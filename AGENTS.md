@@ -2,6 +2,11 @@
 
 AstraMusic es un reproductor de música local, gratuito y multiplataforma para Android, Linux y Windows. Usa un único código base Flutter y reproduce archivos que ya existen en el dispositivo; no incluye servidor ni streaming.
 
+## Estado actual
+
+- Fase 2 completada: prototipo de reproducción de un archivo local con controles básicos, segundo plano en Android y MPRIS en Linux.
+- No hay escaneo de biblioteca, playlists, cola, aleatorio, repetición ni persistencia funcional.
+
 ## Versiones fijadas
 
 - Flutter 3.47.x.
@@ -25,6 +30,8 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 - Drift para persistencia SQLite.
 - `just_audio` para reproducción y `audio_service` para segundo plano y controles del sistema.
 - `just_audio_media_kit` como implementación de audio para Linux y Windows.
+- `AudioPlayerService` desacopla la UI y Riverpod del motor de audio.
+- `AstraAudioHandler` contiene el `AudioPlayer` y es la única fuente del estado de reproducción. El reproductor vive en el handler para que los controles de la UI, Android y MPRIS operen sobre la misma instancia incluso en segundo plano.
 
 ## Comandos habituales
 
