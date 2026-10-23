@@ -4,8 +4,8 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 
 ## Estado actual
 
-- Fase 3A completada: biblioteca persistente con drift, búsqueda, selección manual de varios archivos y reproducción desde la lista.
-- No hay escaneo automático, lectura de metadatos, carátulas, lógica de playlists, cola, aleatorio ni repetición.
+- Fase 3B-1 completada: escaneo recursivo de carpetas en Linux/Windows y de MediaStore en Android, con progreso, cancelación y sincronización de disponibilidad.
+- No hay lectura de etiquetas en escritorio, carátulas, lógica de playlists, cola, aleatorio ni repetición.
 
 ## Versiones fijadas
 
@@ -22,6 +22,7 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 - Nunca versionar keystores, `key.properties`, credenciales ni secretos.
 - No implementar reproducción, biblioteca, playlists o persistencia fuera del alcance explícito de una tarea.
 - Si cambian las tablas de drift, ejecutar `dart run build_runner build --delete-conflicting-outputs` y commitear los archivos `.g.dart` generados.
+- Todo cambio de esquema requiere incrementar `schemaVersion` y escribir una migración que conserve los datos existentes.
 - La UI y el reproductor trabajan únicamente con modelos de dominio; los tipos generados por drift no deben salir de la capa de datos.
 
 ## Arquitectura
@@ -34,12 +35,16 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 - `just_audio_media_kit` como implementación de audio para Linux y Windows.
 - `AudioPlayerService` desacopla la UI y Riverpod del motor de audio.
 - `AstraAudioHandler` contiene el `AudioPlayer` y es la única fuente del estado de reproducción. El reproductor vive en el handler para que los controles de la UI, Android y MPRIS operen sobre la misma instancia incluso en segundo plano.
+- `LibraryScanner` abstrae el escaneo cancelable: `DesktopLibraryScanner` recorre carpetas en un isolate y `AndroidMediaStoreLibraryScanner` usa un MethodChannel hacia MediaStore.
+- `LibrarySyncService` sincroniza los resultados por lotes y actualiza la disponibilidad sin exponer tipos drift.
 
 ## Esquema de base de datos
 
 - `tracks`: ubicación opaca única, datos básicos de la canción, disponibilidad, favorito y fecha de adición.
 - `playlists`: nombre y fechas de creación y actualización.
 - `playlist_tracks`: relación ordenada entre playlists y canciones, con borrado en cascada.
+- `library_folders`: carpetas de escritorio únicas, fecha de adición y último escaneo.
+- Versión actual del esquema: 2.
 
 ## Comandos habituales
 
