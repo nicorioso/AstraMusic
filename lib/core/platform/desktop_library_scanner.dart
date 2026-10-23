@@ -14,6 +14,7 @@ const supportedAudioExtensions = <String>{
   '.opus',
   '.wav',
 };
+const desktopScanProgressInterval = 100;
 
 final class DesktopLibraryScanner implements LibraryScanner {
   const DesktopLibraryScanner();
@@ -135,7 +136,9 @@ void _scanDirectory(_DesktopScanRequest request) {
           'fileSize': stat.size,
           'dateAddedMs': stat.modified.millisecondsSinceEpoch,
         });
-        reportProgress();
+        if (tracks.length % desktopScanProgressInterval == 0) {
+          reportProgress();
+        }
       } on FileSystemException {
         errors++;
         reportProgress();
@@ -144,6 +147,7 @@ void _scanDirectory(_DesktopScanRequest request) {
   }
 
   visit(Directory(request.rootPath));
+  reportProgress();
   request.sendPort.send({
     'type': 'completed',
     'foundCount': tracks.length,
