@@ -18,6 +18,8 @@ final class AndroidMediaStoreLibraryScanner implements LibraryScanner {
       throw StateError('Ya hay un escaneo de MediaStore en curso.');
     }
 
+    // Se cierra en _finish cuando el canal reporta fin, cancelación o error.
+    // ignore: close_sinks
     final controller = StreamController<ScanEvent>();
     _activeController = controller;
     _channel.setMethodCallHandler(_handleNativeCall);

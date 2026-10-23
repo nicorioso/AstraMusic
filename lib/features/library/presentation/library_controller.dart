@@ -205,10 +205,6 @@ final class LibraryController extends Notifier<LibraryViewState> {
     }
   }
 
-  Future<void> playTrack(Track track) async {
-    await playVisibleQueue([track], startIndex: 0);
-  }
-
   Future<void> playVisibleQueue(
     List<Track> tracks, {
     required int startIndex,
