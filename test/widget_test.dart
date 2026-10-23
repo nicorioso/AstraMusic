@@ -82,6 +82,7 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('choose-audio-button')));
     await tester.tap(find.byKey(const Key('choose-audio-button')));
     await tester.pump();
 
@@ -118,6 +119,7 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('choose-audio-button')));
     await tester.tap(find.byKey(const Key('choose-audio-button')));
     await tester.pump();
 
@@ -144,6 +146,34 @@ void main() {
           .onPressed,
       isNotNull,
     );
+  });
+
+  testWidgets('la pantalla del reproductor no desborda en tamaño compacto', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final service = FakeAudioPlayerService();
+    addTearDown(service.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        service: service,
+        picker: const FakeAudioFilePicker(
+          PickedAudioFile(
+            path: 'file:///tmp/cancion.mp3',
+            title: 'Título extremadamente largo para una pantalla compacta',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('choose-audio-button')));
+    await tester.tap(find.byKey(const Key('choose-audio-button')));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('play-pause-button')), findsOneWidget);
   });
 }
 

@@ -53,7 +53,10 @@ class QueueScreen extends ConsumerWidget {
                       padding: const EdgeInsets.only(right: 24),
                       child: const Icon(Icons.delete_outline),
                     ),
-                    onDismissed: (_) => controller.removeFromQueue(index),
+                    confirmDismiss: (_) async {
+                      await controller.removeFromQueue(index);
+                      return false;
+                    },
                     child: Material(
                       key: isCurrent ? const Key('current-queue-item') : null,
                       color: isCurrent
@@ -64,14 +67,29 @@ class QueueScreen extends ConsumerWidget {
                         leading: Icon(
                           isCurrent ? Icons.graphic_eq : Icons.music_note,
                         ),
-                        title: Text(track.title),
-                        subtitle: Text(track.artist ?? 'Artista desconocido'),
+                        title: Text(
+                          track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          track.artist ?? 'Artista desconocido',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         onTap: () => controller.skipToIndex(index),
-                        trailing: ReorderableDragStartListener(
-                          index: index,
-                          child: const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: Icon(Icons.drag_handle),
+                        trailing: Semantics(
+                          button: true,
+                          label: 'Reordenar ${track.title}',
+                          child: ReorderableDragStartListener(
+                            index: index,
+                            child: const Tooltip(
+                              message: 'Mantener y arrastrar para reordenar',
+                              child: Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Icon(Icons.drag_handle),
+                              ),
+                            ),
                           ),
                         ),
                       ),

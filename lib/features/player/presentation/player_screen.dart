@@ -29,31 +29,40 @@ class PlayerScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (notificationWarning) const _NotificationWarning(),
-                  const Spacer(),
-                  const _CurrentTrack(),
-                  const SizedBox(height: 24),
-                  const _PlaybackControls(),
-                  const SizedBox(height: 24),
-                  const _ProgressControls(),
-                  const _PlayerError(),
-                  const Spacer(),
-                  FilledButton.icon(
-                    key: const Key('choose-audio-button'),
-                    onPressed: controller.chooseFile,
-                    icon: const Icon(Icons.audio_file),
-                    label: const Text('Elegir archivo'),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 560,
+                  minHeight: constraints.maxHeight,
+                ),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (notificationWarning) const _NotificationWarning(),
+                        const Spacer(),
+                        const _CurrentTrack(),
+                        const SizedBox(height: 24),
+                        const _PlaybackControls(),
+                        const SizedBox(height: 24),
+                        const _ProgressControls(),
+                        const _PlayerError(),
+                        const Spacer(),
+                        FilledButton.icon(
+                          key: const Key('choose-audio-button'),
+                          onPressed: controller.chooseFile,
+                          icon: const Icon(Icons.audio_file),
+                          label: const Text('Elegir archivo'),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -77,6 +86,8 @@ class _CurrentTrack extends ConsumerWidget {
           item?.title ?? 'Ningún archivo seleccionado',
           key: const Key('current-audio-title'),
           textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleLarge,
         ),
         if (item?.artist case final artist?) ...[
@@ -85,6 +96,8 @@ class _CurrentTrack extends ConsumerWidget {
             artist,
             key: const Key('current-audio-artist'),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyLarge,
           ),
         ],

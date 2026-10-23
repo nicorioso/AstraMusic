@@ -373,8 +373,16 @@ class _TrackList extends StatelessWidget {
         return ListTile(
           enabled: enabled,
           leading: Icon(track.isAvailable ? Icons.music_note : Icons.music_off),
-          title: Text(track.title),
-          subtitle: Text(track.artist ?? 'Artista desconocido'),
+          title: Text(
+            track.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            track.artist ?? 'Artista desconocido',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
