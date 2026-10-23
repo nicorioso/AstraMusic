@@ -18,7 +18,9 @@ class LibraryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tracks = ref.watch(libraryTracksProvider);
     final libraryState = ref.watch(libraryControllerProvider);
-    final playerState = ref.watch(playerControllerProvider);
+    final hasCurrentItem = ref.watch(
+      playerControllerProvider.select((state) => state.currentItem != null),
+    );
     final isAndroid = ref.watch(isAndroidPlatformProvider);
     final libraryController = ref.read(libraryControllerProvider.notifier);
 
@@ -124,10 +126,54 @@ class LibraryScreen extends ConsumerWidget {
               child: tracks.when(
                 data: (items) => items.isEmpty
                     ? const _EmptyLibrary()
-                    : _TrackList(
-                        tracks: items,
-                        enabled: !libraryState.actionsDisabled,
-                        onTrackTap: libraryController.playTrack,
+                    : Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    key: const Key('play-all-button'),
+                                    onPressed: libraryState.actionsDisabled
+                                        ? null
+                                        : () =>
+                                              libraryController.playAll(items),
+                                    icon: const Icon(Icons.play_arrow),
+                                    label: const Text('Reproducir todo'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    key: const Key('shuffle-all-button'),
+                                    onPressed: libraryState.actionsDisabled
+                                        ? null
+                                        : () => libraryController.playAll(
+                                            items,
+                                            shuffle: true,
+                                          ),
+                                    icon: const Icon(Icons.shuffle),
+                                    label: const Text('Aleatorio'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: _TrackList(
+                              tracks: items,
+                              enabled: !libraryState.actionsDisabled,
+                              onTrackTap: (index) => libraryController
+                                  .playVisibleQueue(items, startIndex: index),
+                              onPlayNext: libraryController.playNext,
+                              onAddToQueue: libraryController.addToQueue,
+                            ),
+                          ),
+                        ],
                       ),
                 loading: () => const Center(
                   child: CircularProgressIndicator(
@@ -164,9 +210,7 @@ class LibraryScreen extends ConsumerWidget {
           isAndroid ? 'Escanear música del dispositivo' : 'Añadir carpeta',
         ),
       ),
-      bottomNavigationBar: playerState.currentItem == null
-          ? null
-          : _MiniPlayer(state: playerState),
+      bottomNavigationBar: hasCurrentItem ? const _MiniPlayer() : null,
     );
   }
 }
@@ -299,11 +343,15 @@ class _TrackList extends StatelessWidget {
     required this.tracks,
     required this.enabled,
     required this.onTrackTap,
+    required this.onPlayNext,
+    required this.onAddToQueue,
   });
 
   final List<Track> tracks;
   final bool enabled;
-  final ValueChanged<Track> onTrackTap;
+  final ValueChanged<int> onTrackTap;
+  final ValueChanged<Track> onPlayNext;
+  final ValueChanged<Track> onAddToQueue;
 
   @override
   Widget build(BuildContext context) {
@@ -318,10 +366,36 @@ class _TrackList extends StatelessWidget {
           leading: Icon(track.isAvailable ? Icons.music_note : Icons.music_off),
           title: Text(track.title),
           subtitle: Text(track.artist ?? 'Artista desconocido'),
-          trailing: track.duration == null
-              ? null
-              : Text(_formatDuration(track.duration!)),
-          onTap: enabled ? () => onTrackTap(track) : null,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (track.duration case final duration?)
+                Text(_formatDuration(duration)),
+              PopupMenuButton<_TrackAction>(
+                tooltip: 'Acciones de ${track.title}',
+                enabled: enabled && track.isAvailable,
+                onSelected: (action) {
+                  switch (action) {
+                    case _TrackAction.playNext:
+                      onPlayNext(track);
+                    case _TrackAction.addToQueue:
+                      onAddToQueue(track);
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: _TrackAction.playNext,
+                    child: Text('Reproducir a continuación'),
+                  ),
+                  PopupMenuItem(
+                    value: _TrackAction.addToQueue,
+                    child: Text('Añadir a la cola'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onTap: enabled && track.isAvailable ? () => onTrackTap(index) : null,
         );
       },
     );
@@ -347,13 +421,18 @@ class _EmptyLibrary extends StatelessWidget {
 }
 
 class _MiniPlayer extends ConsumerWidget {
-  const _MiniPlayer({required this.state});
-
-  final PlayerViewState state;
+  const _MiniPlayer();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(playerControllerProvider.notifier);
+    final state = ref.watch(
+      playerControllerProvider.select(
+        (state) =>
+            (state.currentItem, state.status, state.isPlaying, state.isLoading),
+      ),
+    );
+    final (currentItem, status, isPlaying, isLoading) = state;
     return SafeArea(
       top: false,
       child: Material(
@@ -371,12 +450,12 @@ class _MiniPlayer extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    state.currentItem!.title,
+                    currentItem!.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (state.isLoading)
+                if (isLoading)
                   const Padding(
                     padding: EdgeInsets.all(12),
                     child: SizedBox.square(
@@ -387,14 +466,20 @@ class _MiniPlayer extends ConsumerWidget {
                 else
                   IconButton(
                     key: const Key('mini-player-play-pause'),
-                    tooltip: state.isPlaying ? 'Pausar' : 'Reproducir',
-                    onPressed: state.status == AudioPlaybackStatus.error
+                    tooltip: isPlaying ? 'Pausar' : 'Reproducir',
+                    onPressed: status == AudioPlaybackStatus.error
                         ? null
                         : controller.togglePlayback,
-                    icon: Icon(
-                      state.isPlaying ? Icons.pause : Icons.play_arrow,
-                    ),
+                    icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
                   ),
+                IconButton(
+                  key: const Key('mini-player-next'),
+                  tooltip: 'Siguiente',
+                  onPressed: status == AudioPlaybackStatus.error
+                      ? null
+                      : controller.next,
+                  icon: const Icon(Icons.skip_next),
+                ),
               ],
             ),
           ),
@@ -416,3 +501,5 @@ String _formatDuration(Duration duration) {
 }
 
 enum _LibraryAction { update, addFiles, loadDebugTracks, clearLibrary }
+
+enum _TrackAction { playNext, addToQueue }
