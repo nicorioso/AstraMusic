@@ -4,7 +4,7 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 
 ## Estado actual
 
-- Fase 4A completada: cola de reproducción en memoria con edición, anterior/siguiente, aleatorio, repetición y controles del sistema en Android y Linux.
+- Fase 4A.1 completada: cola en memoria con aleatorio manual uniforme, errores auxiliares no fatales y auditoría de estabilidad.
 - No hay persistencia de la cola, reanudación tras cerrar la app, lectura de etiquetas en escritorio, carátulas ni lógica de playlists.
 
 ## Versiones fijadas
@@ -24,6 +24,10 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 - Si cambian las tablas de drift, ejecutar `dart run build_runner build --delete-conflicting-outputs` y commitear los archivos `.g.dart` generados.
 - Todo cambio de esquema requiere incrementar `schemaVersion` y escribir una migración que conserve los datos existentes.
 - La UI y el reproductor trabajan únicamente con modelos de dominio; los tipos generados por drift no deben salir de la capa de datos.
+- Nunca usar `AudioPlayer.shuffle()` ni `setShuffleModeEnabled()`: el aleatorio es una permutación manual de la cola porque `just_audio_media_kit` ignora `shuffleOrder` y no implementa `setShuffleOrder`.
+- Un error fatal impide reproducir la canción, la marca como no disponible y avanza sin crear bucles; un error no fatal de una operación auxiliar solo informa al usuario y no deshabilita controles.
+- Con aleatorio activo, añadir agrega al final de ambos órdenes, “reproducir a continuación” inserta después de la actual en ambos, quitar elimina de ambos y mover cambia únicamente el orden de reproducción. Al desactivar se restaura el orden original restante.
+- Mantener activos los lints adicionales de `analysis_options.yaml`: tipos estrictos, `avoid_print`, `cancel_subscriptions`, `close_sinks`, `prefer_const_constructors`, `unawaited_futures` y `use_build_context_synchronously`.
 
 ## Arquitectura
 
@@ -36,7 +40,7 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 - `AudioPlayerService` desacopla la UI y Riverpod del motor de audio.
 - `AstraAudioHandler` contiene el `AudioPlayer` y es la única fuente del estado de reproducción. El reproductor vive en el handler para que los controles de la UI, Android y MPRIS operen sobre la misma instancia incluso en segundo plano.
 - La cola vive en el reproductor y se refleja en `queue`, `mediaItem` y `PlaybackState` de `audio_service`; no se persiste todavía.
-- Las listas usan las APIs actuales de `just_audio`; no usar `ConcatenatingAudioSource`, que está deprecado.
+- Las listas usan las APIs actuales de `just_audio`; no usar `ConcatenatingAudioSource`, que está deprecado. El aleatorio reordena la lista en Dart y recarga conservando canción, posición y estado play/pausa.
 - `QueueLoadStrategy` aísla la carga completa mediante `setAudioSources` y mide su duración en debug para poder cambiar la estrategia si las bibliotecas grandes lo requieren.
 - `LibraryScanner` abstrae el escaneo cancelable: `DesktopLibraryScanner` recorre carpetas en un isolate y `AndroidMediaStoreLibraryScanner` usa un MethodChannel hacia MediaStore.
 - `LibrarySyncService` sincroniza los resultados por lotes y actualiza la disponibilidad sin exponer tipos drift.
