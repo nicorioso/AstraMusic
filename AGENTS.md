@@ -4,8 +4,8 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 
 ## Estado actual
 
-- Fase 3B-1 completada: escaneo recursivo de carpetas en Linux/Windows y de MediaStore en Android, con progreso, cancelación y sincronización de disponibilidad.
-- No hay lectura de etiquetas en escritorio, carátulas, lógica de playlists, cola, aleatorio ni repetición.
+- Fase 4A completada: cola de reproducción en memoria con edición, anterior/siguiente, aleatorio, repetición y controles del sistema en Android y Linux.
+- No hay persistencia de la cola, reanudación tras cerrar la app, lectura de etiquetas en escritorio, carátulas ni lógica de playlists.
 
 ## Versiones fijadas
 
@@ -35,6 +35,9 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 - `just_audio_media_kit` como implementación de audio para Linux y Windows.
 - `AudioPlayerService` desacopla la UI y Riverpod del motor de audio.
 - `AstraAudioHandler` contiene el `AudioPlayer` y es la única fuente del estado de reproducción. El reproductor vive en el handler para que los controles de la UI, Android y MPRIS operen sobre la misma instancia incluso en segundo plano.
+- La cola vive en el reproductor y se refleja en `queue`, `mediaItem` y `PlaybackState` de `audio_service`; no se persiste todavía.
+- Las listas usan las APIs actuales de `just_audio`; no usar `ConcatenatingAudioSource`, que está deprecado.
+- `QueueLoadStrategy` aísla la carga completa mediante `setAudioSources` y mide su duración en debug para poder cambiar la estrategia si las bibliotecas grandes lo requieren.
 - `LibraryScanner` abstrae el escaneo cancelable: `DesktopLibraryScanner` recorre carpetas en un isolate y `AndroidMediaStoreLibraryScanner` usa un MethodChannel hacia MediaStore.
 - `LibrarySyncService` sincroniza los resultados por lotes y actualiza la disponibilidad sin exponer tipos drift.
 
