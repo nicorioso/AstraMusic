@@ -206,19 +206,36 @@ final class LibraryController extends Notifier<LibraryViewState> {
   }
 
   Future<void> playTrack(Track track) async {
-    if (state.actionsDisabled) return;
-    state = state.copyWith(isBusy: true, message: null, offerSettings: false);
+    await playVisibleQueue([track], startIndex: 0);
+  }
 
-    try {
-      final service = ref.read(audioPlayerServiceProvider);
-      await service.loadFile(path: track.uri, title: track.title);
-      await service.play();
-    } catch (error) {
-      if (!ref.mounted) return;
-      await ref.read(trackRepositoryProvider).markUnavailable({track.uri});
-      if (ref.mounted) state = state.copyWith(message: _messageFor(error));
-    } finally {
-      if (ref.mounted) state = state.copyWith(isBusy: false);
+  Future<void> playVisibleQueue(
+    List<Track> tracks, {
+    required int startIndex,
+    bool shuffle = false,
+  }) async {
+    if (state.actionsDisabled) return;
+    await ref
+        .read(playerControllerProvider.notifier)
+        .playQueue(tracks, startIndex: startIndex, shuffle: shuffle);
+  }
+
+  Future<void> playAll(List<Track> tracks, {bool shuffle = false}) async {
+    if (tracks.isEmpty) return;
+    await playVisibleQueue(tracks, startIndex: 0, shuffle: shuffle);
+  }
+
+  Future<void> playNext(Track track) async {
+    await ref.read(playerControllerProvider.notifier).playNext(track);
+    if (ref.mounted) {
+      state = state.copyWith(message: 'Se reproducirá a continuación.');
+    }
+  }
+
+  Future<void> addToQueue(Track track) async {
+    await ref.read(playerControllerProvider.notifier).addToQueue(track);
+    if (ref.mounted) {
+      state = state.copyWith(message: 'Canción añadida a la cola.');
     }
   }
 
