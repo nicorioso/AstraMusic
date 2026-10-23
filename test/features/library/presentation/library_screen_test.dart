@@ -71,6 +71,9 @@ final class FakeTrackRepository implements TrackRepository {
   Future<int> count() async => tracks.length;
 
   @override
+  Future<void> deleteByUris(Set<String> uris) async {}
+
+  @override
   Future<void> deleteAll() async {}
 
   @override

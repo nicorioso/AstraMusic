@@ -83,6 +83,14 @@ final class DriftTrackRepository implements TrackRepository {
   }
 
   @override
+  Future<void> deleteByUris(Set<String> uris) async {
+    if (uris.isEmpty) return;
+    await (_database.delete(
+      _database.tracks,
+    )..where((track) => track.uri.isIn(uris))).go();
+  }
+
+  @override
   Future<void> deleteAll() async {
     await _database.delete(_database.tracks).go();
   }

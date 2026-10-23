@@ -7,5 +7,6 @@ abstract interface class TrackRepository {
   Future<void> markUnavailable(Set<String> uris);
   Future<Track?> getById(int id);
   Future<int> count();
+  Future<void> deleteByUris(Set<String> uris);
   Future<void> deleteAll();
 }
