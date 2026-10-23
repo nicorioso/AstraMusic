@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:astramusic/core/platform/audio_file_picker.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/library_scanner.dart';
+import 'package:astramusic/core/platform/media_library_permission.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
@@ -15,7 +19,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('empty-library-message')), findsOneWidget);
-    expect(find.byKey(const Key('add-files-button')), findsOneWidget);
+    expect(find.byKey(const Key('scan-library-button')), findsOneWidget);
   });
 
   testWidgets('muestra canciones del repositorio sin tipos de drift', (
@@ -47,12 +51,50 @@ void main() {
     expect(find.text('3:05'), findsOneWidget);
     expect(find.text('Segunda canción'), findsOneWidget);
   });
+
+  testWidgets('muestra progreso y resumen del escaneo', (tester) async {
+    final scanner = ControlledLibraryScanner();
+    await tester.pumpWidget(
+      _testApp(const FakeTrackRepository([]), scanner: scanner),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('scan-library-button')));
+    await tester.pump();
+    await tester.pump();
+    scanner.addProgress(foundCount: 7, errorCount: 1);
+    await tester.pump();
+
+    expect(find.byKey(const Key('scan-progress')), findsOneWidget);
+    expect(find.text('Escaneando: 7 encontradas, 1 errores'), findsOneWidget);
+
+    await scanner.complete([
+      const ScannedTrack(
+        uri: 'content://media/external/audio/media/1',
+        title: 'Encontrada',
+      ),
+    ], errorCount: 1);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('scan-progress')), findsNothing);
+    expect(
+      find.text('1 nuevas, 0 actualizadas, 0 no disponibles, 1 errores.'),
+      findsOneWidget,
+    );
+  });
 }
 
-Widget _testApp(TrackRepository repository) {
+Widget _testApp(TrackRepository repository, {LibraryScanner? scanner}) {
   return ProviderScope(
     overrides: [
       trackRepositoryProvider.overrideWithValue(repository),
+      isAndroidPlatformProvider.overrideWithValue(true),
+      libraryScannerProvider.overrideWithValue(
+        scanner ?? ControlledLibraryScanner(),
+      ),
+      mediaLibraryPermissionProvider.overrideWithValue(
+        const FakeMediaLibraryPermission(),
+      ),
       audioPlayerServiceProvider.overrideWithValue(
         const FakeAudioPlayerService(),
       ),
@@ -60,6 +102,48 @@ Widget _testApp(TrackRepository repository) {
     ],
     child: const MaterialApp(home: LibraryScreen()),
   );
+}
+
+final class ControlledLibraryScanner implements LibraryScanner {
+  StreamController<ScanEvent>? _controller;
+
+  @override
+  Future<LibraryScanTask> startScan({String? rootPath}) async {
+    final controller = StreamController<ScanEvent>();
+    _controller = controller;
+    return LibraryScanTask(controller.stream, () async {
+      if (!controller.isClosed) {
+        controller.add(const ScanCancelled());
+        await controller.close();
+      }
+    });
+  }
+
+  void addProgress({required int foundCount, required int errorCount}) {
+    _controller!.add(
+      ScanProgress(foundCount: foundCount, errorCount: errorCount),
+    );
+  }
+
+  Future<void> complete(
+    List<ScannedTrack> tracks, {
+    required int errorCount,
+  }) async {
+    final controller = _controller!;
+    controller.add(ScanCompleted(tracks: tracks, errorCount: errorCount));
+    await controller.close();
+  }
+}
+
+final class FakeMediaLibraryPermission implements MediaLibraryPermission {
+  const FakeMediaLibraryPermission();
+
+  @override
+  Future<bool> openSettings() async => true;
+
+  @override
+  Future<MediaLibraryPermissionStatus> request() async =>
+      MediaLibraryPermissionStatus.granted;
 }
 
 final class FakeTrackRepository implements TrackRepository {
