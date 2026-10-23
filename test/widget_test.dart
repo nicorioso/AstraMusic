@@ -87,6 +87,9 @@ final class FakeAudioFilePicker implements AudioFilePicker {
 
   @override
   Future<PickedAudioFile?> pickAudioFile() async => file;
+
+  @override
+  Future<List<PickedAudioFile>> pickAudioFiles() async => [?file];
 }
 
 final class FakeAudioPlayerService implements AudioPlayerService {

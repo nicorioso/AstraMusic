@@ -17,6 +17,15 @@ class AudioItem {
   final Duration? duration;
 }
 
+class AudioPlayerException implements Exception {
+  const AudioPlayerException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 abstract interface class AudioPlayerService {
   Stream<AudioPlaybackState> get playbackStateStream;
   Stream<Duration> get positionStream;

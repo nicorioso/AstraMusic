@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -51,18 +52,21 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
       mediaItem.add(item.copyWith(duration: duration));
       _broadcastPlaybackState(_player.playbackEvent);
     } on PlayerException catch (error) {
-      _broadcastError(
-        error.message ?? 'El formato del archivo no es compatible.',
-        code: error.code,
-      );
+      final message =
+          error.message ?? 'El formato del archivo no es compatible.';
+      _broadcastError(message, code: error.code);
+      throw AudioPlayerException(message);
     } on PlayerInterruptedException catch (error) {
-      _broadcastError(
-        error.message ?? 'La carga del archivo fue interrumpida.',
-      );
+      final message = error.message ?? 'La carga del archivo fue interrumpida.';
+      _broadcastError(message);
+      throw AudioPlayerException(message);
     } on FileSystemException catch (error) {
       _broadcastError(error.message);
+      throw AudioPlayerException(error.message);
     } catch (error) {
-      _broadcastError(_messageFor(error));
+      final message = _messageFor(error);
+      _broadcastError(message);
+      throw AudioPlayerException(message);
     }
   }
 

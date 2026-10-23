@@ -1,9 +1,9 @@
 import 'dart:io';
 
+import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/player/data/astra_audio_handler.dart';
 import 'package:astramusic/features/player/data/audio_handler_player_service.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
-import 'package:astramusic/features/player/presentation/player_screen.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -61,7 +61,7 @@ class AstraMusicApp extends StatelessWidget {
     return MaterialApp(
       title: 'AstraMusic',
       theme: ThemeData(colorSchemeSeed: Colors.deepPurple),
-      home: const PlayerScreen(),
+      home: const LibraryScreen(),
     );
   }
 }

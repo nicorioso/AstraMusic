@@ -9,6 +9,7 @@ class PickedAudioFile {
 
 abstract interface class AudioFilePicker {
   Future<PickedAudioFile?> pickAudioFile();
+  Future<List<PickedAudioFile>> pickAudioFiles();
 }
 
 final class SystemAudioFilePicker implements AudioFilePicker {
@@ -19,11 +20,19 @@ final class SystemAudioFilePicker implements AudioFilePicker {
     final file = await FilePicker.pickFile(type: FileType.audio);
     if (file == null) return null;
 
-    return PickedAudioFile(
-      path: file.uri.toString(),
-      title: _withoutExtension(file.name),
-    );
+    return _toPickedAudioFile(file);
   }
+
+  @override
+  Future<List<PickedAudioFile>> pickAudioFiles() async {
+    final files = await FilePicker.pickFiles(type: FileType.audio);
+    return files.map(_toPickedAudioFile).toList(growable: false);
+  }
+
+  PickedAudioFile _toPickedAudioFile(PlatformFile file) => PickedAudioFile(
+    path: file.uri.toString(),
+    title: _withoutExtension(file.name),
+  );
 
   String _withoutExtension(String fileName) {
     final extensionStart = fileName.lastIndexOf('.');
