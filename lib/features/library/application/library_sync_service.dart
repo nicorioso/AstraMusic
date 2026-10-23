@@ -137,16 +137,19 @@ final class LibrarySyncService {
   }
 
   bool _isInsideFolder(String uriValue, String rootPath) {
-    final uri = Uri.tryParse(uriValue);
-    if (uri != null && uri.hasScheme && uri.scheme != 'file') return false;
-
     String filePath;
-    try {
-      filePath = uri != null && uri.scheme == 'file'
-          ? uri.toFilePath()
-          : uriValue;
-    } on UnsupportedError {
-      return false;
+    if (path.isAbsolute(uriValue)) {
+      filePath = uriValue;
+    } else {
+      final uri = Uri.tryParse(uriValue);
+      if (uri != null && uri.hasScheme && uri.scheme != 'file') return false;
+      try {
+        filePath = uri != null && uri.scheme == 'file'
+            ? uri.toFilePath()
+            : uriValue;
+      } on UnsupportedError {
+        return false;
+      }
     }
 
     final normalizedRoot = path.normalize(path.absolute(rootPath));

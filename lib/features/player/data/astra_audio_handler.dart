@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:path/path.dart' as path_utils;
 
 class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   AstraAudioHandler({AudioPlayer? player}) : _player = player ?? AudioPlayer() {
@@ -131,6 +132,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   Uri _sourceUri(String path) {
+    if (path_utils.isAbsolute(path)) return Uri.file(path);
     final uri = Uri.tryParse(path);
     if (uri != null && uri.hasScheme) return uri;
     return Uri.file(path);
