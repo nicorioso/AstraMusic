@@ -47,6 +47,15 @@ class LibraryScreen extends ConsumerWidget {
         libraryController.clearMessage();
       },
     );
+    ref.listen<String?>(
+      playerControllerProvider.select((state) => state.errorMessage),
+      (previous, next) {
+        if (next == null || next == previous) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(next)));
+      },
+    );
 
     return Scaffold(
       appBar: AppBar(
