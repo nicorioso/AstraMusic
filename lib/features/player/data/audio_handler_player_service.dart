@@ -1,12 +1,14 @@
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/player/data/astra_audio_handler.dart';
+import 'package:astramusic/features/player/data/serial_command_queue.dart';
 import 'package:audio_service/audio_service.dart';
 
 final class AudioHandlerPlayerService implements AudioPlayerService {
   AudioHandlerPlayerService(this._handler);
 
   final AstraAudioHandler _handler;
+  final SerialCommandQueue _commands = SerialCommandQueue();
 
   @override
   Stream<AudioPlaybackState> get playbackStateStream =>
@@ -50,20 +52,26 @@ final class AudioHandlerPlayerService implements AudioPlayerService {
 
   @override
   Future<void> loadFile({required String path, required String title}) {
-    return playQueue([
-      Track(uri: path, title: title, dateAdded: DateTime.now()),
-    ]);
+    return _commands.run(
+      () => _playQueue([
+        Track(uri: path, title: title, dateAdded: DateTime.now()),
+      ]),
+    );
   }
 
   @override
-  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {
+  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) {
+    return _commands.run(() => _playQueue(tracks, startIndex: startIndex));
+  }
+
+  Future<void> _playQueue(List<Track> tracks, {int startIndex = 0}) async {
     if (startIndex < 0 || (tracks.isNotEmpty && startIndex >= tracks.length)) {
       throw RangeError.index(startIndex, tracks, 'startIndex');
     }
     final requestedTrack = tracks.isEmpty ? null : tracks[startIndex];
     final available = tracks.where((track) => track.isAvailable).toList();
     if (available.isEmpty) {
-      await clearQueue();
+      await _handler.updateQueue(const []);
       throw const AudioPlayerException(
         'No hay canciones disponibles para reproducir.',
       );
@@ -78,61 +86,70 @@ final class AudioHandlerPlayerService implements AudioPlayerService {
   }
 
   @override
-  Future<void> play() => _handler.play();
+  Future<void> play() => _commands.run(_handler.play);
 
   @override
-  Future<void> pause() => _handler.pause();
+  Future<void> pause() => _commands.run(_handler.pause);
 
   @override
-  Future<void> stop() => _handler.stop();
+  Future<void> stop() => _commands.run(_handler.stop);
 
   @override
-  Future<void> seek(Duration position) => _handler.seek(position);
+  Future<void> seek(Duration position) =>
+      _commands.run(() => _handler.seek(position));
 
   @override
-  Future<void> next() => _handler.skipToNext();
+  Future<void> next() => _commands.run(_handler.skipToNext);
 
   @override
-  Future<void> previous() => _handler.skipToPrevious();
+  Future<void> previous() => _commands.run(_handler.skipToPrevious);
 
   @override
-  Future<void> skipToIndex(int index) => _handler.skipToQueueItem(index);
+  Future<void> skipToIndex(int index) =>
+      _commands.run(() => _handler.skipToQueueItem(index));
 
   @override
-  Future<void> setShuffle(bool enabled) => _handler.setShuffleMode(
-    enabled ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
+  Future<void> setShuffle(bool enabled) => _commands.run(
+    () => _handler.setShuffleMode(
+      enabled ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
+    ),
   );
 
   @override
-  Future<void> setRepeatMode(RepeatMode mode) =>
-      _handler.setRepeatMode(switch (mode) {
-        RepeatMode.off => AudioServiceRepeatMode.none,
-        RepeatMode.all => AudioServiceRepeatMode.all,
-        RepeatMode.one => AudioServiceRepeatMode.one,
-      });
+  Future<void> setRepeatMode(RepeatMode mode) => _commands.run(
+    () => _handler.setRepeatMode(switch (mode) {
+      RepeatMode.off => AudioServiceRepeatMode.none,
+      RepeatMode.all => AudioServiceRepeatMode.all,
+      RepeatMode.one => AudioServiceRepeatMode.one,
+    }),
+  );
 
   @override
   Future<void> addToQueue(Track track) async {
     if (!track.isAvailable) return;
-    await _handler.addQueueItem(_toMediaItem(track));
+    await _commands.run(() => _handler.addQueueItem(_toMediaItem(track)));
   }
 
   @override
   Future<void> playNext(Track track) async {
     if (!track.isAvailable) return;
-    final currentIndex = _handler.playbackState.value.queueIndex ?? -1;
-    await _handler.insertQueueItem(currentIndex + 1, _toMediaItem(track));
+    await _commands.run(() async {
+      final currentIndex = _handler.playbackState.value.queueIndex ?? -1;
+      await _handler.insertQueueItem(currentIndex + 1, _toMediaItem(track));
+    });
   }
 
   @override
-  Future<void> removeFromQueue(int index) => _handler.removeQueueItemAt(index);
+  Future<void> removeFromQueue(int index) =>
+      _commands.run(() => _handler.removeQueueItemAt(index));
 
   @override
   Future<void> moveInQueue(int oldIndex, int newIndex) =>
-      _handler.moveQueueItem(oldIndex, newIndex);
+      _commands.run(() => _handler.moveQueueItem(oldIndex, newIndex));
 
   @override
-  Future<void> clearQueue() => _handler.updateQueue(const []);
+  Future<void> clearQueue() =>
+      _commands.run(() => _handler.updateQueue(const []));
 
   MediaItem _toMediaItem(Track track) => MediaItem(
     id: track.uri,
