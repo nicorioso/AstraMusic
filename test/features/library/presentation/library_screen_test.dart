@@ -9,7 +9,7 @@ import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -207,7 +207,13 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   Stream<AudioItem?> get currentItemStream => const Stream.empty();
 
   @override
+  Stream<int?> get currentIndexStream => const Stream.empty();
+
+  @override
   Stream<Duration?> get durationStream => const Stream.empty();
+
+  @override
+  Stream<AudioPlaybackFailure> get failureStream => const Stream.empty();
 
   @override
   Stream<AudioPlaybackState> get playbackStateStream => const Stream.empty();
@@ -216,7 +222,28 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   Stream<Duration> get positionStream => const Stream.empty();
 
   @override
+  Stream<List<Track>> get queueStream => const Stream.empty();
+
+  @override
+  Stream<RepeatMode> get repeatModeStream => const Stream.empty();
+
+  @override
+  Stream<bool> get shuffleEnabledStream => const Stream.empty();
+
+  @override
+  Future<void> addToQueue(Track track) async {}
+
+  @override
+  Future<void> clearQueue() async {}
+
+  @override
   Future<void> loadFile({required String path, required String title}) async {}
+
+  @override
+  Future<void> moveInQueue(int oldIndex, int newIndex) async {}
+
+  @override
+  Future<void> next() async {}
 
   @override
   Future<void> pause() async {}
@@ -225,7 +252,28 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   Future<void> play() async {}
 
   @override
+  Future<void> playNext(Track track) async {}
+
+  @override
+  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {}
+
+  @override
+  Future<void> previous() async {}
+
+  @override
+  Future<void> removeFromQueue(int index) async {}
+
+  @override
   Future<void> seek(Duration position) async {}
+
+  @override
+  Future<void> setRepeatMode(RepeatMode mode) async {}
+
+  @override
+  Future<void> setShuffle(bool enabled) async {}
+
+  @override
+  Future<void> skipToIndex(int index) async {}
 
   @override
   Future<void> stop() async {}
