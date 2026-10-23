@@ -137,4 +137,22 @@ void main() {
       isNull,
     );
   });
+
+  test('seek se limita entre cero y la duración conocida', () {
+    expect(
+      clampSeekPosition(
+        const Duration(seconds: -4),
+        const Duration(minutes: 3),
+      ),
+      Duration.zero,
+    );
+    expect(
+      clampSeekPosition(const Duration(minutes: 4), const Duration(minutes: 3)),
+      const Duration(minutes: 3),
+    );
+    expect(
+      clampSeekPosition(const Duration(seconds: 20), null),
+      const Duration(seconds: 20),
+    );
+  });
 }

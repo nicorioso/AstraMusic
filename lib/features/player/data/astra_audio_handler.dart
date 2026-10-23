@@ -82,10 +82,6 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   Stream<Duration?> get durationStream => _player.durationStream;
   Stream<HandlerPlaybackFailure> get failureStream => _failureController.stream;
 
-  Future<void> loadLocalFile({required String path, required String title}) {
-    return loadQueue([MediaItem(id: path, title: title)]);
-  }
-
   Future<void> loadQueue(List<MediaItem> items, {int startIndex = 0}) async {
     if (items.isEmpty) {
       await updateQueue(const []);
@@ -163,7 +159,8 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) =>
+      _player.seek(clampSeekPosition(position, _player.duration));
 
   @override
   Future<void> skipToNext() async {
@@ -453,6 +450,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
 
     await _player.seek(Duration.zero, index: nextIndex);
     if (_playRequested) await _player.play();
+    _broadcastPlaybackState(_player.playbackEvent);
   }
 
   void _broadcastError(String message, {int? code}) {

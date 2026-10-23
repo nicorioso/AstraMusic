@@ -85,3 +85,9 @@ int? nextUnfailedIndex({
   }
   return null;
 }
+
+Duration clampSeekPosition(Duration position, Duration? duration) {
+  if (position.isNegative) return Duration.zero;
+  if (duration != null && position > duration) return duration;
+  return position;
+}

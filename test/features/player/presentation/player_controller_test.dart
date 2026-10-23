@@ -82,6 +82,26 @@ void main() {
       );
     },
   );
+
+  test(
+    'un error no fatal conserva el estado y se limpia al continuar',
+    () async {
+      final controller = container.read(playerControllerProvider.notifier);
+      await controller.playQueue(_tracks(3));
+      service.failShuffle = true;
+
+      await controller.toggleShuffle();
+
+      var state = container.read(playerControllerProvider);
+      expect(state.isPlaying, isTrue);
+      expect(state.errorMessage, 'Fallo auxiliar de aleatorio');
+
+      await controller.next();
+      state = container.read(playerControllerProvider);
+      expect(state.isPlaying, isTrue);
+      expect(state.errorMessage, isNull);
+    },
+  );
 }
 
 List<Track> _tracks(int count) => List.generate(
@@ -108,6 +128,7 @@ final class QueueFakeAudioPlayerService implements AudioPlayerService {
   List<Track> tracks = [];
   int? currentIndex;
   RepeatMode repeatMode = RepeatMode.off;
+  bool failShuffle = false;
 
   @override
   Stream<AudioPlaybackState> get playbackStateStream => _playback.stream;
@@ -180,7 +201,12 @@ final class QueueFakeAudioPlayerService implements AudioPlayerService {
   }
 
   @override
-  Future<void> setShuffle(bool enabled) async => _shuffle.add(enabled);
+  Future<void> setShuffle(bool enabled) async {
+    if (failShuffle) {
+      throw const AudioPlayerException('Fallo auxiliar de aleatorio');
+    }
+    _shuffle.add(enabled);
+  }
 
   @override
   Future<void> setRepeatMode(RepeatMode mode) async {
