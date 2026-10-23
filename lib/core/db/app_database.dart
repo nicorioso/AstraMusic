@@ -43,19 +43,29 @@ class PlaylistTracks extends Table {
   DateTimeColumn get addedAt => dateTime()();
 }
 
-@DriftDatabase(tables: [Tracks, Playlists, PlaylistTracks])
+@DataClassName('LibraryFolderRow')
+class LibraryFolders extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get path => text().unique()();
+  DateTimeColumn get addedAt => dateTime()();
+  DateTimeColumn get lastScannedAt => dateTime().nullable()();
+}
+
+@DriftDatabase(tables: [Tracks, Playlists, PlaylistTracks, LibraryFolders])
 final class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) => migrator.createAll(),
     onUpgrade: (migrator, from, to) async {
-      // Las versiones futuras deben migrar de forma incremental según `from`.
+      if (from < 2) {
+        await migrator.createTable(libraryFolders);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
