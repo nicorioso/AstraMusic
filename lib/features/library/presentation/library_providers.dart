@@ -1,7 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:astramusic/core/db/app_database.dart';
+import 'package:astramusic/core/platform/android_media_store_library_scanner.dart';
+import 'package:astramusic/core/platform/desktop_library_scanner.dart';
+import 'package:astramusic/core/platform/library_folder_picker.dart';
+import 'package:astramusic/core/platform/library_scanner.dart';
+import 'package:astramusic/core/platform/media_library_permission.dart';
+import 'package:astramusic/features/library/application/library_sync_service.dart';
+import 'package:astramusic/features/library/data/drift_library_folders_repository.dart';
 import 'package:astramusic/features/library/data/drift_track_repository.dart';
+import 'package:astramusic/features/library/domain/library_folder.dart';
+import 'package:astramusic/features/library/domain/library_folders_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +25,36 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 final trackRepositoryProvider = Provider<TrackRepository>((ref) {
   return DriftTrackRepository(ref.watch(appDatabaseProvider));
 });
+
+final libraryFoldersRepositoryProvider = Provider<LibraryFoldersRepository>((
+  ref,
+) {
+  return DriftLibraryFoldersRepository(ref.watch(appDatabaseProvider));
+});
+
+final libraryFoldersProvider = StreamProvider<List<LibraryFolder>>((ref) {
+  return ref.watch(libraryFoldersRepositoryProvider).watchAll();
+});
+
+final libraryScannerProvider = Provider<LibraryScanner>((ref) {
+  return Platform.isAndroid
+      ? AndroidMediaStoreLibraryScanner()
+      : const DesktopLibraryScanner();
+});
+
+final libraryFolderPickerProvider = Provider<LibraryFolderPicker>((ref) {
+  return const SystemLibraryFolderPicker();
+});
+
+final mediaLibraryPermissionProvider = Provider<MediaLibraryPermission>((ref) {
+  return const SystemMediaLibraryPermission();
+});
+
+final librarySyncServiceProvider = Provider<LibrarySyncService>((ref) {
+  return LibrarySyncService(ref.watch(trackRepositoryProvider));
+});
+
+final isAndroidPlatformProvider = Provider<bool>((ref) => Platform.isAndroid);
 
 final librarySearchQueryProvider = NotifierProvider<LibrarySearchQuery, String>(
   LibrarySearchQuery.new,

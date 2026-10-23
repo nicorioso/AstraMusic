@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
@@ -16,15 +19,29 @@ class LibraryScreen extends ConsumerWidget {
     final tracks = ref.watch(libraryTracksProvider);
     final libraryState = ref.watch(libraryControllerProvider);
     final playerState = ref.watch(playerControllerProvider);
+    final isAndroid = ref.watch(isAndroidPlatformProvider);
     final libraryController = ref.read(libraryControllerProvider.notifier);
 
     ref.listen<String?>(
       libraryControllerProvider.select((state) => state.message),
       (previous, next) {
         if (next == null || next == previous) return;
+        final offerSettings = ref.read(
+          libraryControllerProvider.select((state) => state.offerSettings),
+        );
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text(next)));
+          ..showSnackBar(
+            SnackBar(
+              content: Text(next),
+              action: offerSettings
+                  ? SnackBarAction(
+                      label: 'Abrir ajustes',
+                      onPressed: libraryController.openAppSettings,
+                    )
+                  : null,
+            ),
+          );
         libraryController.clearMessage();
       },
     );
@@ -33,28 +50,53 @@ class LibraryScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Biblioteca'),
         actions: [
-          if (kDebugMode)
-            PopupMenuButton<_DebugAction>(
-              tooltip: 'Acciones de desarrollo',
-              onSelected: (action) {
-                switch (action) {
-                  case _DebugAction.loadTracks:
-                    libraryController.loadDebugTracks();
-                  case _DebugAction.clearLibrary:
-                    libraryController.deleteAll();
-                }
-              },
-              itemBuilder: (context) => const [
+          if (!isAndroid)
+            IconButton(
+              key: const Key('music-folders-button'),
+              tooltip: 'Carpetas de música',
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const _MusicFoldersDialog(),
+              ),
+              icon: const Icon(Icons.folder_copy_outlined),
+            ),
+          PopupMenuButton<_LibraryAction>(
+            tooltip: 'Más acciones',
+            onSelected: (action) {
+              switch (action) {
+                case _LibraryAction.update:
+                  unawaited(libraryController.updateLibrary());
+                case _LibraryAction.addFiles:
+                  unawaited(libraryController.addFiles());
+                case _LibraryAction.loadDebugTracks:
+                  unawaited(libraryController.loadDebugTracks());
+                case _LibraryAction.clearLibrary:
+                  unawaited(libraryController.deleteAll());
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: _LibraryAction.update,
+                child: Text('Actualizar biblioteca'),
+              ),
+              const PopupMenuItem(
+                key: Key('add-files-menu-item'),
+                value: _LibraryAction.addFiles,
+                child: Text('Añadir archivos'),
+              ),
+              if (kDebugMode) ...const [
+                PopupMenuDivider(),
                 PopupMenuItem(
-                  value: _DebugAction.loadTracks,
+                  value: _LibraryAction.loadDebugTracks,
                   child: Text('Cargar datos de prueba'),
                 ),
                 PopupMenuItem(
-                  value: _DebugAction.clearLibrary,
+                  value: _LibraryAction.clearLibrary,
                   child: Text('Vaciar biblioteca'),
                 ),
               ],
-            ),
+            ],
+          ),
         ],
       ),
       body: SafeArea(
@@ -72,13 +114,19 @@ class LibraryScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            if (libraryState.isScanning)
+              _ScanProgressCard(
+                foundCount: libraryState.foundCount,
+                errorCount: libraryState.scanErrorCount,
+                onCancel: libraryController.cancelScan,
+              ),
             Expanded(
               child: tracks.when(
                 data: (items) => items.isEmpty
                     ? const _EmptyLibrary()
                     : _TrackList(
                         tracks: items,
-                        enabled: !libraryState.isBusy,
+                        enabled: !libraryState.actionsDisabled,
                         onTrackTap: libraryController.playTrack,
                       ),
                 loading: () => const Center(
@@ -102,19 +150,146 @@ class LibraryScreen extends ConsumerWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        key: const Key('add-files-button'),
-        onPressed: libraryState.isBusy ? null : libraryController.addFiles,
+        key: const Key('scan-library-button'),
+        onPressed: libraryState.actionsDisabled
+            ? null
+            : libraryController.startScan,
         icon: libraryState.isBusy
             ? const SizedBox.square(
                 dimension: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Icon(Icons.library_add),
-        label: const Text('Añadir archivos'),
+            : Icon(isAndroid ? Icons.audio_file : Icons.create_new_folder),
+        label: Text(
+          isAndroid ? 'Escanear música del dispositivo' : 'Añadir carpeta',
+        ),
       ),
       bottomNavigationBar: playerState.currentItem == null
           ? null
           : _MiniPlayer(state: playerState),
+    );
+  }
+}
+
+class _ScanProgressCard extends StatelessWidget {
+  const _ScanProgressCard({
+    required this.foundCount,
+    required this.errorCount,
+    required this.onCancel,
+  });
+
+  final int foundCount;
+  final int errorCount;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const Key('scan-progress'),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const SizedBox.square(
+              dimension: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Escaneando: $foundCount encontradas, $errorCount errores',
+                key: const Key('scan-progress-text'),
+              ),
+            ),
+            TextButton(onPressed: onCancel, child: const Text('Cancelar')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MusicFoldersDialog extends ConsumerWidget {
+  const _MusicFoldersDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final folders = ref.watch(libraryFoldersProvider);
+    return AlertDialog(
+      title: const Text('Carpetas de música'),
+      content: SizedBox(
+        width: 560,
+        child: folders.when(
+          data: (items) => items.isEmpty
+              ? const Text('No hay carpetas guardadas.')
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: items.length,
+                  itemBuilder: (context, index) =>
+                      _FolderTile(folder: items[index]),
+                ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) =>
+              Text('No fue posible cargar las carpetas: $error'),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cerrar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FolderTile extends ConsumerWidget {
+  const _FolderTile({required this.folder});
+
+  final LibraryFolder folder;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      leading: const Icon(Icons.folder_outlined),
+      title: Text(folder.path),
+      subtitle: Text(
+        folder.lastScannedAt == null
+            ? 'Nunca escaneada'
+            : 'Último escaneo: ${folder.lastScannedAt}',
+      ),
+      trailing: IconButton(
+        tooltip: 'Quitar carpeta',
+        onPressed: () async {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Quitar carpeta'),
+              content: const Text(
+                'Se quitarán sus canciones de la biblioteca. '
+                'Los archivos del disco no se borrarán.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Quitar'),
+                ),
+              ],
+            ),
+          );
+          if (confirmed == true) {
+            await ref
+                .read(libraryControllerProvider.notifier)
+                .removeFolder(folder);
+          }
+        },
+        icon: const Icon(Icons.delete_outline),
+      ),
     );
   }
 }
@@ -162,7 +337,7 @@ class _EmptyLibrary extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.all(24),
         child: Text(
-          'La biblioteca está vacía. Añade archivos de audio para comenzar.',
+          'La biblioteca está vacía. Escanea tu música para comenzar.',
           key: Key('empty-library-message'),
           textAlign: TextAlign.center,
         ),
@@ -240,4 +415,4 @@ String _formatDuration(Duration duration) {
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
 }
 
-enum _DebugAction { loadTracks, clearLibrary }
+enum _LibraryAction { update, addFiles, loadDebugTracks, clearLibrary }
