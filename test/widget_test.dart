@@ -102,6 +102,49 @@ void main() {
     expect(find.byKey(const Key('current-queue-item')), findsOneWidget);
     expect(find.text('cancion'), findsOneWidget);
   });
+
+  testWidgets('un fallo de aleatorio no deshabilita los controles', (
+    tester,
+  ) async {
+    final service = FakeAudioPlayerService(failOnShuffle: true);
+    addTearDown(service.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        service: service,
+        picker: const FakeAudioFilePicker(
+          PickedAudioFile(path: 'file:///tmp/cancion.mp3', title: 'cancion'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('choose-audio-button')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('shuffle-button')));
+    await tester.pump();
+
+    expect(
+      find.text('No fue posible cambiar el modo aleatorio.'),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget<IconButton>(find.byKey(const Key('next-button'))).onPressed,
+      isNotNull,
+    );
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const Key('previous-button')))
+          .onPressed,
+      isNotNull,
+    );
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const Key('repeat-button')))
+          .onPressed,
+      isNotNull,
+    );
+  });
 }
 
 Widget _testApp({
@@ -130,9 +173,10 @@ final class FakeAudioFilePicker implements AudioFilePicker {
 }
 
 final class FakeAudioPlayerService implements AudioPlayerService {
-  FakeAudioPlayerService({this.failOnLoad = false});
+  FakeAudioPlayerService({this.failOnLoad = false, this.failOnShuffle = false});
 
   final bool failOnLoad;
+  final bool failOnShuffle;
   final _playbackStateController =
       StreamController<AudioPlaybackState>.broadcast(sync: true);
   final _positionController = StreamController<Duration>.broadcast(sync: true);
@@ -252,6 +296,11 @@ final class FakeAudioPlayerService implements AudioPlayerService {
 
   @override
   Future<void> setShuffle(bool enabled) async {
+    if (failOnShuffle) {
+      throw const AudioPlayerException(
+        'No fue posible cambiar el modo aleatorio.',
+      );
+    }
     _shuffleController.add(enabled);
   }
 

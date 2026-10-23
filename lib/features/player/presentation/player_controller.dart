@@ -117,7 +117,7 @@ class PlayerController extends Notifier<PlayerViewState> {
       );
       await _service.loadFile(path: file.path, title: file.title);
     } catch (error) {
-      _setError(error);
+      _setFatalError(error);
     }
   }
 
@@ -129,8 +129,10 @@ class PlayerController extends Notifier<PlayerViewState> {
     _startListening();
     final available = tracks.where((track) => track.isAvailable).toList();
     if (available.isEmpty) {
-      state = state.copyWith(
-        errorMessage: 'No hay canciones disponibles para reproducir.',
+      _setFatalError(
+        const AudioPlayerException(
+          'No hay canciones disponibles para reproducir.',
+        ),
       );
       return;
     }
@@ -147,10 +149,14 @@ class PlayerController extends Notifier<PlayerViewState> {
     state = state.copyWith(errorMessage: null);
     try {
       await _service.playQueue(available, startIndex: availableStartIndex);
-      await _service.setShuffle(shuffle);
+      try {
+        await _service.setShuffle(shuffle);
+      } catch (error) {
+        _setNonFatalError(error);
+      }
       await _service.play();
     } catch (error) {
-      _setError(error);
+      _setFatalError(error);
     }
   }
 
@@ -197,12 +203,19 @@ class PlayerController extends Notifier<PlayerViewState> {
 
   Future<void> clearQueue() => _run(_service.clearQueue);
 
+  void clearError() {
+    if (state.errorMessage != null) {
+      state = state.copyWith(errorMessage: null);
+    }
+  }
+
   Future<void> _run(Future<void> Function() action) async {
     _startListening();
     try {
       await action();
+      if (ref.mounted) state = state.copyWith(errorMessage: null);
     } catch (error) {
-      _setError(error);
+      _setNonFatalError(error);
     }
   }
 
@@ -210,56 +223,53 @@ class PlayerController extends Notifier<PlayerViewState> {
     if (_isListening || !ref.mounted) return;
     _isListening = true;
 
-    _subscriptions
-      ..add(
-        _service.playbackStateStream.listen((playbackState) {
-          if (!ref.mounted) return;
-          state = state.copyWith(
-            status: playbackState.status,
-            errorMessage: playbackState.errorMessage ?? state.errorMessage,
-          );
-        }),
-      )
-      ..add(
-        _service.positionStream.listen((position) {
-          if (ref.mounted) state = state.copyWith(position: position);
-        }),
-      )
-      ..add(
-        _service.durationStream.listen((duration) {
-          if (ref.mounted) state = state.copyWith(duration: duration);
-        }),
-      )
-      ..add(
-        _service.currentItemStream.listen((item) {
-          if (!ref.mounted) return;
-          state = state.copyWith(
-            currentItem: item,
-            duration: item?.duration ?? state.duration,
-          );
-        }),
-      )
-      ..add(
-        _service.queueStream.listen((queue) {
-          if (ref.mounted) state = state.copyWith(queue: queue);
-        }),
-      )
-      ..add(
-        _service.currentIndexStream.listen((index) {
-          if (ref.mounted) state = state.copyWith(currentIndex: index);
-        }),
-      )
-      ..add(
-        _service.shuffleEnabledStream.listen((enabled) {
-          if (ref.mounted) state = state.copyWith(shuffleEnabled: enabled);
-        }),
-      )
-      ..add(
-        _service.repeatModeStream.listen((mode) {
-          if (ref.mounted) state = state.copyWith(repeatMode: mode);
-        }),
-      )
-      ..add(_service.failureStream.listen(_handleFailure));
+    _subscribe(_service.playbackStateStream, (playbackState) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        status: playbackState.status,
+        errorMessage: playbackState.errorMessage ?? state.errorMessage,
+      );
+    });
+    _subscribe(_service.positionStream, (position) {
+      if (ref.mounted) state = state.copyWith(position: position);
+    });
+    _subscribe(_service.durationStream, (duration) {
+      if (ref.mounted) state = state.copyWith(duration: duration);
+    });
+    _subscribe(_service.currentItemStream, (item) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        currentItem: item,
+        duration: item?.duration ?? state.duration,
+      );
+    });
+    _subscribe(_service.queueStream, (queue) {
+      if (ref.mounted) state = state.copyWith(queue: queue);
+    });
+    _subscribe(_service.currentIndexStream, (index) {
+      if (ref.mounted) state = state.copyWith(currentIndex: index);
+    });
+    _subscribe(_service.shuffleEnabledStream, (enabled) {
+      if (ref.mounted) state = state.copyWith(shuffleEnabled: enabled);
+    });
+    _subscribe(_service.repeatModeStream, (mode) {
+      if (ref.mounted) state = state.copyWith(repeatMode: mode);
+    });
+    _subscribe(
+      _service.failureStream,
+      (failure) => unawaited(_handleFailure(failure)),
+    );
+  }
+
+  void _subscribe<T>(Stream<T> stream, void Function(T value) onData) {
+    _subscriptions.add(
+      stream.listen(
+        onData,
+        onError: (Object error, StackTrace stackTrace) {
+          _setNonFatalError(error);
+        },
+      ),
+    );
   }
 
   Future<void> _handleFailure(AudioPlaybackFailure failure) async {
@@ -279,12 +289,17 @@ class PlayerController extends Notifier<PlayerViewState> {
     }
   }
 
-  void _setError(Object error) {
+  void _setFatalError(Object error) {
     if (!ref.mounted) return;
     state = state.copyWith(
       status: AudioPlaybackStatus.error,
       errorMessage: _messageFor(error),
     );
+  }
+
+  void _setNonFatalError(Object error) {
+    if (!ref.mounted) return;
+    state = state.copyWith(errorMessage: _messageFor(error));
   }
 
   void _disposeSubscriptions() {

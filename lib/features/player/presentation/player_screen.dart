@@ -236,11 +236,23 @@ class _PlayerError extends ConsumerWidget {
     if (error == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 16),
-      child: Text(
-        error,
-        key: const Key('player-error'),
-        textAlign: TextAlign.center,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              error,
+              key: const Key('player-error'),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+          IconButton(
+            key: const Key('dismiss-player-error'),
+            tooltip: 'Descartar error',
+            onPressed: ref.read(playerControllerProvider.notifier).clearError,
+            icon: const Icon(Icons.close),
+          ),
+        ],
       ),
     );
   }
