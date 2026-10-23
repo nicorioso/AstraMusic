@@ -143,7 +143,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
     if (_player.processingState == ProcessingState.completed) {
       await _player.seek(Duration.zero, index: _player.currentIndex ?? 0);
     }
-    await _player.play();
+    _startPlayer();
   }
 
   @override
@@ -213,7 +213,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
         startIndex: newIndex,
         initialPosition: currentPosition,
       );
-      if (wasPlaying && !_player.playing) await _player.play();
+      if (wasPlaying && !_player.playing) _startPlayer();
       if (!wasPlaying && _player.playing) await _player.pause();
       playbackState.add(playbackState.value.copyWith(shuffleMode: shuffleMode));
     } catch (error) {
@@ -226,7 +226,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
           startIndex: rollbackIndex,
           initialPosition: currentPosition,
         );
-        if (wasPlaying && !_player.playing) await _player.play();
+        if (wasPlaying && !_player.playing) _startPlayer();
       } catch (_) {
         // El error original describe mejor la operación que falló.
       }
@@ -449,8 +449,16 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
     }
 
     await _player.seek(Duration.zero, index: nextIndex);
-    if (_playRequested) await _player.play();
+    if (_playRequested) _startPlayer();
     _broadcastPlaybackState(_player.playbackEvent);
+  }
+
+  void _startPlayer() {
+    unawaited(
+      _player.play().catchError((Object error, StackTrace stackTrace) {
+        _scheduleFailure(_messageFor(error));
+      }),
+    );
   }
 
   void _broadcastError(String message, {int? code}) {
