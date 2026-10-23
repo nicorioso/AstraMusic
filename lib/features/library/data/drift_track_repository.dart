@@ -3,6 +3,7 @@ import 'package:astramusic/features/library/data/track_mapper.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:drift/drift.dart';
+import 'package:drift/extensions/native.dart';
 
 final class DriftTrackRepository implements TrackRepository {
   DriftTrackRepository(this._database);
@@ -20,15 +21,15 @@ final class DriftTrackRepository implements TrackRepository {
 
   @override
   Stream<List<Track>> watchSearch(String query) {
-    final normalizedQuery = query.trim().toLowerCase();
+    final normalizedQuery = query.trim();
     if (normalizedQuery.isEmpty) return watchAll();
 
     final statement = _database.select(_database.tracks)
       ..where(
         (track) =>
-            track.title.lower().contains(normalizedQuery) |
-            track.artist.lower().contains(normalizedQuery) |
-            track.album.lower().contains(normalizedQuery),
+            track.title.containsCase(normalizedQuery) |
+            track.artist.containsCase(normalizedQuery) |
+            track.album.containsCase(normalizedQuery),
       )
       ..orderBy([
         (track) => OrderingTerm.asc(track.title.collate(Collate.noCase)),

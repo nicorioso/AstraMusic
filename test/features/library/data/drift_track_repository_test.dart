@@ -60,6 +60,37 @@ void main() {
     },
   );
 
+  test(
+    'watchSearch trata porcentaje y guion bajo como texto literal',
+    () async {
+      await repository.upsertAll([
+        _track(uri: 'file:///porcentaje.mp3', title: 'Mezcla 100% real'),
+        _track(uri: 'file:///guion.mp3', title: 'Tema_A'),
+        _track(uri: 'file:///parecido.mp3', title: 'TemaXA'),
+      ]);
+
+      expect(
+        (await repository.watchSearch('%').first).map((track) => track.uri),
+        ['file:///porcentaje.mp3'],
+      );
+      expect(
+        (await repository.watchSearch('_').first).map((track) => track.uri),
+        ['file:///guion.mp3'],
+      );
+    },
+  );
+
+  test('watchSearch compara mayúsculas Unicode', () async {
+    await repository.upsertAll([
+      _track(uri: 'file:///unicode.mp3', title: 'ÉXITO 東京'),
+    ]);
+
+    expect(
+      (await repository.watchSearch('éxito 東京').first).single.uri,
+      'file:///unicode.mp3',
+    );
+  });
+
   test('markUnavailable cambia la disponibilidad', () async {
     await repository.upsertAll([
       _track(uri: 'file:///ausente.mp3', title: 'Ausente'),
