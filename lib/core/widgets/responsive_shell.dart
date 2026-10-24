@@ -94,60 +94,114 @@ class _DesktopSidebar extends ConsumerWidget {
         .read(appDestinationProvider.notifier)
         .select(AppDestination.library);
 
+    if (collapsed) {
+      return Material(
+        color: context.astraColors.surface,
+        child: Column(
+          children: [
+            _CollapsedSidebarButton(
+              key: const Key('collapsed-library-button'),
+              tooltip: 'Tu biblioteca',
+              icon: Icons.library_music_outlined,
+              onPressed: selectLibrary,
+            ),
+            _CollapsedSidebarButton(
+              key: const Key('expand-sidebar-button'),
+              tooltip: 'Expandir barra lateral',
+              icon: Icons.chevron_right,
+              onPressed: onToggle,
+            ),
+            Expanded(
+              child: Center(
+                child: _CollapsedSidebarButton(
+                  key: const Key('collapsed-playlists-button'),
+                  tooltip: 'Playlists',
+                  icon: Icons.queue_music_outlined,
+                  onPressed: selectLibrary,
+                ),
+              ),
+            ),
+            _CollapsedSidebarButton(
+              key: const Key('collapsed-settings-button'),
+              tooltip: 'Ajustes',
+              icon: Icons.settings_outlined,
+              onPressed: selectLibrary,
+            ),
+          ],
+        ),
+      );
+    }
+
     return Material(
       color: context.astraColors.surface,
       child: Column(
         children: [
           ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
             leading: const Icon(Icons.library_music_outlined),
-            title: collapsed ? null : const Text('Tu biblioteca'),
-            trailing: collapsed
-                ? null
-                : IconButton(
-                    tooltip: 'Plegar barra lateral',
-                    onPressed: onToggle,
-                    icon: const Icon(Icons.chevron_left),
-                  ),
+            title: const Text('Tu biblioteca'),
+            trailing: IconButton(
+              tooltip: 'Plegar barra lateral',
+              onPressed: onToggle,
+              icon: const Icon(Icons.chevron_left),
+            ),
             onTap: selectLibrary,
           ),
-          if (collapsed)
-            IconButton(
-              key: const Key('expand-sidebar-button'),
-              tooltip: 'Expandir barra lateral',
-              onPressed: onToggle,
-              icon: const Icon(Icons.chevron_right),
-            )
-          else
-            Tooltip(
-              message: 'Próximamente',
+          Tooltip(
+            message: 'Próximamente',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: OutlinedButton.icon(
+                onPressed: null,
+                icon: const Icon(Icons.add),
+                label: const Text('Crear'),
+              ),
+            ),
+          ),
+          const Expanded(
+            child: Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: OutlinedButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Crear'),
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Aún no tienes playlists',
+                  textAlign: TextAlign.center,
                 ),
               ),
             ),
-          Expanded(
-            child: Center(
-              child: collapsed
-                  ? const Icon(Icons.queue_music_outlined)
-                  : const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text(
-                        'Aún no tienes playlists',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-            ),
           ),
           ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
             leading: const Icon(Icons.settings_outlined),
-            title: collapsed ? null : const Text('Ajustes'),
+            title: const Text('Ajustes'),
             onTap: selectLibrary,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CollapsedSidebarButton extends StatelessWidget {
+  const _CollapsedSidebarButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 56,
+      child: IconButton(
+        tooltip: tooltip,
+        padding: const EdgeInsets.all(16),
+        onPressed: onPressed,
+        icon: Icon(icon),
       ),
     );
   }
@@ -573,71 +627,78 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
         height: 88,
         child: Row(
           children: [
-            Expanded(child: _DesktopNowPlaying(item: item)),
-            SizedBox(
-              width: 440,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        key: const Key('desktop-shuffle-button'),
-                        tooltip: 'Aleatorio',
-                        color: state.shuffleEnabled
-                            ? context.astraColors.accent
-                            : null,
-                        onPressed: enabled ? controller.toggleShuffle : null,
-                        icon: const Icon(Icons.shuffle),
-                      ),
-                      IconButton(
-                        key: const Key('desktop-previous-button'),
-                        tooltip: 'Anterior',
-                        onPressed: enabled ? controller.previous : null,
-                        icon: const Icon(Icons.skip_previous),
-                      ),
-                      PlayCircleButton(
-                        key: const Key('desktop-play-button'),
-                        onPressed: enabled ? controller.togglePlayback : null,
-                        isPlaying: state.isPlaying,
-                        size: 44,
-                      ),
-                      IconButton(
-                        key: const Key('desktop-next-button'),
-                        tooltip: 'Siguiente',
-                        onPressed: enabled ? controller.next : null,
-                        icon: const Icon(Icons.skip_next),
-                      ),
-                      IconButton(
-                        key: const Key('desktop-repeat-button'),
-                        tooltip: 'Repetir',
-                        color: state.repeatMode == RepeatMode.off
-                            ? null
-                            : context.astraColors.accent,
-                        onPressed: enabled ? controller.cycleRepeatMode : null,
-                        icon: Icon(
-                          state.repeatMode == RepeatMode.one
-                              ? Icons.repeat_one
-                              : Icons.repeat,
+            Expanded(flex: 3, child: _DesktopNowPlaying(item: item)),
+            Expanded(
+              flex: 4,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          key: const Key('desktop-shuffle-button'),
+                          tooltip: 'Aleatorio',
+                          color: state.shuffleEnabled
+                              ? context.astraColors.accent
+                              : null,
+                          onPressed: enabled ? controller.toggleShuffle : null,
+                          icon: const Icon(Icons.shuffle),
                         ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(
-                    height: 32,
-                    child: SeekBar(
-                      compact: true,
-                      position: state.position,
-                      duration: state.duration,
-                      onSeek: enabled ? controller.seek : null,
+                        IconButton(
+                          key: const Key('desktop-previous-button'),
+                          tooltip: 'Anterior',
+                          onPressed: enabled ? controller.previous : null,
+                          icon: const Icon(Icons.skip_previous),
+                        ),
+                        PlayCircleButton(
+                          key: const Key('desktop-play-button'),
+                          onPressed: enabled ? controller.togglePlayback : null,
+                          isPlaying: state.isPlaying,
+                          size: 44,
+                        ),
+                        IconButton(
+                          key: const Key('desktop-next-button'),
+                          tooltip: 'Siguiente',
+                          onPressed: enabled ? controller.next : null,
+                          icon: const Icon(Icons.skip_next),
+                        ),
+                        IconButton(
+                          key: const Key('desktop-repeat-button'),
+                          tooltip: 'Repetir',
+                          color: state.repeatMode == RepeatMode.off
+                              ? null
+                              : context.astraColors.accent,
+                          onPressed: enabled
+                              ? controller.cycleRepeatMode
+                              : null,
+                          icon: Icon(
+                            state.repeatMode == RepeatMode.one
+                                ? Icons.repeat_one
+                                : Icons.repeat,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    SizedBox(
+                      height: 32,
+                      child: SeekBar(
+                        compact: true,
+                        position: state.position,
+                        duration: state.duration,
+                        onSeek: enabled ? controller.seek : null,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             Expanded(
+              flex: 3,
               child: Row(
+                key: const Key('desktop-volume-zone'),
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   IconButton(
@@ -652,15 +713,23 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                       state.volume == 0 ? Icons.volume_off : Icons.volume_up,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   SizedBox(
-                    width: 120,
-                    child: Slider(
-                      key: const Key('desktop-volume-slider'),
-                      value: state.volume.clamp(0.0, 1.0),
-                      onChanged: controller.setVolume,
+                    width: 132,
+                    child: SliderTheme(
+                      data: Theme.of(context).sliderTheme.copyWith(
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 16,
+                        ),
+                      ),
+                      child: Slider(
+                        key: const Key('desktop-volume-slider'),
+                        value: state.volume.clamp(0.0, 1.0),
+                        onChanged: controller.setVolume,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 20),
                 ],
               ),
             ),
