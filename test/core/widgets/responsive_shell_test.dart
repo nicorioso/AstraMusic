@@ -57,6 +57,67 @@ void main() {
     expect(tester.getSize(find.byKey(const Key('desktop-sidebar'))).width, 300);
   });
 
+  testWidgets('centra todos los iconos de la barra lateral plegada', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(1200, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pump();
+    await tester.tap(find.byTooltip('Plegar barra lateral'));
+    await tester.pump();
+
+    final sidebarCenter = tester
+        .getRect(find.byKey(const Key('desktop-sidebar')))
+        .center
+        .dx;
+    for (final key in const [
+      Key('collapsed-library-button'),
+      Key('expand-sidebar-button'),
+      Key('collapsed-playlists-button'),
+      Key('collapsed-settings-button'),
+    ]) {
+      final button = find.byKey(key);
+      final icon = find.descendant(of: button, matching: find.byType(Icon));
+      expect(
+        (tester.getCenter(icon).dx - sidebarCenter).abs(),
+        lessThanOrEqualTo(1),
+        reason: '$key no comparte el eje central',
+      );
+      final area = tester.getSize(button);
+      expect(area.width, greaterThanOrEqualTo(48));
+      expect(area.height, greaterThanOrEqualTo(48));
+    }
+  });
+
+  for (final width in const [900.0, 1200.0, 1600.0]) {
+    testWidgets('el volumen conserva ancho y margen a ${width.toInt()} dp', (
+      tester,
+    ) async {
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+      await _setSize(tester, Size(width, 800));
+      await tester.pumpWidget(fixture.app());
+      await tester.pump();
+
+      final barRect = tester.getRect(
+        find.byKey(const Key('desktop-player-bar')),
+      );
+      final sliderRect = tester.getRect(
+        find.byKey(const Key('desktop-volume-slider')),
+      );
+      final muteRect = tester.getRect(
+        find.byKey(const Key('desktop-mute-button')),
+      );
+      expect(sliderRect.width, greaterThanOrEqualTo(110));
+      expect(sliderRect.left - muteRect.right, greaterThanOrEqualTo(8));
+      expect(barRect.right - sliderRect.right, greaterThanOrEqualTo(16));
+      expect(sliderRect.top, greaterThanOrEqualTo(barRect.top));
+      expect(sliderRect.bottom, lessThanOrEqualTo(barRect.bottom));
+    });
+  }
+
   testWidgets('silencia y restaura el volumen anterior', (tester) async {
     final fixture = _Fixture();
     addTearDown(fixture.dispose);
