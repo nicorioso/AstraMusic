@@ -102,6 +102,27 @@ void main() {
       expect(state.errorMessage, isNull);
     },
   );
+
+  test('quitar la canción actual avanza y la última detiene la cola', () async {
+    final controller = container.read(playerControllerProvider.notifier);
+    await controller.playQueue(_tracks(2), startIndex: 0);
+
+    await controller.removeTrackFromQueue('file:///track-1.mp3');
+
+    expect(
+      container.read(playerControllerProvider).queue.single.uri,
+      'file:///track-2.mp3',
+    );
+    expect(
+      container.read(playerControllerProvider).currentItem?.path,
+      'file:///track-2.mp3',
+    );
+
+    await controller.removeTrackFromQueue('file:///track-2.mp3');
+
+    expect(container.read(playerControllerProvider).queue, isEmpty);
+    expect(container.read(playerControllerProvider).currentItem, isNull);
+  });
 }
 
 List<Track> _tracks(int count) => List.generate(

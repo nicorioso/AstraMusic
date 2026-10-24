@@ -193,6 +193,7 @@ class LibraryScreen extends ConsumerWidget {
                                     .playVisibleQueue(items, startIndex: index),
                                 onPlayNext: libraryController.playNext,
                                 onAddToQueue: libraryController.addToQueue,
+                                onDelete: libraryController.deleteTrack,
                               ),
                             ),
                           ],
@@ -401,6 +402,7 @@ class _TrackList extends StatelessWidget {
     required this.onTrackTap,
     required this.onPlayNext,
     required this.onAddToQueue,
+    required this.onDelete,
   });
 
   final List<Track> tracks;
@@ -409,6 +411,7 @@ class _TrackList extends StatelessWidget {
   final ValueChanged<int> onTrackTap;
   final ValueChanged<Track> onPlayNext;
   final ValueChanged<Track> onAddToQueue;
+  final ValueChanged<Track> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -456,6 +459,8 @@ class _TrackList extends StatelessWidget {
                           onPlayNext(track);
                         case _TrackAction.addToQueue:
                           onAddToQueue(track);
+                        case _TrackAction.delete:
+                          onDelete(track);
                       }
                     },
                     itemBuilder: (context) => const [
@@ -466,6 +471,10 @@ class _TrackList extends StatelessWidget {
                       PopupMenuItem(
                         value: _TrackAction.addToQueue,
                         child: Text('Añadir a la cola'),
+                      ),
+                      PopupMenuItem(
+                        value: _TrackAction.delete,
+                        child: Text('Eliminar de la biblioteca'),
                       ),
                     ],
                   ),
@@ -605,4 +614,4 @@ String _formatDuration(Duration duration) {
 
 enum _LibraryAction { update, addFiles, loadDebugTracks, clearLibrary }
 
-enum _TrackAction { playNext, addToQueue }
+enum _TrackAction { playNext, addToQueue, delete }

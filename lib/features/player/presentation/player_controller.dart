@@ -210,6 +210,16 @@ class PlayerController extends Notifier<PlayerViewState> {
 
   Future<void> clearQueue() => _run(_service.clearQueue);
 
+  Future<void> removeTrackFromQueue(String uri) async {
+    final indices = <int>[
+      for (var index = 0; index < state.queue.length; index++)
+        if (state.queue[index].uri == uri) index,
+    ];
+    for (final index in indices.reversed) {
+      await _service.removeFromQueue(index);
+    }
+  }
+
   void clearError() {
     if (state.errorMessage != null) {
       state = state.copyWith(errorMessage: null);

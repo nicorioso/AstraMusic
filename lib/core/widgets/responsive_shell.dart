@@ -330,6 +330,16 @@ class SongsDestination extends ConsumerWidget {
     final tracks = ref.watch(libraryTracksProvider);
     final state = ref.watch(libraryControllerProvider);
     final controller = ref.read(libraryControllerProvider.notifier);
+    ref.listen<String?>(
+      libraryControllerProvider.select((state) => state.message),
+      (previous, next) {
+        if (next == null || next == previous) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(next)));
+        controller.clearMessage();
+      },
+    );
     return Column(
       key: Key(showSearch ? 'search-destination' : 'home-destination'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -454,6 +464,33 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                trailing: PopupMenuButton<_ShellTrackAction>(
+                  tooltip: 'Acciones de ${track.title}',
+                  onSelected: (action) {
+                    switch (action) {
+                      case _ShellTrackAction.playNext:
+                        controller.playNext(track);
+                      case _ShellTrackAction.addToQueue:
+                        controller.addToQueue(track);
+                      case _ShellTrackAction.delete:
+                        controller.deleteTrack(track);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: _ShellTrackAction.playNext,
+                      child: Text('Reproducir a continuación'),
+                    ),
+                    PopupMenuItem(
+                      value: _ShellTrackAction.addToQueue,
+                      child: Text('Añadir a la cola'),
+                    ),
+                    PopupMenuItem(
+                      value: _ShellTrackAction.delete,
+                      child: Text('Eliminar de la biblioteca'),
+                    ),
+                  ],
+                ),
                 onTap: () => controller.playVisibleQueue(
                   widget.tracks,
                   startIndex: index,
@@ -466,6 +503,8 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
     );
   }
 }
+
+enum _ShellTrackAction { playNext, addToQueue, delete }
 
 class PlaylistsDestination extends ConsumerWidget {
   const PlaylistsDestination({super.key});

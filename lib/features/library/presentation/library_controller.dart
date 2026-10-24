@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 
 import 'package:astramusic/core/platform/library_scanner.dart';
+import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/platform/media_library_permission.dart';
 import 'package:astramusic/core/platform/tag_reader.dart';
 import 'package:astramusic/features/library/application/library_sync_service.dart';
@@ -295,6 +296,44 @@ final class LibraryController extends Notifier<LibraryViewState> {
     await ref.read(playerControllerProvider.notifier).addToQueue(track);
     if (ref.mounted) {
       state = state.copyWith(message: 'Canción añadida a la cola.');
+    }
+  }
+
+  Future<void> deleteTrack(Track track) async {
+    if (state.actionsDisabled) return;
+    state = state.copyWith(isBusy: true, message: null, offerSettings: false);
+    try {
+      final repository = ref.read(trackRepositoryProvider);
+      final tracks = await repository.watchAll().first;
+      final key = artworkCacheKey(
+        artist: track.artist,
+        album: track.album,
+        uri: track.uri,
+      );
+      final artworkIsShared = tracks.any(
+        (candidate) =>
+            candidate.uri != track.uri &&
+            artworkCacheKey(
+                  artist: candidate.artist,
+                  album: candidate.album,
+                  uri: candidate.uri,
+                ) ==
+                key,
+      );
+      await ref
+          .read(playerControllerProvider.notifier)
+          .removeTrackFromQueue(track.uri);
+      await repository.excludeAndDelete(track);
+      if (!artworkIsShared) {
+        await ref.read(artworkCacheProvider).deleteByKey(key);
+      }
+      if (ref.mounted) {
+        state = state.copyWith(message: 'Eliminada de la biblioteca');
+      }
+    } catch (error) {
+      if (ref.mounted) state = state.copyWith(message: _messageFor(error));
+    } finally {
+      if (ref.mounted) state = state.copyWith(isBusy: false);
     }
   }
 

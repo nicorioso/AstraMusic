@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:astramusic/core/db/app_database.dart';
 import 'package:astramusic/core/platform/android_media_store_library_scanner.dart';
+import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/platform/desktop_library_scanner.dart';
 import 'package:astramusic/core/platform/library_folder_picker.dart';
@@ -59,6 +60,10 @@ final isAndroidPlatformProvider = Provider<bool>((ref) => Platform.isAndroid);
 
 final artworkProviderProvider = Provider<ArtworkProvider>((ref) {
   return CachedArtworkProvider();
+});
+
+final artworkCacheProvider = Provider<ArtworkCache>((ref) {
+  return const FileArtworkCache();
 });
 
 final librarySearchQueryProvider = NotifierProvider<LibrarySearchQuery, String>(
