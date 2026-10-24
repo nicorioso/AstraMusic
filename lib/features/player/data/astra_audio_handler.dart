@@ -102,6 +102,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   Stream<Duration> get positionStream => _player.positionStream;
   Stream<Duration?> get durationStream => _player.durationStream;
   Stream<HandlerPlaybackFailure> get failureStream => _failureController.stream;
+  List<MediaItem> get originalQueue => List.unmodifiable(_queueOrder.original);
 
   Future<void> loadQueue(List<MediaItem> items, {int startIndex = 0}) async {
     if (items.isEmpty) {

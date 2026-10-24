@@ -8,7 +8,8 @@ import 'package:astramusic/features/player/data/astra_audio_handler.dart';
 import 'package:astramusic/features/player/data/serial_command_queue.dart';
 import 'package:audio_service/audio_service.dart';
 
-final class AudioHandlerPlayerService implements AudioPlayerService {
+final class AudioHandlerPlayerService
+    implements AudioPlayerService, OriginalQueueProvider {
   AudioHandlerPlayerService(this._handler, {ArtworkProvider? artworkProvider})
     : _artworkProvider = artworkProvider {
     if (artworkProvider != null) {
@@ -23,6 +24,14 @@ final class AudioHandlerPlayerService implements AudioPlayerService {
   final AstraAudioHandler _handler;
   final ArtworkProvider? _artworkProvider;
   final SerialCommandQueue _commands = SerialCommandQueue();
+
+  @override
+  List<Track> get originalQueue =>
+      List.unmodifiable(_handler.originalQueue.map(_toTrack));
+
+  @override
+  List<Track> get playbackQueue =>
+      List.unmodifiable(_handler.queue.value.map(_toTrack));
 
   @override
   Stream<AudioPlaybackState> get playbackStateStream =>

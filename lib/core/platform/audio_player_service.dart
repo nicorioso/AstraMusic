@@ -75,3 +75,8 @@ abstract interface class AudioPlayerService {
   Future<void> moveInQueue(int oldIndex, int newIndex);
   Future<void> clearQueue();
 }
+
+abstract interface class OriginalQueueProvider {
+  List<Track> get originalQueue;
+  List<Track> get playbackQueue;
+}

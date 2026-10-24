@@ -66,7 +66,7 @@ void main() {
         )
         .getSingleOrNull();
 
-    expect(database.schemaVersion, 4);
+    expect(database.schemaVersion, 5);
     expect(tracks.single.title, 'Existente');
     expect(tracks.single.searchText, 'existente');
     expect(tracks.single.sortTitle, 'existente');
@@ -90,7 +90,31 @@ void main() {
     final track = await database.select(database.tracks).getSingle();
     expect(track.title, 'Tema');
     expect(track.artworkPath, isNull);
-    expect(database.schemaVersion, 4);
+    expect(database.schemaVersion, 5);
+  });
+
+  test('migra de 4 a 5 y crea el estado y la cola persistidos', () async {
+    final executor = NativeDatabase.memory(
+      setup: (database) {
+        _createVersionFourSchema(database);
+        database.userVersion = 4;
+      },
+    );
+    final database = AppDatabase(executor);
+    addTearDown(database.close);
+
+    final tables = await database
+        .customSelect(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' "
+          "AND name IN ('playback_state', 'queue_items') ORDER BY name",
+        )
+        .get();
+
+    expect(tables.map((row) => row.read<String>('name')), [
+      'playback_state',
+      'queue_items',
+    ]);
+    expect(database.schemaVersion, 5);
   });
 
   test('migra de 2 a 3, hace backfill y conserva todas las tablas', () async {
@@ -171,6 +195,36 @@ void _createVersionThreeTracks(dynamic database) {
   database.execute(
     'CREATE INDEX tracks_sort_title_idx ON tracks (sort_title, id)',
   );
+}
+
+void _createVersionFourSchema(dynamic database) {
+  _createVersionThreeTracks(database);
+  database.execute('ALTER TABLE tracks ADD COLUMN artwork_path TEXT NULL');
+  database.execute('''
+    CREATE TABLE playlists (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE TABLE playlist_tracks (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      playlist_id INTEGER NOT NULL REFERENCES playlists (id) ON DELETE CASCADE,
+      track_id INTEGER NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      added_at INTEGER NOT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE TABLE library_folders (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      path TEXT NOT NULL UNIQUE,
+      added_at INTEGER NOT NULL,
+      last_scanned_at INTEGER NULL
+    )
+  ''');
 }
 
 void _createVersionTwoSchema(dynamic database) {

@@ -56,13 +56,46 @@ class LibraryFolders extends Table {
   DateTimeColumn get lastScannedAt => dateTime().nullable()();
 }
 
-@DriftDatabase(tables: [Tracks, Playlists, PlaylistTracks, LibraryFolders])
+@DataClassName('PlaybackStateRow')
+class PlaybackState extends Table {
+  IntColumn get id => integer().withDefault(const Constant(1))();
+  IntColumn get currentIndex => integer().nullable()();
+  IntColumn get positionMs => integer().withDefault(const Constant(0))();
+  BoolColumn get shuffle => boolean().withDefault(const Constant(false))();
+  TextColumn get repeatMode => text().withDefault(const Constant('off'))();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@DataClassName('QueueItemRow')
+class QueueItems extends Table {
+  IntColumn get position => integer()();
+  IntColumn get trackId =>
+      integer().references(Tracks, #id, onDelete: KeyAction.cascade)();
+  IntColumn get originalPosition => integer().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {position};
+}
+
+@DriftDatabase(
+  tables: [
+    Tracks,
+    Playlists,
+    PlaylistTracks,
+    LibraryFolders,
+    PlaybackState,
+    QueueItems,
+  ],
+)
 final class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -111,6 +144,10 @@ final class AppDatabase extends _$AppDatabase {
       }
       if (from < 4) {
         await migrator.addColumn(tracks, tracks.artworkPath);
+      }
+      if (from < 5) {
+        await migrator.createTable(playbackState);
+        await migrator.createTable(queueItems);
       }
     },
     beforeOpen: (details) async {

@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/core/db/app_database.dart';
 import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
+import 'package:astramusic/features/player/application/playback_persistence_coordinator.dart';
 import 'package:astramusic/features/player/data/astra_audio_handler.dart';
 import 'package:astramusic/features/player/data/audio_handler_player_service.dart';
+import 'package:astramusic/features/player/data/drift_playback_state_repository.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -34,6 +38,12 @@ Future<void> main() async {
     handler,
     artworkProvider: artworkProvider,
   );
+  final database = AppDatabase();
+  final persistence = PlaybackPersistenceCoordinator(
+    playerService,
+    DriftPlaybackStateRepository(database),
+  );
+  await persistence.start();
 
   runApp(
     ProviderScope(
@@ -43,10 +53,51 @@ Future<void> main() async {
           notificationPermissionGranted,
         ),
         artworkProviderProvider.overrideWithValue(artworkProvider),
+        appDatabaseProvider.overrideWithValue(database),
       ],
-      child: const AstraMusicApp(),
+      child: PlaybackLifecycle(
+        coordinator: persistence,
+        child: const AstraMusicApp(),
+      ),
     ),
   );
+}
+
+class PlaybackLifecycle extends StatefulWidget {
+  const PlaybackLifecycle({
+    required this.coordinator,
+    required this.child,
+    super.key,
+  });
+
+  final PlaybackPersistenceCoordinator coordinator;
+  final Widget child;
+
+  @override
+  State<PlaybackLifecycle> createState() => _PlaybackLifecycleState();
+}
+
+class _PlaybackLifecycleState extends State<PlaybackLifecycle> {
+  late final AppLifecycleListener _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _listener = AppLifecycleListener(
+      onPause: () => unawaited(widget.coordinator.flush()),
+      onDetach: () => unawaited(widget.coordinator.flush()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _listener.dispose();
+    unawaited(widget.coordinator.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 Future<bool> _requestNotificationPermission() async {
