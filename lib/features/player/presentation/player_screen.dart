@@ -120,7 +120,8 @@ class _CurrentTrack extends ConsumerWidget {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyLarge,
+            style: Theme.of(context).textTheme.bodyLarge
+                ?.copyWith(color: context.astraColors.textMuted),
           ),
         ],
       ],
@@ -154,16 +155,17 @@ class _PlaybackControls extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            IconButton(
-              key: const Key('shuffle-button'),
-              tooltip: shuffleEnabled
-                  ? 'Desactivar aleatorio'
-                  : 'Activar aleatorio',
-              color: shuffleEnabled
-                  ? Theme.of(context).colorScheme.primary
-                  : null,
-              onPressed: enabled ? controller.toggleShuffle : null,
-              icon: Icon(shuffleEnabled ? Icons.shuffle_on : Icons.shuffle),
+            _ActiveControl(
+              active: shuffleEnabled,
+              child: IconButton(
+                key: const Key('shuffle-button'),
+                tooltip: shuffleEnabled
+                    ? 'Desactivar aleatorio'
+                    : 'Activar aleatorio',
+                color: shuffleEnabled ? context.astraColors.accent : null,
+                onPressed: enabled ? controller.toggleShuffle : null,
+                icon: Icon(shuffleEnabled ? Icons.shuffle_on : Icons.shuffle),
+              ),
             ),
             IconButton(
               key: const Key('previous-button'),
@@ -194,15 +196,20 @@ class _PlaybackControls extends ConsumerWidget {
               onPressed: enabled ? controller.next : null,
               icon: const Icon(Icons.skip_next),
             ),
-            IconButton(
-              key: const Key('repeat-button'),
-              tooltip: _repeatTooltip(repeatMode),
-              color: repeatMode == RepeatMode.off
-                  ? null
-                  : Theme.of(context).colorScheme.primary,
-              onPressed: enabled ? controller.cycleRepeatMode : null,
-              icon: Icon(
-                repeatMode == RepeatMode.one ? Icons.repeat_one : Icons.repeat,
+            _ActiveControl(
+              active: repeatMode != RepeatMode.off,
+              child: IconButton(
+                key: const Key('repeat-button'),
+                tooltip: _repeatTooltip(repeatMode),
+                color: repeatMode == RepeatMode.off
+                    ? null
+                    : context.astraColors.accent,
+                onPressed: enabled ? controller.cycleRepeatMode : null,
+                icon: Icon(
+                  repeatMode == RepeatMode.one
+                      ? Icons.repeat_one
+                      : Icons.repeat,
+                ),
               ),
             ),
           ],
@@ -211,6 +218,33 @@ class _PlaybackControls extends ConsumerWidget {
           _repeatLabel(repeatMode),
           key: const Key('repeat-mode-label'),
           style: Theme.of(context).textTheme.labelMedium,
+        ),
+      ],
+    );
+  }
+}
+
+class _ActiveControl extends StatelessWidget {
+  const _ActiveControl({required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        child,
+        Container(
+          width: 4,
+          height: 4,
+          decoration: BoxDecoration(
+            color: active
+                ? context.astraColors.accent
+                : context.astraColors.voidColor.withValues(alpha: 0),
+            shape: BoxShape.circle,
+          ),
         ),
       ],
     );

@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
+import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
+import 'package:astramusic/core/widgets/section_title.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/track.dart';
@@ -21,8 +23,8 @@ class LibraryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tracks = ref.watch(libraryTracksProvider);
     final libraryState = ref.watch(libraryControllerProvider);
-    final hasCurrentItem = ref.watch(
-      playerControllerProvider.select((state) => state.currentItem != null),
+    final currentPath = ref.watch(
+      playerControllerProvider.select((state) => state.currentItem?.path),
     );
     final isAndroid = ref.watch(isAndroidPlatformProvider);
     final libraryController = ref.read(libraryControllerProvider.notifier);
@@ -114,100 +116,106 @@ class LibraryScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: TextField(
-                key: const Key('library-search-field'),
-                onChanged: ref.read(librarySearchQueryProvider.notifier).update,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Buscar por título, artista o álbum',
-                  prefixIcon: Icon(Icons.search),
-                ),
-              ),
-            ),
-            if (libraryState.scanActive)
-              _ScanProgressCard(
-                foundCount: libraryState.foundCount,
-                errorCount: libraryState.scanErrorCount,
-                unchangedCount: libraryState.unchangedCount,
-                isCancelling: libraryState.isCancelling,
-                onCancel: libraryController.cancelScan,
-              ),
-            Expanded(
-              child: tracks.when(
-                data: (items) => items.isEmpty
-                    ? const _EmptyLibrary()
-                    : Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    key: const Key('play-all-button'),
-                                    onPressed: libraryState.actionsDisabled
-                                        ? null
-                                        : () =>
-                                              libraryController.playAll(items),
-                                    icon: const Icon(Icons.play_arrow),
-                                    label: const Text('Reproducir todo'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    key: const Key('shuffle-all-button'),
-                                    onPressed: libraryState.actionsDisabled
-                                        ? null
-                                        : () => libraryController.playAll(
-                                            items,
-                                            shuffle: true,
-                                          ),
-                                    icon: const Icon(Icons.shuffle),
-                                    label: const Text('Aleatorio'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: _TrackList(
-                              tracks: items,
-                              enabled: !libraryState.actionsDisabled,
-                              onTrackTap: (index) => libraryController
-                                  .playVisibleQueue(items, startIndex: index),
-                              onPlayNext: libraryController.playNext,
-                              onAddToQueue: libraryController.addToQueue,
-                            ),
-                          ),
-                        ],
-                      ),
-                loading: () => const Center(
-                  child: CircularProgressIndicator(
-                    key: Key('library-loading-indicator'),
+      body: AstraBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: TextField(
+                  key: const Key('library-search-field'),
+                  onChanged: ref
+                      .read(librarySearchQueryProvider.notifier)
+                      .update,
+                  decoration: const InputDecoration(
+                    hintText: 'Buscar por título, artista o álbum',
+                    prefixIcon: Icon(Icons.search),
                   ),
                 ),
-                error: (error, stackTrace) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'No fue posible cargar la biblioteca: $error',
-                      key: const Key('library-error'),
-                      textAlign: TextAlign.center,
+              ),
+              if (libraryState.scanActive)
+                _ScanProgressCard(
+                  foundCount: libraryState.foundCount,
+                  errorCount: libraryState.scanErrorCount,
+                  unchangedCount: libraryState.unchangedCount,
+                  isCancelling: libraryState.isCancelling,
+                  onCancel: libraryController.cancelScan,
+                ),
+              Expanded(
+                child: tracks.when(
+                  data: (items) => items.isEmpty
+                      ? const _EmptyLibrary()
+                      : Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: FilledButton.icon(
+                                      key: const Key('play-all-button'),
+                                      onPressed: libraryState.actionsDisabled
+                                          ? null
+                                          : () => libraryController.playAll(
+                                              items,
+                                            ),
+                                      icon: const Icon(Icons.play_arrow),
+                                      label: const Text('Reproducir todo'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      key: const Key('shuffle-all-button'),
+                                      onPressed: libraryState.actionsDisabled
+                                          ? null
+                                          : () => libraryController.playAll(
+                                              items,
+                                              shuffle: true,
+                                            ),
+                                      icon: const Icon(Icons.shuffle),
+                                      label: const Text('Aleatorio'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SectionTitle('Canciones'),
+                            Expanded(
+                              child: _TrackList(
+                                tracks: items,
+                                currentPath: currentPath,
+                                enabled: !libraryState.actionsDisabled,
+                                onTrackTap: (index) => libraryController
+                                    .playVisibleQueue(items, startIndex: index),
+                                onPlayNext: libraryController.playNext,
+                                onAddToQueue: libraryController.addToQueue,
+                              ),
+                            ),
+                          ],
+                        ),
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(
+                      key: Key('library-loading-indicator'),
+                    ),
+                  ),
+                  error: (error, stackTrace) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'No fue posible cargar la biblioteca: $error',
+                        key: const Key('library-error'),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -225,7 +233,7 @@ class LibraryScreen extends ConsumerWidget {
           isAndroid ? 'Escanear música del dispositivo' : 'Añadir carpeta',
         ),
       ),
-      bottomNavigationBar: hasCurrentItem ? const _MiniPlayer() : null,
+      bottomNavigationBar: currentPath != null ? const _MiniPlayer() : null,
     );
   }
 }
@@ -320,7 +328,8 @@ class _FolderTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
       leading: const Icon(Icons.folder_outlined),
-      title: Text(folder.path),
+      minVerticalPadding: 0,
+      title: Text(folder.path, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
         folder.lastScannedAt == null
             ? 'Nunca escaneada'
@@ -364,6 +373,7 @@ class _FolderTile extends ConsumerWidget {
 class _TrackList extends StatelessWidget {
   const _TrackList({
     required this.tracks,
+    required this.currentPath,
     required this.enabled,
     required this.onTrackTap,
     required this.onPlayNext,
@@ -371,6 +381,7 @@ class _TrackList extends StatelessWidget {
   });
 
   final List<Track> tracks;
+  final String? currentPath;
   final bool enabled;
   final ValueChanged<int> onTrackTap;
   final ValueChanged<Track> onPlayNext;
@@ -384,49 +395,64 @@ class _TrackList extends StatelessWidget {
       itemCount: tracks.length,
       itemBuilder: (context, index) {
         final track = tracks[index];
-        return ListTile(
-          enabled: enabled,
-          leading: TrackArtwork(track: track, size: 48),
-          title: Text(
-            track.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            track.artist ?? 'Artista desconocido',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (track.duration case final duration?)
-                Text(_formatDuration(duration)),
-              PopupMenuButton<_TrackAction>(
-                tooltip: 'Acciones de ${track.title}',
-                enabled: enabled && track.isAvailable,
-                onSelected: (action) {
-                  switch (action) {
-                    case _TrackAction.playNext:
-                      onPlayNext(track);
-                    case _TrackAction.addToQueue:
-                      onAddToQueue(track);
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: _TrackAction.playNext,
-                    child: Text('Reproducir a continuación'),
-                  ),
-                  PopupMenuItem(
-                    value: _TrackAction.addToQueue,
-                    child: Text('Añadir a la cola'),
+        final isCurrent = track.uri == currentPath;
+        return SizedBox(
+          height: 56,
+          child: Material(
+            color: isCurrent
+                ? context.astraColors.surfaceHover
+                : context.astraColors.voidColor.withValues(alpha: 0),
+            child: ListTile(
+              minVerticalPadding: 0,
+              enabled: enabled,
+              leading: TrackArtwork(track: track, size: 48),
+              title: Text(
+                track.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: isCurrent
+                    ? TextStyle(color: context.astraColors.accent)
+                    : null,
+              ),
+              subtitle: Text(
+                track.artist ?? 'Artista desconocido',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (track.duration case final duration?)
+                    Text(_formatDuration(duration)),
+                  PopupMenuButton<_TrackAction>(
+                    tooltip: 'Acciones de ${track.title}',
+                    enabled: enabled && track.isAvailable,
+                    onSelected: (action) {
+                      switch (action) {
+                        case _TrackAction.playNext:
+                          onPlayNext(track);
+                        case _TrackAction.addToQueue:
+                          onAddToQueue(track);
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: _TrackAction.playNext,
+                        child: Text('Reproducir a continuación'),
+                      ),
+                      PopupMenuItem(
+                        value: _TrackAction.addToQueue,
+                        child: Text('Añadir a la cola'),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+              onTap: enabled && track.isAvailable
+                  ? () => onTrackTap(index)
+                  : null,
+            ),
           ),
-          onTap: enabled && track.isAvailable ? () => onTrackTap(index) : null,
         );
       },
     );
@@ -490,10 +516,23 @@ class _MiniPlayer extends ConsumerWidget {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    currentItem.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        currentItem.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      Text(
+                        currentItem.artist ?? 'Artista desconocido',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
                 ),
                 if (isLoading)

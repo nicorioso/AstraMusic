@@ -1,4 +1,6 @@
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/core/theme/astra_colors.dart';
+import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:flutter/material.dart';
@@ -28,74 +30,87 @@ class QueueScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: SafeArea(
-        child: queue.isEmpty
-            ? const Center(
-                child: Text(
-                  'La cola está vacía.',
-                  key: Key('empty-queue-message'),
-                ),
-              )
-            : ReorderableListView.builder(
-                key: const Key('queue-list'),
-                buildDefaultDragHandles: false,
-                itemCount: queue.length,
-                onReorderItem: controller.moveInQueue,
-                itemBuilder: (context, index) {
-                  final track = queue[index];
-                  final itemKey = ValueKey(_queueIdentity(queue, index));
-                  final isCurrent = index == currentIndex;
-                  return Dismissible(
-                    key: itemKey,
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 24),
-                      child: const Icon(Icons.delete_outline),
-                    ),
-                    confirmDismiss: (_) async {
-                      await controller.removeFromQueue(index);
-                      return false;
-                    },
-                    child: Material(
-                      key: isCurrent ? const Key('current-queue-item') : null,
-                      color: isCurrent
-                          ? Theme.of(context).colorScheme.primaryContainer
-                                .withValues(alpha: 0.6)
-                          : Colors.transparent,
-                      child: ListTile(
-                        leading: TrackArtwork(track: track, size: 48),
-                        title: Text(
-                          track.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+      body: AstraBackground(
+        child: SafeArea(
+          child: queue.isEmpty
+              ? const Center(
+                  child: Text(
+                    'La cola está vacía.',
+                    key: Key('empty-queue-message'),
+                  ),
+                )
+              : ReorderableListView.builder(
+                  key: const Key('queue-list'),
+                  buildDefaultDragHandles: false,
+                  itemCount: queue.length,
+                  onReorderItem: controller.moveInQueue,
+                  itemBuilder: (context, index) {
+                    final track = queue[index];
+                    final itemKey = ValueKey(_queueIdentity(queue, index));
+                    final isCurrent = index == currentIndex;
+                    return SizedBox(
+                      height: 56,
+                      child: Dismissible(
+                        key: itemKey,
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          color: context.astraColors.error,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 24),
+                          child: const Icon(Icons.delete_outline),
                         ),
-                        subtitle: Text(
-                          track.artist ?? 'Artista desconocido',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () => controller.skipToIndex(index),
-                        trailing: Semantics(
-                          button: true,
-                          label: 'Reordenar ${track.title}',
-                          child: ReorderableDragStartListener(
-                            index: index,
-                            child: const Tooltip(
-                              message: 'Mantener y arrastrar para reordenar',
-                              child: Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Icon(Icons.drag_handle),
+                        confirmDismiss: (_) async {
+                          await controller.removeFromQueue(index);
+                          return false;
+                        },
+                        child: Material(
+                          key: isCurrent
+                              ? const Key('current-queue-item')
+                              : null,
+                          color: isCurrent
+                              ? context.astraColors.surfaceHover
+                              : context.astraColors.voidColor.withValues(
+                                  alpha: 0,
+                                ),
+                          child: ListTile(
+                            minVerticalPadding: 0,
+                            leading: TrackArtwork(track: track, size: 48),
+                            title: Text(
+                              track.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: isCurrent
+                                  ? TextStyle(color: context.astraColors.accent)
+                                  : null,
+                            ),
+                            subtitle: Text(
+                              track.artist ?? 'Artista desconocido',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => controller.skipToIndex(index),
+                            trailing: Semantics(
+                              button: true,
+                              label: 'Reordenar ${track.title}',
+                              child: ReorderableDragStartListener(
+                                index: index,
+                                child: const Tooltip(
+                                  message:
+                                      'Mantener y arrastrar para reordenar',
+                                  child: Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: Icon(Icons.drag_handle),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
-              ),
+                    );
+                  },
+                ),
+        ),
       ),
     );
   }

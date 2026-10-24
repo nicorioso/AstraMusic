@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:flutter/material.dart';
 
 const seekConfirmationTolerance = Duration(seconds: 1);
@@ -26,6 +27,7 @@ class _SeekBarState extends State<SeekBar> {
   Duration? _pendingTarget;
   Timer? _confirmationTimer;
   bool _dragging = false;
+  bool _hovered = false;
 
   @override
   void didUpdateWidget(SeekBar oldWidget) {
@@ -57,13 +59,27 @@ class _SeekBarState extends State<SeekBar> {
 
     return Column(
       children: [
-        Slider(
-          key: const Key('seek-slider'),
-          value: displayedPosition.inMilliseconds.toDouble(),
-          max: maxMilliseconds,
-          onChangeStart: enabled ? _startDrag : null,
-          onChanged: enabled ? _updateDrag : null,
-          onChangeEnd: enabled ? _finishDrag : null,
+        MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: SliderTheme(
+            data: Theme.of(context).sliderTheme.copyWith(
+              activeTrackColor: _hovered
+                  ? context.astraColors.accent
+                  : context.astraColors.photon,
+              thumbColor: _hovered
+                  ? context.astraColors.accent
+                  : context.astraColors.photon,
+            ),
+            child: Slider(
+              key: const Key('seek-slider'),
+              value: displayedPosition.inMilliseconds.toDouble(),
+              max: maxMilliseconds,
+              onChangeStart: enabled ? _startDrag : null,
+              onChanged: enabled ? _updateDrag : null,
+              onChangeEnd: enabled ? _finishDrag : null,
+            ),
+          ),
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

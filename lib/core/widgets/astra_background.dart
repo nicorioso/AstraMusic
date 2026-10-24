@@ -9,16 +9,26 @@ class AstraBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.astraColors;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.voidColor,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [colors.gradientTop, colors.voidColor.withValues(alpha: 0)],
-        ),
+    return ColoredBox(
+      color: colors.voidColor,
+      child: Stack(
+        children: [
+          Container(
+            height: 300,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  colors.gradientTop,
+                  colors.voidColor.withValues(alpha: 0),
+                ],
+              ),
+            ),
+          ),
+          Positioned.fill(child: child),
+        ],
       ),
-      child: SizedBox(width: double.infinity, child: child),
     );
   }
 }
