@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_file_picker.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/platform/library_scanner.dart';
 import 'package:astramusic/core/platform/media_library_permission.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
@@ -18,6 +19,61 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('conserva la carátula compartida al borrar una canción', () async {
+    final first = Track(
+      id: 1,
+      uri: 'file:///uno.mp3',
+      title: 'Uno',
+      artist: 'Artista',
+      album: 'Álbum',
+      dateAdded: DateTime(2026),
+    );
+    final second = Track(
+      id: 2,
+      uri: 'file:///dos.mp3',
+      title: 'Dos',
+      artist: 'Artista',
+      album: 'Álbum',
+      dateAdded: DateTime(2026),
+    );
+    final repository = RecordingTrackRepository([first, second]);
+    final cache = RecordingArtworkCache();
+    final container = ProviderContainer(
+      overrides: [
+        trackRepositoryProvider.overrideWithValue(repository),
+        audioPlayerServiceProvider.overrideWithValue(
+          const FakeAudioPlayerService(),
+        ),
+        artworkCacheProvider.overrideWithValue(cache),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(libraryControllerProvider.notifier).deleteTrack(first);
+
+    expect(repository.deletedUris, {'file:///uno.mp3'});
+    expect(cache.deletedKeys, isEmpty);
+  });
+
+  test('Añadir archivos recupera una uri excluida', () async {
+    final repository = RecordingTrackRepository([]);
+    final container = ProviderContainer(
+      overrides: [
+        trackRepositoryProvider.overrideWithValue(repository),
+        audioPlayerServiceProvider.overrideWithValue(
+          const FakeAudioPlayerService(),
+        ),
+        audioFilePickerProvider.overrideWithValue(const _PickedFilePicker()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(libraryControllerProvider.notifier).addFiles();
+
+    expect(repository.restoredUris, {'content://document/audio/1'});
+    expect(repository.tracks.single.uri, 'content://document/audio/1');
+  });
+
   testWidgets('muestra el estado vacío de la biblioteca', (tester) async {
     await tester.pumpWidget(_testApp(const FakeTrackRepository([])));
     await tester.pumpAndSettle();
@@ -64,15 +120,14 @@ void main() {
   testWidgets('muestra progreso y resumen del escaneo', (tester) async {
     final scanner = ControlledLibraryScanner();
     await tester.pumpWidget(
-      _testApp(
-        const FakeTrackRepository([]),
-        scanner: scanner,
-        isAndroid: false,
-      ),
+      _testApp(const FakeTrackRepository([]), scanner: scanner),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('scan-library-button')));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(LibraryScreen)),
+    );
+    unawaited(container.read(libraryControllerProvider.notifier).startScan());
     await tester.pump();
     await tester.pump();
     scanner.addProgress(foundCount: 7, errorCount: 1);
@@ -107,20 +162,16 @@ void main() {
   ) async {
     final scanner = ControlledLibraryScanner()..delayCancellation();
     await tester.pumpWidget(
-      _testApp(
-        const FakeTrackRepository([]),
-        scanner: scanner,
-        isAndroid: false,
-      ),
+      _testApp(const FakeTrackRepository([]), scanner: scanner),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('scan-library-button')));
-    await tester.pump();
-    await tester.pump();
     final container = ProviderScope.containerOf(
       tester.element(find.byType(LibraryScreen)),
     );
+    unawaited(container.read(libraryControllerProvider.notifier).startScan());
+    await tester.pump();
+    await tester.pump();
     final cancellation = container
         .read(libraryControllerProvider.notifier)
         .cancelScan();
@@ -128,14 +179,7 @@ void main() {
     await scanner.cancellationStarted;
 
     expect(find.text('Cancelando...'), findsOneWidget);
-    expect(
-      tester
-          .widget<FloatingActionButton>(
-            find.byKey(const Key('scan-library-button')),
-          )
-          .onPressed,
-      isNull,
-    );
+    expect(container.read(libraryControllerProvider).actionsDisabled, isTrue);
 
     scanner.completeCancellation();
     await cancellation;
@@ -393,6 +437,77 @@ final class FakeTrackRepository implements TrackRepository {
         )
         .toList(growable: false),
   );
+}
+
+final class RecordingTrackRepository implements TrackRepository {
+  RecordingTrackRepository(this.tracks);
+
+  final List<Track> tracks;
+  final Set<String> deletedUris = {};
+  final Set<String> restoredUris = {};
+
+  @override
+  Future<void> excludeAndDelete(Track track) async {
+    deletedUris.add(track.uri);
+    tracks.removeWhere((candidate) => candidate.uri == track.uri);
+  }
+
+  @override
+  Future<void> restoreExcluded(Set<String> uris) async =>
+      restoredUris.addAll(uris);
+
+  @override
+  Future<void> upsertAll(List<Track> values) async => tracks.addAll(values);
+
+  @override
+  Stream<List<Track>> watchAll() => Stream.value(List.of(tracks));
+
+  @override
+  Stream<List<Track>> watchSearch(String query) => watchAll();
+
+  @override
+  Future<int> count() async => tracks.length;
+
+  @override
+  Future<void> clearLibrary() async => tracks.clear();
+
+  @override
+  Future<void> deleteAll() async => tracks.clear();
+
+  @override
+  Future<void> deleteByUris(Set<String> uris) async =>
+      tracks.removeWhere((track) => uris.contains(track.uri));
+
+  @override
+  Future<Set<String>> excludedUris() async => const {};
+
+  @override
+  Future<Track?> getById(int id) async => null;
+
+  @override
+  Future<void> markUnavailable(Set<String> uris) async {}
+}
+
+final class RecordingArtworkCache implements ArtworkCache {
+  final List<String> deletedKeys = [];
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<void> deleteByKey(String key) async => deletedKeys.add(key);
+}
+
+final class _PickedFilePicker implements AudioFilePicker {
+  const _PickedFilePicker();
+
+  @override
+  Future<PickedAudioFile?> pickAudioFile() async => null;
+
+  @override
+  Future<List<PickedAudioFile>> pickAudioFiles() async => const [
+    PickedAudioFile(path: 'content://document/audio/1', title: 'Recuperada'),
+  ];
 }
 
 final class FakeAudioFilePicker implements AudioFilePicker {

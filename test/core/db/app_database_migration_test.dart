@@ -144,14 +144,14 @@ void main() {
     final database = AppDatabase(executor);
     addTearDown(database.close);
 
-    await database.into(database.excludedUris).insert(
-      const ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3'),
-    );
+    await database
+        .into(database.excludedUris)
+        .insert(ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3'));
 
     expect(
-      () => database.into(database.excludedUris).insert(
-        const ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3'),
-      ),
+      () => database
+          .into(database.excludedUris)
+          .insert(ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3')),
       throwsA(anything),
     );
     expect(database.schemaVersion, 6);
