@@ -71,6 +71,7 @@ class MediaStoreLibraryScanner(
                 MediaStore.Audio.Media.YEAR,
                 MediaStore.Audio.Media.SIZE,
                 MediaStore.Audio.Media.DATE_ADDED,
+                MediaStore.Audio.Media.DATE_MODIFIED,
                 MediaStore.Audio.Media.DISPLAY_NAME,
             )
             val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
@@ -94,6 +95,9 @@ class MediaStoreLibraryScanner(
                 val yearColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
                 val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
                 val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val dateModifiedColumn = cursor.getColumnIndexOrThrow(
+                    MediaStore.Audio.Media.DATE_MODIFIED,
+                )
                 val displayNameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
 
                 while (!cancelled && cursor.moveToNext()) {
@@ -117,6 +121,8 @@ class MediaStoreLibraryScanner(
                                 "year" to cursor.positiveIntOrNull(yearColumn),
                                 "fileSize" to cursor.longOrNull(sizeColumn),
                                 "dateAddedMs" to cursor.positiveLongOrNull(dateAddedColumn)
+                                    ?.times(1000L),
+                                "dateModifiedMs" to cursor.positiveLongOrNull(dateModifiedColumn)
                                     ?.times(1000L),
                             ),
                         )

@@ -23,7 +23,7 @@ void main() {
     final events = await task.events.toList();
     final completed = events.whereType<ScanCompleted>().single;
 
-    expect(completed.errorCount, 0);
+    expect(completed.errorCount, 2);
     expect(
       completed.tracks.map((track) => track.title),
       unorderedEquals(['Primera', 'Segunda']),
@@ -34,6 +34,71 @@ void main() {
     );
     expect(completed.tracks.every((track) => track.fileSize != null), isTrue);
     expect(completed.tracks.every((track) => track.dateAdded != null), isTrue);
+    expect(
+      completed.tracks.every((track) => track.dateModified != null),
+      isTrue,
+    );
     expect(events.whereType<ScanProgress>(), isNotEmpty);
   });
+
+  test(
+    'omite etiquetas sin cambios y relee solo el archivo modificado',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'astramusic_incremental_',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final unchangedFile = await File(path.join(root.path, 'estable.mp3'))
+          .writeAsBytes([1]);
+      final changedFile = await File(path.join(root.path, 'cambia.flac'))
+          .writeAsBytes([2]);
+
+      final first = await _completedScan(root.path);
+      expect(first.errorCount, 2);
+      final known = {
+        for (final track in first.tracks)
+          track.uri: KnownFileStats(
+            fileSize: track.fileSize,
+            dateModified: track.dateModified,
+          ),
+      };
+
+      final second = await _completedScan(root.path, knownFiles: known);
+      expect(second.errorCount, 0);
+      expect(second.unchangedCount, 2);
+      expect(second.tracks.every((track) => track.unchanged), isTrue);
+
+      await changedFile.writeAsBytes([2, 3, 4]);
+      await changedFile.setLastModified(
+        known[changedFile.path]!.dateModified!.add(const Duration(seconds: 2)),
+      );
+      final third = await _completedScan(root.path, knownFiles: known);
+
+      expect(third.errorCount, 1);
+      expect(third.unchangedCount, 1);
+      expect(
+        third.tracks
+            .singleWhere((track) => track.uri == unchangedFile.path)
+            .unchanged,
+        isTrue,
+      );
+      expect(
+        third.tracks
+            .singleWhere((track) => track.uri == changedFile.path)
+            .unchanged,
+        isFalse,
+      );
+    },
+  );
+}
+
+Future<ScanCompleted> _completedScan(
+  String rootPath, {
+  Map<String, KnownFileStats> knownFiles = const {},
+}) async {
+  final task = await const DesktopLibraryScanner().startScan(
+    rootPath: rootPath,
+    knownFiles: knownFiles,
+  );
+  return (await task.events.toList()).whereType<ScanCompleted>().single;
 }

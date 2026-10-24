@@ -77,6 +77,45 @@ void main() {
     );
     expect(await repository.count(), 2);
   });
+
+  test(
+    'un archivo sin cambios conserva sus etiquetas y se contabiliza',
+    () async {
+      final uri = path.join(root.path, 'etiquetada.mp3');
+      final scope = DesktopFolderScanScope(root.path);
+      await service.synchronize(
+        scannedTracks: [
+          ScannedTrack(
+            uri: uri,
+            title: 'Título de etiqueta',
+            artist: 'Artista',
+            fileSize: 42,
+            dateModified: DateTime(2026),
+          ),
+        ],
+        scope: scope,
+      );
+
+      final summary = await service.synchronize(
+        scannedTracks: [
+          ScannedTrack(
+            uri: uri,
+            title: 'nombre-del-archivo',
+            fileSize: 42,
+            dateModified: DateTime(2026),
+            unchanged: true,
+          ),
+        ],
+        scope: scope,
+      );
+      final stored = (await repository.watchAll().first).single;
+
+      expect(summary.unchangedCount, 1);
+      expect(summary.updatedCount, 0);
+      expect(stored.title, 'Título de etiqueta');
+      expect(stored.artist, 'Artista');
+    },
+  );
 }
 
 ScannedTrack _scanned(String uri) => ScannedTrack(
@@ -84,4 +123,5 @@ ScannedTrack _scanned(String uri) => ScannedTrack(
   title: path.basenameWithoutExtension(uri),
   fileSize: 42,
   dateAdded: DateTime(2026),
+  dateModified: DateTime(2026),
 );

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:astramusic/core/platform/library_scanner.dart';
+import 'package:astramusic/core/platform/tag_reader.dart';
 import 'package:path/path.dart' as path;
 
 const supportedAudioExtensions = <String>{
@@ -20,7 +21,10 @@ final class DesktopLibraryScanner implements LibraryScanner {
   const DesktopLibraryScanner();
 
   @override
-  Future<LibraryScanTask> startScan({String? rootPath}) async {
+  Future<LibraryScanTask> startScan({
+    String? rootPath,
+    Map<String, KnownFileStats> knownFiles = const {},
+  }) async {
     if (rootPath == null || rootPath.trim().isEmpty) {
       throw ArgumentError.value(
         rootPath,
@@ -43,7 +47,13 @@ final class DesktopLibraryScanner implements LibraryScanner {
     late final StreamSubscription<Object?> subscription;
     final isolate = await Isolate.spawn<_DesktopScanRequest>(
       _scanDirectory,
-      _DesktopScanRequest(root.path, receivePort.sendPort),
+      _DesktopScanRequest(root.path, receivePort.sendPort, {
+        for (final entry in knownFiles.entries)
+          entry.key: [
+            entry.value.fileSize,
+            entry.value.dateModified?.millisecondsSinceEpoch,
+          ],
+      }),
       debugName: 'astramusic-library-scan',
     );
 
@@ -60,10 +70,15 @@ final class DesktopLibraryScanner implements LibraryScanner {
       final type = message['type'];
       final foundCount = message['foundCount'] as int? ?? 0;
       final errorCount = message['errorCount'] as int? ?? 0;
+      final unchangedCount = message['unchangedCount'] as int? ?? 0;
 
       if (type == 'progress') {
         controller.add(
-          ScanProgress(foundCount: foundCount, errorCount: errorCount),
+          ScanProgress(
+            foundCount: foundCount,
+            errorCount: errorCount,
+            unchangedCount: unchangedCount,
+          ),
         );
         return;
       }
@@ -77,6 +92,7 @@ final class DesktopLibraryScanner implements LibraryScanner {
                 .map(_trackFromMessage)
                 .toList(growable: false),
             errorCount: errorCount,
+            unchangedCount: unchangedCount,
           ),
         );
         unawaited(finish());
@@ -93,21 +109,24 @@ final class DesktopLibraryScanner implements LibraryScanner {
 }
 
 final class _DesktopScanRequest {
-  const _DesktopScanRequest(this.rootPath, this.sendPort);
+  const _DesktopScanRequest(this.rootPath, this.sendPort, this.knownFiles);
 
   final String rootPath;
   final SendPort sendPort;
+  final Map<String, List<int?>> knownFiles;
 }
 
 void _scanDirectory(_DesktopScanRequest request) {
   final tracks = <Map<String, Object?>>[];
   var errors = 0;
+  var unchanged = 0;
 
   void reportProgress() {
     request.sendPort.send({
       'type': 'progress',
       'foundCount': tracks.length,
       'errorCount': errors,
+      'unchangedCount': unchanged,
     });
   }
 
@@ -130,11 +149,30 @@ void _scanDirectory(_DesktopScanRequest request) {
 
       try {
         final stat = entry.statSync();
+        final modifiedMs = stat.modified.millisecondsSinceEpoch;
+        final known = request.knownFiles[entry.path];
+        final isUnchanged =
+            known != null && known[0] == stat.size && known[1] == modifiedMs;
+        if (isUnchanged) unchanged++;
+
+        AudioTags? tags;
+        if (!isUnchanged) {
+          final result = readTagsSafely(const AudioMetadataTagReader(), entry);
+          tags = result.tags;
+          if (result.hadError) errors++;
+        }
         tracks.add({
           'uri': entry.path,
-          'title': path.basenameWithoutExtension(entry.path),
+          'title': tags?.title ?? path.basenameWithoutExtension(entry.path),
+          'artist': tags?.artist,
+          'album': tags?.album,
+          'durationMs': tags?.durationMs,
+          'trackNumber': tags?.trackNumber,
+          'year': tags?.year,
           'fileSize': stat.size,
           'dateAddedMs': stat.modified.millisecondsSinceEpoch,
+          'dateModifiedMs': modifiedMs,
+          'unchanged': isUnchanged,
         });
         if (tracks.length % desktopScanProgressInterval == 0) {
           reportProgress();
@@ -152,6 +190,7 @@ void _scanDirectory(_DesktopScanRequest request) {
     'type': 'completed',
     'foundCount': tracks.length,
     'errorCount': errors,
+    'unchangedCount': unchanged,
     'tracks': tracks,
   });
 }
@@ -162,9 +201,19 @@ bool _isSupportedAudio(String filePath) =>
 ScannedTrack _trackFromMessage(Map<Object?, Object?> message) => ScannedTrack(
   uri: message['uri']! as String,
   title: message['title']! as String,
+  artist: message['artist'] as String?,
+  album: message['album'] as String?,
+  durationMs: message['durationMs'] as int?,
+  trackNumber: message['trackNumber'] as int?,
+  year: message['year'] as int?,
   fileSize: message['fileSize'] as int?,
   dateAdded: switch (message['dateAddedMs']) {
     final int milliseconds => DateTime.fromMillisecondsSinceEpoch(milliseconds),
     _ => null,
   },
+  dateModified: switch (message['dateModifiedMs']) {
+    final int milliseconds => DateTime.fromMillisecondsSinceEpoch(milliseconds),
+    _ => null,
+  },
+  unchanged: message['unchanged'] as bool? ?? false,
 );

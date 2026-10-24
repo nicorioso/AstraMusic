@@ -11,9 +11,13 @@ final class AndroidMediaStoreLibraryScanner implements LibraryScanner {
 
   final MethodChannel _channel;
   StreamController<ScanEvent>? _activeController;
+  Completer<void>? _cancellationCompletion;
 
   @override
-  Future<LibraryScanTask> startScan({String? rootPath}) async {
+  Future<LibraryScanTask> startScan({
+    String? rootPath,
+    Map<String, KnownFileStats> knownFiles = const {},
+  }) async {
     if (_activeController != null) {
       throw StateError('Ya hay un escaneo de MediaStore en curso.');
     }
@@ -33,9 +37,15 @@ final class AndroidMediaStoreLibraryScanner implements LibraryScanner {
 
     return LibraryScanTask(controller.stream, () async {
       if (_activeController != controller) return;
-      await _channel.invokeMethod<void>('cancelScan');
-      if (!controller.isClosed) controller.add(const ScanCancelled());
-      await _finish();
+      final completion = Completer<void>();
+      _cancellationCompletion = completion;
+      try {
+        await _channel.invokeMethod<void>('cancelScan');
+        await completion.future;
+      } catch (_) {
+        await _finish();
+        rethrow;
+      }
     });
   }
 
@@ -50,6 +60,7 @@ final class AndroidMediaStoreLibraryScanner implements LibraryScanner {
           ScanProgress(
             foundCount: arguments['foundCount'] as int? ?? 0,
             errorCount: arguments['errorCount'] as int? ?? 0,
+            unchangedCount: arguments['unchangedCount'] as int? ?? 0,
           ),
         );
       case 'scanCompleted':
@@ -61,6 +72,7 @@ final class AndroidMediaStoreLibraryScanner implements LibraryScanner {
                 .map(_trackFromNative)
                 .toList(growable: false),
             errorCount: arguments['errorCount'] as int? ?? 0,
+            unchangedCount: arguments['unchangedCount'] as int? ?? 0,
           ),
         );
         await _finish();
@@ -85,6 +97,11 @@ final class AndroidMediaStoreLibraryScanner implements LibraryScanner {
     _activeController = null;
     _channel.setMethodCallHandler(null);
     if (controller != null && !controller.isClosed) await controller.close();
+    final cancellation = _cancellationCompletion;
+    _cancellationCompletion = null;
+    if (cancellation != null && !cancellation.isCompleted) {
+      cancellation.complete();
+    }
   }
 
   ScannedTrack _trackFromNative(Map<Object?, Object?> values) => ScannedTrack(
@@ -97,6 +114,12 @@ final class AndroidMediaStoreLibraryScanner implements LibraryScanner {
     year: values['year'] as int?,
     fileSize: values['fileSize'] as int?,
     dateAdded: switch (values['dateAddedMs']) {
+      final int milliseconds => DateTime.fromMillisecondsSinceEpoch(
+        milliseconds,
+      ),
+      _ => null,
+    },
+    dateModified: switch (values['dateModifiedMs']) {
       final int milliseconds => DateTime.fromMillisecondsSinceEpoch(
         milliseconds,
       ),

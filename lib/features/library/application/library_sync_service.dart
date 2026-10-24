@@ -23,25 +23,29 @@ class LibrarySyncSummary {
   const LibrarySyncSummary({
     this.newCount = 0,
     this.updatedCount = 0,
+    this.unchangedCount = 0,
     this.unavailableCount = 0,
     this.errorCount = 0,
   });
 
   final int newCount;
   final int updatedCount;
+  final int unchangedCount;
   final int unavailableCount;
   final int errorCount;
 
   LibrarySyncSummary operator +(LibrarySyncSummary other) => LibrarySyncSummary(
     newCount: newCount + other.newCount,
     updatedCount: updatedCount + other.updatedCount,
+    unchangedCount: unchangedCount + other.unchangedCount,
     unavailableCount: unavailableCount + other.unavailableCount,
     errorCount: errorCount + other.errorCount,
   );
 
   String get message =>
       '$newCount nuevas, $updatedCount actualizadas, '
-      '$unavailableCount no disponibles, $errorCount errores.';
+      '$unchangedCount sin cambios, $unavailableCount no disponibles, '
+      '$errorCount errores.';
 }
 
 final class LibrarySyncService {
@@ -66,19 +70,23 @@ final class LibrarySyncService {
     final upserts = <Track>[];
     for (final scanned in uniqueScanned.values) {
       final old = existingByUri[scanned.uri];
+      final preserveMetadata = scanned.unchanged && old != null;
       final track = Track(
         id: old?.id,
         uri: scanned.uri,
-        title: scanned.title,
-        artist: scanned.artist,
-        album: scanned.album,
-        duration: scanned.durationMs == null
+        title: preserveMetadata ? old.title : scanned.title,
+        artist: preserveMetadata ? old.artist : scanned.artist,
+        album: preserveMetadata ? old.album : scanned.album,
+        duration: preserveMetadata
+            ? old.duration
+            : scanned.durationMs == null
             ? null
             : Duration(milliseconds: scanned.durationMs!),
-        trackNumber: scanned.trackNumber,
-        year: scanned.year,
+        trackNumber: preserveMetadata ? old.trackNumber : scanned.trackNumber,
+        year: preserveMetadata ? old.year : scanned.year,
         fileSize: scanned.fileSize,
-        dateAdded: scanned.dateAdded ?? old?.dateAdded ?? now,
+        dateAdded: old?.dateAdded ?? scanned.dateAdded ?? now,
+        dateModified: scanned.dateModified ?? old?.dateModified,
         isAvailable: true,
         isFavorite: old?.isFavorite ?? false,
       );
@@ -109,6 +117,9 @@ final class LibrarySyncService {
     return LibrarySyncSummary(
       newCount: newCount,
       updatedCount: updatedCount,
+      unchangedCount: uniqueScanned.values
+          .where((track) => track.unchanged)
+          .length,
       unavailableCount: unavailableUris.length,
       errorCount: scanErrorCount,
     );
@@ -178,6 +189,7 @@ final class LibrarySyncService {
       old.year == current.year &&
       old.fileSize == current.fileSize &&
       old.dateAdded == current.dateAdded &&
+      old.dateModified == current.dateModified &&
       old.isAvailable == current.isAvailable &&
       old.isFavorite == current.isFavorite;
 }

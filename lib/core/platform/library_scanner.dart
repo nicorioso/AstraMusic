@@ -9,6 +9,8 @@ class ScannedTrack {
     this.year,
     this.fileSize,
     this.dateAdded,
+    this.dateModified,
+    this.unchanged = false,
   });
 
   final String uri;
@@ -20,6 +22,15 @@ class ScannedTrack {
   final int? year;
   final int? fileSize;
   final DateTime? dateAdded;
+  final DateTime? dateModified;
+  final bool unchanged;
+}
+
+class KnownFileStats {
+  const KnownFileStats({required this.fileSize, required this.dateModified});
+
+  final int? fileSize;
+  final DateTime? dateModified;
 }
 
 sealed class ScanEvent {
@@ -27,17 +38,27 @@ sealed class ScanEvent {
 }
 
 final class ScanProgress extends ScanEvent {
-  const ScanProgress({required this.foundCount, required this.errorCount});
+  const ScanProgress({
+    required this.foundCount,
+    required this.errorCount,
+    this.unchangedCount = 0,
+  });
 
   final int foundCount;
   final int errorCount;
+  final int unchangedCount;
 }
 
 final class ScanCompleted extends ScanEvent {
-  const ScanCompleted({required this.tracks, required this.errorCount});
+  const ScanCompleted({
+    required this.tracks,
+    required this.errorCount,
+    this.unchangedCount = 0,
+  });
 
   final List<ScannedTrack> tracks;
   final int errorCount;
+  final int unchangedCount;
 }
 
 final class ScanCancelled extends ScanEvent {
@@ -54,5 +75,8 @@ final class LibraryScanTask {
 }
 
 abstract interface class LibraryScanner {
-  Future<LibraryScanTask> startScan({String? rootPath});
+  Future<LibraryScanTask> startScan({
+    String? rootPath,
+    Map<String, KnownFileStats> knownFiles = const {},
+  });
 }
