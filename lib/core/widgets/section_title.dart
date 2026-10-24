@@ -20,7 +20,7 @@ class SectionTitle extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
-          if (trailing case final trailing?) trailing,
+          ?trailing,
         ],
       ),
     );

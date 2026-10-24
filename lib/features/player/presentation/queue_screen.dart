@@ -49,9 +49,10 @@ class QueueScreen extends ConsumerWidget {
                     final itemKey = ValueKey(_queueIdentity(queue, index));
                     final isCurrent = index == currentIndex;
                     return SizedBox(
+                      key: itemKey,
                       height: 56,
                       child: Dismissible(
-                        key: itemKey,
+                        key: ValueKey('dismiss-$itemKey'),
                         direction: DismissDirection.endToStart,
                         background: Container(
                           color: context.astraColors.error,

@@ -76,12 +76,12 @@ ThemeData buildAstraTheme() {
       elevation: 0,
       titleTextStyle: textTheme.titleLarge,
     ),
-    cardTheme: const CardThemeData(
+    cardTheme: CardThemeData(
       color: colors.surfaceRaised,
-      margin: EdgeInsets.zero,
+      margin: const EdgeInsets.all(0),
     ),
-    dividerTheme: const DividerThemeData(color: colors.divider),
-    iconTheme: const IconThemeData(color: colors.textMuted),
+    dividerTheme: DividerThemeData(color: colors.divider),
+    iconTheme: IconThemeData(color: colors.textMuted),
     sliderTheme: SliderThemeData(
       activeTrackColor: colors.photon,
       inactiveTrackColor: colors.divider,
@@ -96,7 +96,7 @@ ThemeData buildAstraTheme() {
               ? colors.accentHover
               : colors.accent,
         ),
-        foregroundColor: const WidgetStatePropertyAll(colors.onAccent),
+        foregroundColor: WidgetStatePropertyAll(colors.onAccent),
         textStyle: const WidgetStatePropertyAll(
           TextStyle(fontWeight: FontWeight.w700),
         ),
@@ -106,7 +106,7 @@ ThemeData buildAstraTheme() {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: colors.text,
-        side: const BorderSide(color: colors.divider),
+        side: BorderSide(color: colors.divider),
         minimumSize: const Size(48, 48),
       ),
     ),
@@ -116,13 +116,13 @@ ThemeData buildAstraTheme() {
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(foregroundColor: colors.textMuted),
     ),
-    listTileTheme: const ListTileThemeData(
+    listTileTheme: ListTileThemeData(
       minTileHeight: 56,
       minLeadingWidth: 48,
       iconColor: colors.textMuted,
       textColor: colors.text,
       subtitleTextStyle: TextStyle(color: colors.textMuted),
-      contentPadding: EdgeInsets.symmetric(horizontal: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: colors.surfaceRaised,
@@ -148,13 +148,13 @@ ThemeData buildAstraTheme() {
       titleTextStyle: textTheme.titleLarge,
       contentTextStyle: textTheme.bodyMedium,
     ),
-    snackBarTheme: const SnackBarThemeData(
+    snackBarTheme: SnackBarThemeData(
       backgroundColor: colors.surfaceHover,
       contentTextStyle: TextStyle(color: colors.text),
       actionTextColor: colors.accent,
       behavior: SnackBarBehavior.floating,
     ),
-    popupMenuTheme: const PopupMenuThemeData(
+    popupMenuTheme: PopupMenuThemeData(
       color: colors.surfaceRaised,
       textStyle: TextStyle(color: colors.text),
     ),
@@ -172,7 +172,7 @@ ThemeData buildAstraTheme() {
         color: colors.surfaceHover,
         borderRadius: BorderRadius.circular(6),
       ),
-      textStyle: const TextStyle(color: colors.text),
+      textStyle: TextStyle(color: colors.text),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -180,9 +180,9 @@ ThemeData buildAstraTheme() {
       border: pill,
       enabledBorder: pill,
       focusedBorder: pill.copyWith(
-        borderSide: const BorderSide(color: colors.accent, width: 2),
+        borderSide: BorderSide(color: colors.accent, width: 2),
       ),
-      hintStyle: const TextStyle(color: colors.textMuted),
+      hintStyle: TextStyle(color: colors.textMuted),
       prefixIconColor: colors.textMuted,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
     ),
