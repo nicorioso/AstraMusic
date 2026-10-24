@@ -80,6 +80,14 @@ class QueueItems extends Table {
   Set<Column<Object>> get primaryKey => {position};
 }
 
+@DataClassName('ExcludedUriRow')
+class ExcludedUris extends Table {
+  TextColumn get uri => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {uri};
+}
+
 @DriftDatabase(
   tables: [
     Tracks,
@@ -88,6 +96,7 @@ class QueueItems extends Table {
     LibraryFolders,
     PlaybackState,
     QueueItems,
+    ExcludedUris,
   ],
 )
 final class AppDatabase extends _$AppDatabase {
@@ -95,7 +104,7 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -148,6 +157,9 @@ final class AppDatabase extends _$AppDatabase {
       if (from < 5) {
         await migrator.createTable(playbackState);
         await migrator.createTable(queueItems);
+      }
+      if (from < 6) {
+        await migrator.createTable(excludedUris);
       }
     },
     beforeOpen: (details) async {

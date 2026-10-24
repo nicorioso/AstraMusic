@@ -2548,6 +2548,164 @@ class QueueItemsCompanion extends UpdateCompanion<QueueItemRow> {
   }
 }
 
+class $ExcludedUrisTable extends ExcludedUris
+    with TableInfo<$ExcludedUrisTable, ExcludedUriRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ExcludedUrisTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _uriMeta = const VerificationMeta('uri');
+  @override
+  late final GeneratedColumn<String> uri = GeneratedColumn<String>(
+    'uri',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [uri];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'excluded_uris';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ExcludedUriRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('uri')) {
+      context.handle(
+        _uriMeta,
+        uri.isAcceptableOrUnknown(data['uri']!, _uriMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_uriMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {uri};
+  @override
+  ExcludedUriRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ExcludedUriRow(
+      uri: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uri'],
+      )!,
+    );
+  }
+
+  @override
+  $ExcludedUrisTable createAlias(String alias) {
+    return $ExcludedUrisTable(attachedDatabase, alias);
+  }
+}
+
+class ExcludedUriRow extends DataClass implements Insertable<ExcludedUriRow> {
+  final String uri;
+  const ExcludedUriRow({required this.uri});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['uri'] = Variable<String>(uri);
+    return map;
+  }
+
+  ExcludedUrisCompanion toCompanion(bool nullToAbsent) {
+    return ExcludedUrisCompanion(uri: Value(uri));
+  }
+
+  factory ExcludedUriRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ExcludedUriRow(uri: serializer.fromJson<String>(json['uri']));
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{'uri': serializer.toJson<String>(uri)};
+  }
+
+  ExcludedUriRow copyWith({String? uri}) =>
+      ExcludedUriRow(uri: uri ?? this.uri);
+  ExcludedUriRow copyWithCompanion(ExcludedUrisCompanion data) {
+    return ExcludedUriRow(uri: data.uri.present ? data.uri.value : this.uri);
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExcludedUriRow(')
+          ..write('uri: $uri')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => uri.hashCode;
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExcludedUriRow && other.uri == this.uri);
+}
+
+class ExcludedUrisCompanion extends UpdateCompanion<ExcludedUriRow> {
+  final Value<String> uri;
+  final Value<int> rowid;
+  const ExcludedUrisCompanion({
+    this.uri = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ExcludedUrisCompanion.insert({
+    required String uri,
+    this.rowid = const Value.absent(),
+  }) : uri = Value(uri);
+  static Insertable<ExcludedUriRow> custom({
+    Expression<String>? uri,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (uri != null) 'uri': uri,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ExcludedUrisCompanion copyWith({Value<String>? uri, Value<int>? rowid}) {
+    return ExcludedUrisCompanion(
+      uri: uri ?? this.uri,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (uri.present) {
+      map['uri'] = Variable<String>(uri.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExcludedUrisCompanion(')
+          ..write('uri: $uri, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2557,6 +2715,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LibraryFoldersTable libraryFolders = $LibraryFoldersTable(this);
   late final $PlaybackStateTable playbackState = $PlaybackStateTable(this);
   late final $QueueItemsTable queueItems = $QueueItemsTable(this);
+  late final $ExcludedUrisTable excludedUris = $ExcludedUrisTable(this);
   late final Index tracksSortTitleIdx = Index(
     'tracks_sort_title_idx',
     'CREATE INDEX tracks_sort_title_idx ON tracks (sort_title, id)',
@@ -2576,6 +2735,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     libraryFolders,
     playbackState,
     queueItems,
+    excludedUris,
     tracksSortTitleIdx,
     playlistTracksPlaylistPositionIdx,
   ];
@@ -4586,6 +4746,125 @@ typedef $$QueueItemsTableProcessedTableManager =
       QueueItemRow,
       PrefetchHooks Function({bool trackId})
     >;
+typedef $$ExcludedUrisTableCreateCompanionBuilder =
+    ExcludedUrisCompanion Function({required String uri, Value<int> rowid});
+typedef $$ExcludedUrisTableUpdateCompanionBuilder =
+    ExcludedUrisCompanion Function({Value<String> uri, Value<int> rowid});
+
+class $$ExcludedUrisTableFilterComposer
+    extends Composer<_$AppDatabase, $ExcludedUrisTable> {
+  $$ExcludedUrisTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get uri => $composableBuilder(
+    column: $table.uri,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ExcludedUrisTableOrderingComposer
+    extends Composer<_$AppDatabase, $ExcludedUrisTable> {
+  $$ExcludedUrisTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get uri => $composableBuilder(
+    column: $table.uri,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ExcludedUrisTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ExcludedUrisTable> {
+  $$ExcludedUrisTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get uri =>
+      $composableBuilder(column: $table.uri, builder: (column) => column);
+}
+
+class $$ExcludedUrisTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ExcludedUrisTable,
+          ExcludedUriRow,
+          $$ExcludedUrisTableFilterComposer,
+          $$ExcludedUrisTableOrderingComposer,
+          $$ExcludedUrisTableAnnotationComposer,
+          $$ExcludedUrisTableCreateCompanionBuilder,
+          $$ExcludedUrisTableUpdateCompanionBuilder,
+          (
+            ExcludedUriRow,
+            BaseReferences<_$AppDatabase, $ExcludedUrisTable, ExcludedUriRow>,
+          ),
+          ExcludedUriRow,
+          PrefetchHooks Function()
+        > {
+  $$ExcludedUrisTableTableManager(_$AppDatabase db, $ExcludedUrisTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ExcludedUrisTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ExcludedUrisTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ExcludedUrisTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> uri = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) => ExcludedUrisCompanion(uri: uri, rowid: rowid),
+          createCompanionCallback: ({
+            required String uri,
+            Value<int> rowid = const Value.absent(),
+          }) => ExcludedUrisCompanion.insert(uri: uri, rowid: rowid),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ExcludedUrisTable, ExcludedUriRow>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ExcludedUrisTable,
+                    ExcludedUriRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ExcludedUrisTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ExcludedUrisTable,
+      ExcludedUriRow,
+      $$ExcludedUrisTableFilterComposer,
+      $$ExcludedUrisTableOrderingComposer,
+      $$ExcludedUrisTableAnnotationComposer,
+      $$ExcludedUrisTableCreateCompanionBuilder,
+      $$ExcludedUrisTableUpdateCompanionBuilder,
+      (
+        ExcludedUriRow,
+        BaseReferences<_$AppDatabase, $ExcludedUrisTable, ExcludedUriRow>,
+      ),
+      ExcludedUriRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4602,4 +4881,6 @@ class $AppDatabaseManager {
       $$PlaybackStateTableTableManager(_db, _db.playbackState);
   $$QueueItemsTableTableManager get queueItems =>
       $$QueueItemsTableTableManager(_db, _db.queueItems);
+  $$ExcludedUrisTableTableManager get excludedUris =>
+      $$ExcludedUrisTableTableManager(_db, _db.excludedUris);
 }

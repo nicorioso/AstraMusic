@@ -66,7 +66,7 @@ void main() {
         )
         .getSingleOrNull();
 
-    expect(database.schemaVersion, 5);
+    expect(database.schemaVersion, 6);
     expect(tracks.single.title, 'Existente');
     expect(tracks.single.searchText, 'existente');
     expect(tracks.single.sortTitle, 'existente');
@@ -90,7 +90,7 @@ void main() {
     final track = await database.select(database.tracks).getSingle();
     expect(track.title, 'Tema');
     expect(track.artworkPath, isNull);
-    expect(database.schemaVersion, 5);
+    expect(database.schemaVersion, 6);
   });
 
   test('migra de 4 a 5 y crea el estado y la cola persistidos', () async {
@@ -114,7 +114,47 @@ void main() {
       'playback_state',
       'queue_items',
     ]);
-    expect(database.schemaVersion, 5);
+    expect(database.schemaVersion, 6);
+  });
+
+  test('migra de 5 a 6 y crea excluded_uris con uri única', () async {
+    final executor = NativeDatabase.memory(
+      setup: (database) {
+        _createVersionFourSchema(database);
+        database.execute('''
+          CREATE TABLE playback_state (
+            id INTEGER NOT NULL PRIMARY KEY DEFAULT 1,
+            current_index INTEGER NULL,
+            position_ms INTEGER NOT NULL DEFAULT 0,
+            shuffle INTEGER NOT NULL DEFAULT 0 CHECK (shuffle IN (0, 1)),
+            repeat_mode TEXT NOT NULL DEFAULT 'off',
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+        database.execute('''
+          CREATE TABLE queue_items (
+            position INTEGER NOT NULL PRIMARY KEY,
+            track_id INTEGER NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
+            original_position INTEGER NULL
+          )
+        ''');
+        database.userVersion = 5;
+      },
+    );
+    final database = AppDatabase(executor);
+    addTearDown(database.close);
+
+    await database.into(database.excludedUris).insert(
+      const ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3'),
+    );
+
+    expect(
+      () => database.into(database.excludedUris).insert(
+        const ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3'),
+      ),
+      throwsA(anything),
+    );
+    expect(database.schemaVersion, 6);
   });
 
   test('migra de 2 a 3, hace backfill y conserva todas las tablas', () async {
