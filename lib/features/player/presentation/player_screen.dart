@@ -1,6 +1,7 @@
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/queue_screen.dart';
+import 'package:astramusic/features/player/presentation/seek_bar.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -207,33 +208,10 @@ class _ProgressControls extends ConsumerWidget {
       ),
     );
     final (position, nullableDuration, hasItem) = progress;
-    final duration = nullableDuration ?? Duration.zero;
-    final maxMilliseconds = duration.inMilliseconds > 0
-        ? duration.inMilliseconds.toDouble()
-        : 1.0;
-    final positionMilliseconds = position.inMilliseconds
-        .clamp(0, maxMilliseconds.toInt())
-        .toDouble();
-
-    return Column(
-      children: [
-        Slider(
-          value: positionMilliseconds,
-          max: maxMilliseconds,
-          onChanged: !hasItem || duration == Duration.zero
-              ? null
-              : (value) => ref
-                    .read(playerControllerProvider.notifier)
-                    .seek(Duration(milliseconds: value.round())),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(_formatDuration(position)),
-            Text(_formatDuration(duration)),
-          ],
-        ),
-      ],
+    return SeekBar(
+      position: position,
+      duration: nullableDuration,
+      onSeek: hasItem ? ref.read(playerControllerProvider.notifier).seek : null,
     );
   }
 }
@@ -308,14 +286,3 @@ String _repeatTooltip(RepeatMode mode) => switch (mode) {
   RepeatMode.all => 'Repetir una canción',
   RepeatMode.one => 'Desactivar repetición',
 };
-
-String _formatDuration(Duration duration) {
-  final hours = duration.inHours;
-  final minutes = duration.inMinutes.remainder(60);
-  final seconds = duration.inSeconds.remainder(60);
-  if (hours > 0) {
-    return '$hours:${minutes.toString().padLeft(2, '0')}:'
-        '${seconds.toString().padLeft(2, '0')}';
-  }
-  return '$minutes:${seconds.toString().padLeft(2, '0')}';
-}
