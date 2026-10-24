@@ -6,6 +6,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 
 void main() {
+  test('elige el cubo de miniatura según el uso', () {
+    expect(artworkThumbnailBucket(ArtworkUsage.list), 256);
+    expect(artworkThumbnailBucket(ArtworkUsage.miniPlayer), 256);
+    expect(artworkThumbnailBucket(ArtworkUsage.player), 640);
+    expect(normalizeArtworkThumbnailBucket(48), 256);
+    expect(normalizeArtworkThumbnailBucket(512), 640);
+  });
+
+  test('la clave de caché cambia entre cubos', () {
+    final compact = artworkBucketCacheKey(
+      artist: 'Artista',
+      album: 'Álbum',
+      uri: 'file:///song.mp3',
+      bucket: 256,
+    );
+    final large = artworkBucketCacheKey(
+      artist: 'Artista',
+      album: 'Álbum',
+      uri: 'file:///song.mp3',
+      bucket: 640,
+    );
+
+    expect(compact, isNot(large));
+  });
+
   test('la clave deduplica por artista y álbum y cae a URI', () {
     final first = artworkCacheKey(
       artist: ' Artista ',

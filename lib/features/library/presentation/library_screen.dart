@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
@@ -552,6 +553,7 @@ class _MiniPlayer extends ConsumerWidget {
                     artworkPath: currentItem.artworkPath,
                   ),
                   size: 48,
+                  usage: ArtworkUsage.miniPlayer,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

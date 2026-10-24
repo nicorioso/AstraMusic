@@ -11,6 +11,16 @@ abstract interface class ArtworkProvider {
   Future<String?> artworkFor(Track track, {required int size});
 }
 
+enum ArtworkUsage { list, miniPlayer, player }
+
+int artworkThumbnailBucket(ArtworkUsage usage) => switch (usage) {
+  ArtworkUsage.list || ArtworkUsage.miniPlayer => 256,
+  ArtworkUsage.player => 640,
+};
+
+int normalizeArtworkThumbnailBucket(int requestedSize) =>
+    requestedSize <= 256 ? 256 : 640;
+
 String artworkCacheKey({String? artist, String? album, required String uri}) {
   final normalizedArtist = artist?.trim().toLowerCase();
   final normalizedAlbum = album?.trim().toLowerCase();
@@ -28,6 +38,13 @@ String artworkCacheKey({String? artist, String? album, required String uri}) {
   }
   return hash.toRadixString(16).padLeft(16, '0');
 }
+
+String artworkBucketCacheKey({
+  String? artist,
+  String? album,
+  required String uri,
+  required int bucket,
+}) => '${artworkCacheKey(artist: artist, album: album, uri: uri)}-$bucket';
 
 File? selectFolderArtwork(Directory directory) {
   if (!directory.existsSync()) return null;
@@ -71,13 +88,14 @@ final class CachedArtworkProvider implements ArtworkProvider {
       }
     }
     if (!Platform.isAndroid) return Future.value(null);
-    final key = '${track.uri}@$size';
+    final bucket = normalizeArtworkThumbnailBucket(size);
+    final key = '${track.uri}@$bucket';
     if (_memory.containsKey(key)) {
       final value = _memory.remove(key);
       _memory[key] = value;
       return Future.value(value);
     }
-    return _pending.putIfAbsent(key, () => _loadAndroid(track, size, key));
+    return _pending.putIfAbsent(key, () => _loadAndroid(track, bucket, key));
   }
 
   Future<String?> _loadAndroid(Track track, int size, String memoryKey) async {
@@ -89,7 +107,7 @@ final class CachedArtworkProvider implements ArtworkProvider {
       final file = File(
         path.join(
           directory.path,
-          '${artworkCacheKey(artist: track.artist, album: track.album, uri: track.uri)}-$size.jpg',
+          '${artworkBucketCacheKey(artist: track.artist, album: track.album, uri: track.uri, bucket: size)}.jpg',
         ),
       );
       if (await file.exists()) {

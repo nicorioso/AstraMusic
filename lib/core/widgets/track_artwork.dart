@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
@@ -7,10 +8,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class TrackArtwork extends ConsumerStatefulWidget {
-  const TrackArtwork({super.key, required this.track, required this.size});
+  const TrackArtwork({
+    super.key,
+    required this.track,
+    required this.size,
+    this.usage = ArtworkUsage.list,
+  });
 
   final Track track;
   final double size;
+  final ArtworkUsage usage;
 
   @override
   ConsumerState<TrackArtwork> createState() => _TrackArtworkState();
@@ -30,7 +37,8 @@ class _TrackArtworkState extends ConsumerState<TrackArtwork> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.track.uri != widget.track.uri ||
         oldWidget.track.artworkPath != widget.track.artworkPath ||
-        oldWidget.size != widget.size) {
+        oldWidget.size != widget.size ||
+        oldWidget.usage != widget.usage) {
       _path = null;
       _load();
     }
@@ -40,7 +48,7 @@ class _TrackArtworkState extends ConsumerState<TrackArtwork> {
     final uri = widget.track.uri;
     final result = await ref
         .read(artworkProviderProvider)
-        .artworkFor(widget.track, size: widget.size.ceil());
+        .artworkFor(widget.track, size: artworkThumbnailBucket(widget.usage));
     if (mounted && widget.track.uri == uri) setState(() => _path = result);
   }
 
@@ -48,6 +56,10 @@ class _TrackArtworkState extends ConsumerState<TrackArtwork> {
   Widget build(BuildContext context) {
     final path = _path;
     if (path == null || !File(path).existsSync()) return _placeholder(context);
+    final physicalSize = physicalArtworkPixels(
+      widget.size,
+      MediaQuery.devicePixelRatioOf(context),
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
       child: Image.file(
@@ -57,8 +69,9 @@ class _TrackArtworkState extends ConsumerState<TrackArtwork> {
         height: widget.size,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        cacheWidth: (widget.size * MediaQuery.devicePixelRatioOf(context))
-            .ceil(),
+        filterQuality: FilterQuality.medium,
+        cacheWidth: physicalSize,
+        cacheHeight: physicalSize,
         errorBuilder: (_, _, _) => _placeholder(context),
       ),
     );
@@ -83,3 +96,6 @@ class _TrackArtworkState extends ConsumerState<TrackArtwork> {
     ),
   );
 }
+
+int physicalArtworkPixels(double logicalSize, double devicePixelRatio) =>
+    (logicalSize * devicePixelRatio).ceil();

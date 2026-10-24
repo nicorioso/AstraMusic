@@ -1,4 +1,5 @@
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
@@ -110,6 +111,7 @@ class _CurrentTrack extends ConsumerWidget {
               artworkPath: item.artworkPath,
             ),
             size: artworkSize,
+            usage: ArtworkUsage.player,
           ),
           const SizedBox(height: 24),
         ],

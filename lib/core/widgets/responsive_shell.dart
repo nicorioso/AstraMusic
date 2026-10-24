@@ -1,5 +1,6 @@
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
@@ -684,7 +685,11 @@ class MobileMiniPlayer extends ConsumerWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(8),
-                  child: TrackArtwork(track: track, size: 48),
+                  child: TrackArtwork(
+                    track: track,
+                    size: 48,
+                    usage: ArtworkUsage.miniPlayer,
+                  ),
                 ),
                 Expanded(
                   child: Column(
@@ -887,7 +892,11 @@ class _DesktopNowPlaying extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            TrackArtwork(track: track, size: 56),
+            TrackArtwork(
+              track: track,
+              size: 56,
+              usage: ArtworkUsage.miniPlayer,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
