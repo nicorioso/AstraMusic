@@ -513,6 +513,17 @@ class PlaylistsDestination extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(libraryControllerProvider.notifier);
     final state = ref.watch(libraryControllerProvider);
+    final isAndroid = ref.watch(isAndroidPlatformProvider);
+    ref.listen<String?>(
+      libraryControllerProvider.select((state) => state.message),
+      (previous, next) {
+        if (next == null || next == previous) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(next)));
+        controller.clearMessage();
+      },
+    );
     return Material(
       color: context.astraColors.surface.withValues(alpha: 0),
       child: Column(
@@ -535,25 +546,34 @@ class PlaylistsDestination extends ConsumerWidget {
             child: Center(child: Text('Aún no tienes playlists')),
           ),
           const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.folder_copy_outlined),
-            title: const Text('Carpetas de música'),
-            onTap: () => showDialog<void>(
-              context: context,
-              builder: (_) => const MusicFoldersDialog(),
+          if (!isAndroid) ...[
+            ListTile(
+              leading: const Icon(Icons.folder_copy_outlined),
+              title: const Text('Carpetas de música'),
+              onTap: () => showDialog<void>(
+                context: context,
+                builder: (_) => const MusicFoldersDialog(),
+              ),
             ),
-          ),
+            ListTile(
+              leading: const Icon(Icons.library_add_outlined),
+              title: const Text('Añadir carpeta'),
+              enabled: !state.actionsDisabled,
+              onTap: controller.startScan,
+            ),
+            ListTile(
+              leading: const Icon(Icons.refresh),
+              title: const Text('Actualizar biblioteca'),
+              enabled: !state.actionsDisabled,
+              onTap: controller.updateLibrary,
+            ),
+          ],
           ListTile(
-            leading: const Icon(Icons.library_add_outlined),
-            title: const Text('Escanear música'),
+            key: const Key('settings-add-files-button'),
+            leading: const Icon(Icons.audio_file_outlined),
+            title: const Text('Añadir archivos'),
             enabled: !state.actionsDisabled,
-            onTap: controller.startScan,
-          ),
-          ListTile(
-            leading: const Icon(Icons.refresh),
-            title: const Text('Actualizar biblioteca'),
-            enabled: !state.actionsDisabled,
-            onTap: controller.updateLibrary,
+            onTap: controller.addFiles,
           ),
           if (kDebugMode)
             ListTile(
@@ -562,9 +582,64 @@ class PlaylistsDestination extends ConsumerWidget {
               enabled: !state.actionsDisabled,
               onTap: controller.loadDebugTracks,
             ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              'Zona de peligro',
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+          ListTile(
+            key: const Key('clear-library-button'),
+            leading: Icon(
+              Icons.delete_forever_outlined,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            title: Text(
+              'Eliminar toda la biblioteca',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            enabled: !state.actionsDisabled,
+            onTap: () => _confirmClearLibrary(context, controller),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmClearLibrary(
+    BuildContext context,
+    LibraryController controller,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar toda la biblioteca'),
+        content: const Text(
+          'Se eliminarán de AstraMusic todas las canciones, las playlists '
+          'creadas, la cola y las carpetas guardadas. Tus archivos del '
+          'dispositivo NO se borran. Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Eliminar todo'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await controller.clearLibrary();
   }
 }
 

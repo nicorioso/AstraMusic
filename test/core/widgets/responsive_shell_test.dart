@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
 import 'package:astramusic/features/library/domain/track.dart';
@@ -12,6 +13,39 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('confirma antes de vaciar la biblioteca', (tester) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('clear-library-button')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Se eliminarán de AstraMusic todas las canciones, las playlists '
+        'creadas, la cola y las carpetas guardadas. Tus archivos del '
+        'dispositivo NO se borran. Esta acción no se puede deshacer.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(fixture.repository.clearCount, 0);
+
+    await tester.tap(find.byKey(const Key('clear-library-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Eliminar todo'));
+    await tester.pumpAndSettle();
+
+    expect(fixture.repository.clearCount, 1);
+    expect(fixture.cache.clearCount, 1);
+    expect(find.text('Biblioteca vaciada'), findsOneWidget);
+  });
+
   testWidgets('elige el shell y responde al cambio de ancho', (tester) async {
     final fixture = _Fixture();
     addTearDown(fixture.dispose);
@@ -224,6 +258,7 @@ Future<void> _setSize(WidgetTester tester, Size size) async {
 
 final class _Fixture {
   final player = _FakePlayer();
+  final cache = _FakeArtworkCache();
   final repository = _FakeTrackRepository(
     List.generate(
       30,
@@ -243,6 +278,7 @@ final class _Fixture {
       audioPlayerServiceProvider.overrideWithValue(player),
       trackRepositoryProvider.overrideWithValue(repository),
       isAndroidPlatformProvider.overrideWithValue(true),
+      artworkCacheProvider.overrideWithValue(cache),
     ],
     child: MaterialApp(
       theme: buildAstraTheme(),
@@ -257,8 +293,9 @@ final class _Fixture {
 }
 
 final class _FakeTrackRepository implements TrackRepository {
-  const _FakeTrackRepository(this.tracks);
+  _FakeTrackRepository(this.tracks);
   final List<Track> tracks;
+  int clearCount = 0;
   @override
   Future<int> count() async => tracks.length;
   @override
@@ -272,6 +309,13 @@ final class _FakeTrackRepository implements TrackRepository {
 
   @override
   Future<void> restoreExcluded(Set<String> uris) async {}
+
+  @override
+  Future<void> clearLibrary() async {
+    clearCount++;
+    tracks.clear();
+  }
+
   @override
   Future<void> deleteByUris(Set<String> uris) async {}
   @override
@@ -290,6 +334,16 @@ final class _FakeTrackRepository implements TrackRepository {
         )
         .toList(),
   );
+}
+
+final class _FakeArtworkCache implements ArtworkCache {
+  int clearCount = 0;
+
+  @override
+  Future<void> clear() async => clearCount++;
+
+  @override
+  Future<void> deleteByKey(String key) async {}
 }
 
 final class _FakePlayer implements AudioPlayerService {
