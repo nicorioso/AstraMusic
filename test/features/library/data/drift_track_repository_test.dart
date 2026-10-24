@@ -161,13 +161,19 @@ void main() {
             addedAt: now,
           ),
         );
+    await database
+        .into(database.queueItems)
+        .insert(QueueItemsCompanion.insert(position: 0, trackId: trackId));
 
-    await (database.delete(
-      database.tracks,
-    )..where((track) => track.id.equals(trackId))).go();
+    await repository.excludeAndDelete(
+      (await repository.watchAll().first).single,
+    );
 
     final relations = await database.select(database.playlistTracks).get();
+    final queue = await database.select(database.queueItems).get();
     expect(relations, isEmpty);
+    expect(queue, isEmpty);
+    expect(await repository.excludedUris(), {'file:///relacionada.mp3'});
   });
 
   test('watchAll emite de nuevo al insertar', () async {

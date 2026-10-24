@@ -96,6 +96,32 @@ final class DriftTrackRepository implements TrackRepository {
     await _database.delete(_database.tracks).go();
   }
 
+  @override
+  Future<Set<String>> excludedUris() async {
+    final rows = await _database.select(_database.excludedUris).get();
+    return rows.map((row) => row.uri).toSet();
+  }
+
+  @override
+  Future<void> excludeAndDelete(Track track) async {
+    await _database.transaction(() async {
+      await _database
+          .into(_database.excludedUris)
+          .insertOnConflictUpdate(ExcludedUrisCompanion.insert(uri: track.uri));
+      await (_database.delete(
+        _database.tracks,
+      )..where((row) => row.uri.equals(track.uri))).go();
+    });
+  }
+
+  @override
+  Future<void> restoreExcluded(Set<String> uris) async {
+    if (uris.isEmpty) return;
+    await (_database.delete(
+      _database.excludedUris,
+    )..where((row) => row.uri.isIn(uris))).go();
+  }
+
   List<Track> _toDomainList(List<TrackRow> rows) =>
       List.unmodifiable(rows.map((row) => row.toDomain()));
 }

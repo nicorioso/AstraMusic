@@ -116,6 +116,26 @@ void main() {
       expect(stored.artist, 'Artista');
     },
   );
+
+  test('una uri excluida no reaparece en una sincronización', () async {
+    final uri = path.join(root.path, 'borrada.mp3');
+    final track = _scanned(uri);
+    await service.synchronize(
+      scannedTracks: [track],
+      scope: DesktopFolderScanScope(root.path),
+    );
+    await repository.excludeAndDelete(
+      (await repository.watchAll().first).single,
+    );
+
+    final summary = await service.synchronize(
+      scannedTracks: [track],
+      scope: DesktopFolderScanScope(root.path),
+    );
+
+    expect(summary.newCount, 0);
+    expect(await repository.count(), 0);
+  });
 }
 
 ScannedTrack _scanned(String uri) => ScannedTrack(

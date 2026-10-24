@@ -326,6 +326,15 @@ final class FakeTrackRepository implements TrackRepository {
   Future<int> count() async => 0;
   @override
   Future<void> deleteAll() async {}
+
+  @override
+  Future<Set<String>> excludedUris() async => const {};
+
+  @override
+  Future<void> excludeAndDelete(Track track) async {}
+
+  @override
+  Future<void> restoreExcluded(Set<String> uris) async {}
   @override
   Future<void> deleteByUris(Set<String> uris) async {}
   @override

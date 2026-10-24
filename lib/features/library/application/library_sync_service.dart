@@ -59,9 +59,11 @@ final class LibrarySyncService {
     int scanErrorCount = 0,
   }) async {
     final existing = await _tracks.watchAll().first;
+    final excluded = await _tracks.excludedUris();
     final existingByUri = {for (final track in existing) track.uri: track};
     final uniqueScanned = {
-      for (final scanned in scannedTracks) scanned.uri: scanned,
+      for (final scanned in scannedTracks)
+        if (!excluded.contains(scanned.uri)) scanned.uri: scanned,
     };
     final now = DateTime.now();
     var newCount = 0;

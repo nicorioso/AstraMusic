@@ -249,7 +249,11 @@ final class LibraryController extends Notifier<LibraryViewState> {
           ),
         );
       }
-      await ref.read(trackRepositoryProvider).upsertAll(tracks);
+      final repository = ref.read(trackRepositoryProvider);
+      await repository.restoreExcluded(
+        tracks.map((track) => track.uri).toSet(),
+      );
+      await repository.upsertAll(tracks);
       if (tagErrors > 0 && ref.mounted) {
         state = state.copyWith(
           message:
