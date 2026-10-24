@@ -67,10 +67,22 @@ final libraryTracksProvider = StreamProvider<List<Track>>((ref) {
 });
 
 final class LibrarySearchQuery extends Notifier<String> {
+  Timer? _debounce;
+
   @override
-  String build() => '';
+  String build() {
+    ref.onDispose(() => _debounce?.cancel());
+    return '';
+  }
 
   void update(String query) {
-    state = query;
+    _debounce?.cancel();
+    if (query.trim().isEmpty) {
+      state = '';
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      state = query;
+    });
   }
 }
