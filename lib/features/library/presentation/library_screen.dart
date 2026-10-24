@@ -87,15 +87,14 @@ class LibraryScreen extends ConsumerWidget {
                   unawaited(libraryController.addFiles());
                 case _LibraryAction.loadDebugTracks:
                   unawaited(libraryController.loadDebugTracks());
-                case _LibraryAction.clearLibrary:
-                  unawaited(libraryController.deleteAll());
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: _LibraryAction.update,
-                child: Text('Actualizar biblioteca'),
-              ),
+              if (!isAndroid)
+                const PopupMenuItem(
+                  value: _LibraryAction.update,
+                  child: Text('Actualizar biblioteca'),
+                ),
               const PopupMenuItem(
                 key: Key('add-files-menu-item'),
                 value: _LibraryAction.addFiles,
@@ -106,10 +105,6 @@ class LibraryScreen extends ConsumerWidget {
                 PopupMenuItem(
                   value: _LibraryAction.loadDebugTracks,
                   child: Text('Cargar datos de prueba'),
-                ),
-                PopupMenuItem(
-                  value: _LibraryAction.clearLibrary,
-                  child: Text('Vaciar biblioteca'),
                 ),
               ],
             ],
@@ -219,21 +214,21 @@ class LibraryScreen extends ConsumerWidget {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        key: const Key('scan-library-button'),
-        onPressed: libraryState.actionsDisabled
-            ? null
-            : libraryController.startScan,
-        icon: libraryState.isBusy
-            ? const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Icon(isAndroid ? Icons.audio_file : Icons.create_new_folder),
-        label: Text(
-          isAndroid ? 'Escanear música del dispositivo' : 'Añadir carpeta',
-        ),
-      ),
+      floatingActionButton: isAndroid
+          ? null
+          : FloatingActionButton.extended(
+              key: const Key('scan-library-button'),
+              onPressed: libraryState.actionsDisabled
+                  ? null
+                  : libraryController.startScan,
+              icon: libraryState.isBusy
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.create_new_folder),
+              label: const Text('Añadir carpeta'),
+            ),
       bottomNavigationBar: currentPath != null ? const _MiniPlayer() : null,
     );
   }
@@ -612,6 +607,6 @@ String _formatDuration(Duration duration) {
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
 }
 
-enum _LibraryAction { update, addFiles, loadDebugTracks, clearLibrary }
+enum _LibraryAction { update, addFiles, loadDebugTracks }
 
 enum _TrackAction { playNext, addToQueue, delete }

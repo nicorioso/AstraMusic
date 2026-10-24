@@ -23,7 +23,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('empty-library-message')), findsOneWidget);
-    expect(find.byKey(const Key('scan-library-button')), findsOneWidget);
+    expect(find.byKey(const Key('scan-library-button')), findsNothing);
+    expect(find.text('Escanear música del dispositivo'), findsNothing);
+    expect(find.text('Actualizar biblioteca'), findsNothing);
+    await tester.tap(find.byTooltip('Más acciones'));
+    await tester.pumpAndSettle();
+    expect(find.text('Añadir archivos'), findsOneWidget);
   });
 
   testWidgets('muestra canciones del repositorio sin tipos de drift', (
@@ -59,7 +64,11 @@ void main() {
   testWidgets('muestra progreso y resumen del escaneo', (tester) async {
     final scanner = ControlledLibraryScanner();
     await tester.pumpWidget(
-      _testApp(const FakeTrackRepository([]), scanner: scanner),
+      _testApp(
+        const FakeTrackRepository([]),
+        scanner: scanner,
+        isAndroid: false,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -98,7 +107,11 @@ void main() {
   ) async {
     final scanner = ControlledLibraryScanner()..delayCancellation();
     await tester.pumpWidget(
-      _testApp(const FakeTrackRepository([]), scanner: scanner),
+      _testApp(
+        const FakeTrackRepository([]),
+        scanner: scanner,
+        isAndroid: false,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -348,6 +361,9 @@ final class FakeTrackRepository implements TrackRepository {
 
   @override
   Future<void> restoreExcluded(Set<String> uris) async {}
+
+  @override
+  Future<void> clearLibrary() async {}
 
   @override
   Future<Track?> getById(int id) async {

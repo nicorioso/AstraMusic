@@ -9,6 +9,7 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // TODO: reconectar MediaStore cuando exista un flujo de UI con alcance explícito.
         mediaStoreScanner = MediaStoreLibraryScanner(
             applicationContext,
             flutterEngine.dartExecutor.binaryMessenger,
