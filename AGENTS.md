@@ -27,3 +27,5 @@ lib/core (platform, db, utils) y lib/features (library, player, playlists, setti
 - Slider: seek SOLO en onChangeEnd; seeks pendientes se coalescen (gana el último).
 - Errores: fatales (canción actual) saltan a la siguiente; no fatales muestran mensaje y NO deshabilitan controles.
 - Búsqueda: usar search_text y normalizeForSearch; orden por sort_title.
+
+Diseño: docs/diseno-ui.md (leer solo en tareas de UI)
