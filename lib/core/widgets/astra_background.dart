@@ -12,21 +12,27 @@ class AstraBackground extends StatelessWidget {
     return ColoredBox(
       color: colors.voidColor,
       child: Stack(
+        fit: StackFit.expand,
         children: [
-          Container(
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
             height: 300,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  colors.gradientTop,
-                  colors.voidColor.withValues(alpha: 0),
-                ],
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    colors.gradientTop,
+                    colors.voidColor.withValues(alpha: 0),
+                  ],
+                ),
               ),
             ),
           ),
-          Positioned.fill(child: child),
+          child,
         ],
       ),
     );

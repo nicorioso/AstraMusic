@@ -5,6 +5,8 @@ import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/library_scanner.dart';
 import 'package:astramusic/core/platform/media_library_permission.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
+import 'package:astramusic/features/library/domain/library_folder.dart';
+import 'package:astramusic/features/library/domain/library_folders_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
@@ -153,13 +155,76 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('la lista usa al menos 70% de alto y muestra ocho filas', (
+    tester,
+  ) async {
+    const size = Size(937, 1029);
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final tracks = List.generate(
+      30,
+      (index) => Track(
+        id: index,
+        uri: 'file:///cancion-$index.mp3',
+        title: 'Canción $index',
+        dateAdded: DateTime(2026),
+      ),
+    );
+
+    await tester.pumpWidget(_testApp(FakeTrackRepository(tracks)));
+    await tester.pumpAndSettle();
+
+    final viewport = tester.getSize(
+      find.byKey(const Key('library-track-list')),
+    );
+    expect(viewport.height, greaterThanOrEqualTo(size.height * 0.70));
+    expect(find.text('Canción 7'), findsOneWidget);
+  });
+
+  testWidgets('la lista de carpetas usa al menos 70% de alto', (tester) async {
+    const size = Size(937, 1029);
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final folders = List.generate(
+      30,
+      (index) => LibraryFolder(
+        id: index,
+        path: '/música/carpeta-$index',
+        addedAt: DateTime(2026),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _testApp(
+        const FakeTrackRepository([]),
+        isAndroid: false,
+        foldersRepository: FakeLibraryFoldersRepository(folders),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('music-folders-button')));
+    await tester.pumpAndSettle();
+
+    final viewport = tester.getSize(
+      find.byKey(const Key('music-folders-list')),
+    );
+    expect(viewport.height, greaterThanOrEqualTo(size.height * 0.70));
+  });
 }
 
-Widget _testApp(TrackRepository repository, {LibraryScanner? scanner}) {
+Widget _testApp(
+  TrackRepository repository, {
+  LibraryScanner? scanner,
+  bool isAndroid = true,
+  LibraryFoldersRepository? foldersRepository,
+}) {
   return ProviderScope(
     overrides: [
       trackRepositoryProvider.overrideWithValue(repository),
-      isAndroidPlatformProvider.overrideWithValue(true),
+      isAndroidPlatformProvider.overrideWithValue(isAndroid),
+      if (foldersRepository != null)
+        libraryFoldersRepositoryProvider.overrideWithValue(foldersRepository),
       libraryScannerProvider.overrideWithValue(
         scanner ?? ControlledLibraryScanner(),
       ),
@@ -179,6 +244,24 @@ Widget _testApp(TrackRepository repository, {LibraryScanner? scanner}) {
       home: const LibraryScreen(),
     ),
   );
+}
+
+final class FakeLibraryFoldersRepository implements LibraryFoldersRepository {
+  const FakeLibraryFoldersRepository(this.folders);
+
+  final List<LibraryFolder> folders;
+
+  @override
+  Future<LibraryFolder> add(String path) => throw UnimplementedError();
+
+  @override
+  Future<void> markScanned(int id, DateTime scannedAt) async {}
+
+  @override
+  Future<void> remove(int id) async {}
+
+  @override
+  Stream<List<LibraryFolder>> watchAll() => Stream.value(folders);
 }
 
 final class ControlledLibraryScanner implements LibraryScanner {

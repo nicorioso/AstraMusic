@@ -291,30 +291,53 @@ class _MusicFoldersDialog extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final folders = ref.watch(libraryFoldersProvider);
-    return AlertDialog(
-      title: const Text('Carpetas de música'),
-      content: SizedBox(
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+      child: SizedBox(
         width: 560,
-        child: folders.when(
-          data: (items) => items.isEmpty
-              ? const Text('No hay carpetas guardadas.')
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: items.length,
-                  itemBuilder: (context, index) =>
-                      _FolderTile(folder: items[index]),
+        height: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+              child: Text(
+                'Carpetas de música',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            Expanded(
+              child: folders.when(
+                data: (items) => items.isEmpty
+                    ? const Center(child: Text('No hay carpetas guardadas.'))
+                    : ListView.builder(
+                        key: const Key('music-folders-list'),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) =>
+                            _FolderTile(folder: items[index]),
+                      ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stackTrace) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text('No fue posible cargar las carpetas: $error'),
+                  ),
                 ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stackTrace) =>
-              Text('No fue posible cargar las carpetas: $error'),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cerrar'),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cerrar'),
-        ),
-      ],
     );
   }
 }
