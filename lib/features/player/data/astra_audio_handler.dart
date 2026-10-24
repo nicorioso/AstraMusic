@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/features/player/data/latest_seek_coordinator.dart';
 import 'package:astramusic/features/player/data/queue_load_strategy.dart';
 import 'package:astramusic/features/player/domain/manual_queue_order.dart';
 import 'package:astramusic/features/player/domain/queue_rules.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as path_utils;
 
@@ -23,6 +25,16 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
     Random? shuffleRandom,
   }) : _player = player ?? AudioPlayer(),
        _queueOrder = ManualQueueOrder([], random: shuffleRandom) {
+    _lastObservedSpeed = _player.speed;
+    _seekCoordinator = LatestSeekCoordinator(
+      _executeSeek,
+      canExecute: () => !_queueOrder.isEmpty,
+      onDiscarded: (count) {
+        if (kDebugMode) {
+          debugPrint('AstraMusic seek: $count solicitudes descartadas.');
+        }
+      },
+    );
     _playerSubscriptions
       ..add(
         _player.playbackEventStream.listen(
@@ -58,6 +70,12 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
         }, onError: _handleStreamError),
       )
       ..add(
+        _player.speedStream.listen(
+          _handleSpeedChange,
+          onError: _handleStreamError,
+        ),
+      )
+      ..add(
         _player.processingStateStream.listen((state) {
           if (state == ProcessingState.completed) {
             unawaited(_resetAtQueueEnd());
@@ -69,6 +87,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player;
   final QueueLoadStrategy _queueLoadStrategy;
   final ManualQueueOrder<MediaItem> _queueOrder;
+  late final LatestSeekCoordinator _seekCoordinator;
   final Set<int> _failedIndices = {};
   final List<StreamSubscription<dynamic>> _playerSubscriptions = [];
   final _failureController =
@@ -77,6 +96,8 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   bool _mutatingQueue = false;
   bool _playRequested = false;
   bool _resettingAtEnd = false;
+  late double _lastObservedSpeed;
+  double? _lastUnexpectedPublishedSpeed;
 
   Stream<Duration> get positionStream => _player.positionStream;
   Stream<Duration?> get durationStream => _player.durationStream;
@@ -159,8 +180,15 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> seek(Duration position) =>
-      _player.seek(clampSeekPosition(position, _player.duration));
+  Future<void> seek(Duration position) {
+    if (kDebugMode) {
+      debugPrint(
+        'AstraMusic seek solicitado: ${position.inMilliseconds} ms, '
+        '${DateTime.now().toIso8601String()}.',
+      );
+    }
+    return _seekCoordinator.request(position);
+  }
 
   @override
   Future<void> skipToNext() async {
@@ -377,6 +405,17 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   void _broadcastPlaybackState(PlaybackEvent event) {
     final hasQueue = !_queueOrder.isEmpty;
     final playing = _player.playing;
+    final speed = _player.speed;
+    if (kDebugMode && speed != 1.0) {
+      if (_lastUnexpectedPublishedSpeed != speed) {
+        debugPrint(
+          'AstraMusic PlaybackState publicó velocidad inesperada: $speed.',
+        );
+        _lastUnexpectedPublishedSpeed = speed;
+      }
+    } else {
+      _lastUnexpectedPublishedSpeed = null;
+    }
     playbackState.add(
       playbackState.value.copyWith(
         controls: hasQueue ? _controls(playing) : const [],
@@ -386,7 +425,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
         playing: playing,
         updatePosition: _player.position,
         bufferedPosition: _player.bufferedPosition,
-        speed: _player.speed,
+        speed: speed,
         queueIndex: _player.currentIndex,
       ),
     );
@@ -519,6 +558,33 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
 
   void _handleStreamError(Object error, StackTrace stackTrace) {
     _broadcastError(_messageFor(error));
+  }
+
+  Future<void> _executeSeek(Duration requestedPosition) async {
+    final duration = _player.duration ?? mediaItem.value?.duration;
+    final position = clampSeekPosition(requestedPosition, duration);
+    final stopwatch = Stopwatch()..start();
+    try {
+      await _player.seek(position);
+      _broadcastPlaybackState(_player.playbackEvent);
+    } finally {
+      stopwatch.stop();
+      if (kDebugMode) {
+        debugPrint(
+          'AstraMusic seek ejecutado: ${position.inMilliseconds} ms en '
+          '${stopwatch.elapsedMilliseconds} ms; estado '
+          '${_player.processingState.name}, playing=${_player.playing}.',
+        );
+      }
+    }
+  }
+
+  void _handleSpeedChange(double speed) {
+    if (speed == _lastObservedSpeed) return;
+    if (kDebugMode) {
+      debugPrint('AstraMusic velocidad cambió: $_lastObservedSpeed -> $speed.');
+    }
+    _lastObservedSpeed = speed;
   }
 
   AudioProcessingState _processingState(ProcessingState state) {

@@ -95,8 +95,7 @@ final class AudioHandlerPlayerService implements AudioPlayerService {
   Future<void> stop() => _commands.run(_handler.stop);
 
   @override
-  Future<void> seek(Duration position) =>
-      _commands.run(() => _handler.seek(position));
+  Future<void> seek(Duration position) => _handler.seek(position);
 
   @override
   Future<void> next() => _commands.run(_handler.skipToNext);
