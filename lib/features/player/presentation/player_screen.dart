@@ -46,14 +46,21 @@ class PlayerScreen extends ConsumerWidget {
                   ),
                   child: IntrinsicHeight(
                     child: Padding(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (notificationWarning) const _NotificationWarning(),
                           const Spacer(),
-                          const _CurrentTrack(),
+                          _CurrentTrack(
+                            artworkSize: constraints.maxHeight < 760
+                                ? 220
+                                : 280,
+                          ),
                           const SizedBox(height: 24),
                           const _PlaybackControls(),
                           const SizedBox(height: 24),
@@ -81,7 +88,9 @@ class PlayerScreen extends ConsumerWidget {
 }
 
 class _CurrentTrack extends ConsumerWidget {
-  const _CurrentTrack();
+  const _CurrentTrack({required this.artworkSize});
+
+  final double artworkSize;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -100,7 +109,7 @@ class _CurrentTrack extends ConsumerWidget {
               dateAdded: DateTime.fromMillisecondsSinceEpoch(0),
               artworkPath: item.artworkPath,
             ),
-            size: 280,
+            size: artworkSize,
           ),
           const SizedBox(height: 24),
         ],

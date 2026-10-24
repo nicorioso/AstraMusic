@@ -215,11 +215,76 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('la cola usa al menos 70% del alto de la ventana', (
+    tester,
+  ) async {
+    const size = Size(937, 1029);
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final service = FakeAudioPlayerService();
+    addTearDown(service.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        service: service,
+        picker: const FakeAudioFilePicker(null),
+        home: const QueueScreen(),
+      ),
+    );
+    service.seedQueue(30);
+    await tester.pump();
+
+    final viewport = tester.getSize(find.byKey(const Key('queue-list')));
+    expect(viewport.height, greaterThanOrEqualTo(size.height * 0.70));
+    expect(find.text('Canción 7'), findsOneWidget);
+  });
+
+  for (final size in const [Size(360, 800), Size(937, 1029)]) {
+    testWidgets('controles visibles y alcanzables a ${size.width.toInt()} px', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final service = FakeAudioPlayerService();
+      addTearDown(service.dispose);
+
+      await tester.pumpWidget(
+        _testApp(service: service, picker: const FakeAudioFilePicker(null)),
+      );
+      service.seedQueue(1);
+      await tester.pump();
+
+      for (final key in const [
+        Key('current-audio-title'),
+        Key('current-audio-artist'),
+        Key('play-pause-button'),
+        Key('next-button'),
+        Key('previous-button'),
+        Key('shuffle-button'),
+        Key('repeat-button'),
+        Key('seek-slider'),
+        Key('open-queue-button'),
+      ]) {
+        final finder = find.byKey(key);
+        expect(finder, findsOneWidget);
+        expect(
+          finder.hitTestable(),
+          findsOneWidget,
+          reason: '$key no es alcanzable',
+        );
+        final rect = tester.getRect(finder);
+        expect(rect.top, greaterThanOrEqualTo(0));
+        expect(rect.bottom, lessThanOrEqualTo(size.height));
+      }
+    });
+  }
 }
 
 Widget _testApp({
   required AudioPlayerService service,
   required AudioFilePicker picker,
+  Widget home = const PlayerScreen(),
 }) {
   return ProviderScope(
     overrides: [
@@ -231,7 +296,7 @@ Widget _testApp({
       darkTheme: buildAstraTheme(),
       themeMode: ThemeMode.dark,
       themeAnimationDuration: Duration.zero,
-      home: const PlayerScreen(),
+      home: home,
     ),
   );
 }
@@ -264,6 +329,33 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   final _indexController = StreamController<int?>.broadcast(sync: true);
   final _shuffleController = StreamController<bool>.broadcast(sync: true);
   final _repeatController = StreamController<RepeatMode>.broadcast(sync: true);
+
+  void seedQueue(int count) {
+    final tracks = List.generate(
+      count,
+      (index) => Track(
+        uri: 'file:///cancion-$index.mp3',
+        title: 'Canción $index',
+        artist: 'Artista $index',
+        duration: const Duration(minutes: 3),
+        dateAdded: DateTime(2026),
+      ),
+    );
+    _queueController.add(tracks);
+    _indexController.add(0);
+    _currentItemController.add(
+      AudioItem(
+        path: tracks.first.uri,
+        title: tracks.first.title,
+        artist: tracks.first.artist,
+        duration: tracks.first.duration,
+      ),
+    );
+    _durationController.add(tracks.first.duration);
+    _playbackStateController.add(
+      const AudioPlaybackState(AudioPlaybackStatus.paused),
+    );
+  }
 
   @override
   Stream<AudioPlaybackState> get playbackStateStream =>
