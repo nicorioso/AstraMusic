@@ -30,4 +30,21 @@ class Track {
   final bool isAvailable;
   final bool isFavorite;
   final String? artworkPath;
+
+  Track withAvailability(bool value) => Track(
+    id: id,
+    uri: uri,
+    title: title,
+    artist: artist,
+    album: album,
+    duration: duration,
+    trackNumber: trackNumber,
+    year: year,
+    fileSize: fileSize,
+    dateAdded: dateAdded,
+    dateModified: dateModified,
+    isAvailable: value,
+    isFavorite: isFavorite,
+    artworkPath: artworkPath,
+  );
 }

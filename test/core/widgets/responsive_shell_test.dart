@@ -323,6 +323,8 @@ final class _FakeTrackRepository implements TrackRepository {
   @override
   Future<void> markUnavailable(Set<String> uris) async {}
   @override
+  Future<void> setAvailability(Map<String, bool> availability) async {}
+  @override
   Future<void> upsertAll(List<Track> tracks) async {}
   @override
   Stream<List<Track>> watchAll() => Stream.value(tracks);

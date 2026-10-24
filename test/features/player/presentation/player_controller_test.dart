@@ -344,6 +344,9 @@ final class FakeTrackRepository implements TrackRepository {
   }
 
   @override
+  Future<void> setAvailability(Map<String, bool> availability) async {}
+
+  @override
   Future<int> count() async => 0;
   @override
   Future<void> deleteAll() async {}

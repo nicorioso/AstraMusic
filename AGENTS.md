@@ -12,6 +12,7 @@ Detalle histórico por fase: docs/historial-agents.md (leer solo si es necesario
 - Por tarea ejecuta SOLO analyze y test. Builds (linux/apk) solo si la tarea lo pide.
 
 ## Reglas
+- el arranque nunca depende de archivos del usuario; restauraciones y verificaciones corren tras el primer frame y con try/catch.
 - Sin sudo. No ejecutes la app. No compiles Windows.
 - Dependencias solo con `flutter pub add`; no inventes APIs: lee el paquete en ~/.pub-cache. permission_handler fijado en 12.0.3.
 - Un commit pequeño por tarea; nunca commitear secretos.

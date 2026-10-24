@@ -117,6 +117,38 @@ void main() {
     expect(find.text('Segunda canción'), findsOneWidget);
   });
 
+  testWidgets('atenúa una canción no disponible y no intenta reproducirla', (
+    tester,
+  ) async {
+    var playQueueCalls = 0;
+    final track = Track(
+      id: 1,
+      uri: 'file:///ausente.mp3',
+      title: 'Canción ausente',
+      dateAdded: DateTime(2026),
+      isAvailable: false,
+    );
+    await tester.pumpWidget(
+      _testApp(
+        FakeTrackRepository([track]),
+        player: FakeAudioPlayerService(onPlayQueue: () => playQueueCalls++),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final opacity = tester.widget<Opacity>(
+      find.byKey(const ValueKey('track-availability-file:///ausente.mp3')),
+    );
+    expect(opacity.opacity, lessThan(1));
+    expect(find.text('No disponible'), findsOneWidget);
+
+    await tester.tap(find.text('Canción ausente'));
+    await tester.pump();
+
+    expect(playQueueCalls, 0);
+    expect(find.text('No disponible'), findsWidgets);
+  });
+
   testWidgets('muestra progreso y resumen del escaneo', (tester) async {
     final scanner = ControlledLibraryScanner();
     await tester.pumpWidget(
@@ -275,6 +307,7 @@ Widget _testApp(
   LibraryScanner? scanner,
   bool isAndroid = true,
   LibraryFoldersRepository? foldersRepository,
+  AudioPlayerService player = const FakeAudioPlayerService(),
 }) {
   return ProviderScope(
     overrides: [
@@ -288,9 +321,7 @@ Widget _testApp(
       mediaLibraryPermissionProvider.overrideWithValue(
         const FakeMediaLibraryPermission(),
       ),
-      audioPlayerServiceProvider.overrideWithValue(
-        const FakeAudioPlayerService(),
-      ),
+      audioPlayerServiceProvider.overrideWithValue(player),
       audioFilePickerProvider.overrideWithValue(const FakeAudioFilePicker()),
     ],
     child: MaterialApp(
@@ -421,6 +452,9 @@ final class FakeTrackRepository implements TrackRepository {
   Future<void> markUnavailable(Set<String> uris) async {}
 
   @override
+  Future<void> setAvailability(Map<String, bool> availability) async {}
+
+  @override
   Future<void> upsertAll(List<Track> tracks) async {}
 
   @override
@@ -486,6 +520,9 @@ final class RecordingTrackRepository implements TrackRepository {
 
   @override
   Future<void> markUnavailable(Set<String> uris) async {}
+
+  @override
+  Future<void> setAvailability(Map<String, bool> availability) async {}
 }
 
 final class RecordingArtworkCache implements ArtworkCache {
@@ -521,7 +558,9 @@ final class FakeAudioFilePicker implements AudioFilePicker {
 }
 
 final class FakeAudioPlayerService implements AudioPlayerService {
-  const FakeAudioPlayerService();
+  const FakeAudioPlayerService({this.onPlayQueue});
+
+  final VoidCallback? onPlayQueue;
 
   @override
   Stream<AudioItem?> get currentItemStream => const Stream.empty();
@@ -578,7 +617,9 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   Future<void> playNext(Track track) async {}
 
   @override
-  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {}
+  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {
+    onPlayQueue?.call();
+  }
 
   @override
   Future<void> previous() async {}

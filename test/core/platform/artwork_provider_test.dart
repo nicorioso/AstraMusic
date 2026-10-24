@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/features/library/domain/track.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 
@@ -35,4 +36,16 @@ void main() {
       expect(path.basename(selectFolderArtwork(directory)!.path), 'COVER.PNG');
     },
   );
+
+  test('ignora una ruta de carátula inválida o eliminada', () async {
+    final provider = CachedArtworkProvider();
+    final track = Track(
+      uri: 'file:///music/song.mp3',
+      title: 'Canción',
+      dateAdded: DateTime(2026),
+      artworkPath: '\u0000ruta-inválida',
+    );
+
+    await expectLater(provider.artworkFor(track, size: 48), completion(isNull));
+  });
 }

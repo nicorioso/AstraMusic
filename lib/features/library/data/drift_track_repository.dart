@@ -68,6 +68,20 @@ final class DriftTrackRepository implements TrackRepository {
   }
 
   @override
+  Future<void> setAvailability(Map<String, bool> availability) async {
+    if (availability.isEmpty) return;
+    await _database.batch((batch) {
+      for (final entry in availability.entries) {
+        batch.update(
+          _database.tracks,
+          TracksCompanion(isAvailable: Value(entry.value)),
+          where: (track) => track.uri.equals(entry.key),
+        );
+      }
+    });
+  }
+
+  @override
   Future<Track?> getById(int id) async {
     final query = _database.select(_database.tracks)
       ..where((track) => track.id.equals(id));

@@ -10,20 +10,25 @@ final class DriftPlaybackStateRepository implements PlaybackStateRepository {
   final AppDatabase _database;
 
   @override
+  Future<void> clear() async {
+    await _database.transaction(() async {
+      await _database.delete(_database.queueItems).go();
+      await _database.delete(_database.playbackState).go();
+    });
+  }
+
+  @override
   Future<PersistedPlaybackState?> load() async {
     final state = await _database
         .select(_database.playbackState)
         .getSingleOrNull();
     if (state == null) return null;
-    final query =
-        _database.select(_database.queueItems).join([
-            innerJoin(
-              _database.tracks,
-              _database.tracks.id.equalsExp(_database.queueItems.trackId),
-            ),
-          ])
-          ..where(_database.tracks.isAvailable.equals(true))
-          ..orderBy([OrderingTerm.asc(_database.queueItems.position)]);
+    final query = _database.select(_database.queueItems).join([
+      innerJoin(
+        _database.tracks,
+        _database.tracks.id.equalsExp(_database.queueItems.trackId),
+      ),
+    ])..orderBy([OrderingTerm.asc(_database.queueItems.position)]);
     final rows = await query.get();
     final items = rows
         .map((row) {

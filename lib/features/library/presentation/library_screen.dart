@@ -186,6 +186,8 @@ class LibraryScreen extends ConsumerWidget {
                                 enabled: !libraryState.actionsDisabled,
                                 onTrackTap: (index) => libraryController
                                     .playVisibleQueue(items, startIndex: index),
+                                onUnavailable:
+                                    libraryController.showUnavailableMessage,
                                 onPlayNext: libraryController.playNext,
                                 onAddToQueue: libraryController.addToQueue,
                                 onDelete: libraryController.deleteTrack,
@@ -395,6 +397,7 @@ class _TrackList extends StatelessWidget {
     required this.currentPath,
     required this.enabled,
     required this.onTrackTap,
+    required this.onUnavailable,
     required this.onPlayNext,
     required this.onAddToQueue,
     required this.onDelete,
@@ -404,6 +407,7 @@ class _TrackList extends StatelessWidget {
   final String? currentPath;
   final bool enabled;
   final ValueChanged<int> onTrackTap;
+  final VoidCallback onUnavailable;
   final ValueChanged<Track> onPlayNext;
   final ValueChanged<Track> onAddToQueue;
   final ValueChanged<Track> onDelete;
@@ -417,67 +421,75 @@ class _TrackList extends StatelessWidget {
       itemBuilder: (context, index) {
         final track = tracks[index];
         final isCurrent = track.uri == currentPath;
-        return SizedBox(
-          height: 56,
-          child: Material(
-            color: isCurrent
-                ? context.astraColors.surfaceHover
-                : context.astraColors.voidColor.withValues(alpha: 0),
-            child: ListTile(
-              minVerticalPadding: 0,
-              enabled: enabled,
-              leading: TrackArtwork(track: track, size: 48),
-              title: Text(
-                track.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: isCurrent
-                    ? TextStyle(color: context.astraColors.accent)
-                    : null,
+        return Opacity(
+          key: ValueKey('track-availability-${track.uri}'),
+          opacity: track.isAvailable ? 1 : 0.48,
+          child: SizedBox(
+            height: 56,
+            child: Material(
+              color: isCurrent
+                  ? context.astraColors.surfaceHover
+                  : context.astraColors.voidColor.withValues(alpha: 0),
+              child: ListTile(
+                minVerticalPadding: 0,
+                enabled: enabled,
+                leading: TrackArtwork(track: track, size: 48),
+                title: Text(
+                  track.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: isCurrent
+                      ? TextStyle(color: context.astraColors.accent)
+                      : null,
+                ),
+                subtitle: Text(
+                  track.isAvailable
+                      ? track.artist ?? 'Artista desconocido'
+                      : 'No disponible',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (track.duration case final duration?)
+                      Text(_formatDuration(duration)),
+                    PopupMenuButton<_TrackAction>(
+                      tooltip: 'Acciones de ${track.title}',
+                      enabled: enabled && track.isAvailable,
+                      onSelected: (action) {
+                        switch (action) {
+                          case _TrackAction.playNext:
+                            onPlayNext(track);
+                          case _TrackAction.addToQueue:
+                            onAddToQueue(track);
+                          case _TrackAction.delete:
+                            onDelete(track);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: _TrackAction.playNext,
+                          child: Text('Reproducir a continuación'),
+                        ),
+                        PopupMenuItem(
+                          value: _TrackAction.addToQueue,
+                          child: Text('Añadir a la cola'),
+                        ),
+                        PopupMenuItem(
+                          value: _TrackAction.delete,
+                          child: Text('Eliminar de la biblioteca'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                onTap: !enabled
+                    ? null
+                    : track.isAvailable
+                    ? () => onTrackTap(index)
+                    : onUnavailable,
               ),
-              subtitle: Text(
-                track.artist ?? 'Artista desconocido',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (track.duration case final duration?)
-                    Text(_formatDuration(duration)),
-                  PopupMenuButton<_TrackAction>(
-                    tooltip: 'Acciones de ${track.title}',
-                    enabled: enabled && track.isAvailable,
-                    onSelected: (action) {
-                      switch (action) {
-                        case _TrackAction.playNext:
-                          onPlayNext(track);
-                        case _TrackAction.addToQueue:
-                          onAddToQueue(track);
-                        case _TrackAction.delete:
-                          onDelete(track);
-                      }
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: _TrackAction.playNext,
-                        child: Text('Reproducir a continuación'),
-                      ),
-                      PopupMenuItem(
-                        value: _TrackAction.addToQueue,
-                        child: Text('Añadir a la cola'),
-                      ),
-                      PopupMenuItem(
-                        value: _TrackAction.delete,
-                        child: Text('Eliminar de la biblioteca'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              onTap: enabled && track.isAvailable
-                  ? () => onTrackTap(index)
-                  : null,
             ),
           ),
         );

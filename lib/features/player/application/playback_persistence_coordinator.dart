@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/playback_state_repository.dart';
+import 'package:astramusic/core/platform/track_availability.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 
 final class PlaybackPersistenceCoordinator {
@@ -10,12 +11,16 @@ final class PlaybackPersistenceCoordinator {
     this._repository, {
     this.debounceDuration = const Duration(milliseconds: 500),
     this.positionInterval = const Duration(seconds: 5),
+    this.restoreTimeout = const Duration(seconds: 5),
+    this.availabilityChecker = const SystemTrackAvailabilityChecker(),
   });
 
   final AudioPlayerService _player;
   final PlaybackStateRepository _repository;
   final Duration debounceDuration;
   final Duration positionInterval;
+  final Duration restoreTimeout;
+  final TrackAvailabilityChecker availabilityChecker;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   List<Track> _queue = const [];
   List<Track> _originalQueue = const [];
@@ -28,47 +33,95 @@ final class PlaybackPersistenceCoordinator {
   Timer? _positionTimer;
   Future<void> _writeChain = Future.value();
   bool _restoring = false;
+  bool _started = false;
+  int _restoreGeneration = 0;
 
   Future<void> start() async {
-    await _restoreSilently();
-    _listen();
-  }
-
-  Future<void> _restoreSilently() async {
+    if (_started) return;
+    _started = true;
     _restoring = true;
+    _listen();
+    final generation = ++_restoreGeneration;
     try {
-      final saved = await _repository.load();
-      if (saved == null || saved.queue.isEmpty) return;
-      final playback = saved.queue.map((item) => item.track).toList();
-      final original = [...saved.queue]
-        ..sort(
-          (a, b) => (a.originalPosition ?? a.position).compareTo(
-            b.originalPosition ?? b.position,
-          ),
-        );
-      final originalTracks = original.map((item) => item.track).toList();
-      await _player.playQueue(originalTracks, startIndex: 0);
-      if (saved.shuffle) {
-        await _player.setShuffle(true);
-        await _reorderTo(playback);
-      }
-      await _player.setRepeatMode(saved.repeatMode);
-      final index = saved.currentIndex?.clamp(0, playback.length - 1) ?? 0;
-      await _player.skipToIndex(index);
-      await _player.seek(saved.position);
-      await _player.pause();
-      _queue = playback;
-      _originalQueue = originalTracks;
-      _currentIndex = index;
-      _position = saved.position;
-      _shuffle = saved.shuffle;
-      _repeatMode = saved.repeatMode;
-      _status = AudioPlaybackStatus.paused;
+      await _restore(generation).timeout(restoreTimeout);
     } catch (_) {
-      // La persistencia nunca debe impedir el arranque normal.
+      _restoreGeneration++;
+      await _discardRestore();
     } finally {
       _restoring = false;
     }
+  }
+
+  Future<void> _restore(int generation) async {
+    final saved = await _repository.load();
+    if (!_isCurrentRestore(generation) || saved == null) return;
+    final availableItems = <PersistedQueueItem>[];
+    for (final item in saved.queue) {
+      if (await availabilityChecker.exists(item.track.uri)) {
+        availableItems.add(
+          PersistedQueueItem(
+            track: item.track.withAvailability(true),
+            position: item.position,
+            originalPosition: item.originalPosition,
+          ),
+        );
+      }
+      if (!_isCurrentRestore(generation)) return;
+    }
+    if (availableItems.isEmpty) {
+      await _discardRestore();
+      return;
+    }
+    final playback = availableItems.map((item) => item.track).toList();
+    final original = [...availableItems]
+      ..sort(
+        (a, b) => (a.originalPosition ?? a.position).compareTo(
+          b.originalPosition ?? b.position,
+        ),
+      );
+    final originalTracks = original.map((item) => item.track).toList();
+    final savedIndex = saved.currentIndex ?? 0;
+    final index = availableItems
+        .where((item) => item.position < savedIndex)
+        .length
+        .clamp(0, playback.length - 1);
+    await _player.playQueue(originalTracks, startIndex: 0);
+    if (!_isCurrentRestore(generation)) return;
+    if (saved.shuffle) {
+      await _player.setShuffle(true);
+      await _reorderTo(playback);
+    }
+    await _player.setRepeatMode(saved.repeatMode);
+    await _player.skipToIndex(index);
+    await _player.seek(saved.position);
+    await _player.pause();
+    if (!_isCurrentRestore(generation)) return;
+    _queue = playback;
+    _originalQueue = originalTracks;
+    _currentIndex = index;
+    _position = saved.position;
+    _shuffle = saved.shuffle;
+    _repeatMode = saved.repeatMode;
+    _status = AudioPlaybackStatus.paused;
+  }
+
+  bool _isCurrentRestore(int generation) =>
+      _restoring && generation == _restoreGeneration;
+
+  Future<void> _discardRestore() async {
+    try {
+      await _repository.clear();
+    } catch (_) {}
+    try {
+      await _player.clearQueue();
+    } catch (_) {}
+    _queue = const [];
+    _originalQueue = const [];
+    _currentIndex = null;
+    _position = Duration.zero;
+    _shuffle = false;
+    _repeatMode = RepeatMode.off;
+    _status = AudioPlaybackStatus.idle;
   }
 
   Future<void> _reorderTo(List<Track> target) async {

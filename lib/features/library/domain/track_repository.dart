@@ -5,6 +5,7 @@ abstract interface class TrackRepository {
   Stream<List<Track>> watchSearch(String query);
   Future<void> upsertAll(List<Track> tracks);
   Future<void> markUnavailable(Set<String> uris);
+  Future<void> setAvailability(Map<String, bool> availability);
   Future<Track?> getById(int id);
   Future<int> count();
   Future<void> deleteByUris(Set<String> uris);

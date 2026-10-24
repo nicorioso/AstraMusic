@@ -63,8 +63,12 @@ final class CachedArtworkProvider implements ArtworkProvider {
   @override
   Future<String?> artworkFor(Track track, {required int size}) {
     final existing = track.artworkPath;
-    if (existing != null && File(existing).existsSync()) {
-      return Future.value(existing);
+    if (existing != null) {
+      try {
+        if (File(existing).existsSync()) return Future.value(existing);
+      } on Object {
+        // Una ruta de caché inválida o eliminada se trata como caché ausente.
+      }
     }
     if (!Platform.isAndroid) return Future.value(null);
     final key = '${track.uri}@$size';

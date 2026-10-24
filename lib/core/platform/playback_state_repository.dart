@@ -50,4 +50,5 @@ class PlaybackStateSnapshot {
 abstract interface class PlaybackStateRepository {
   Future<PersistedPlaybackState?> load();
   Future<void> save(PlaybackStateSnapshot snapshot);
+  Future<void> clear();
 }

@@ -443,57 +443,66 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
         itemBuilder: (context, index) {
           final track = widget.tracks[index];
           final current = track.uri == currentPath;
-          return SizedBox(
-            height: 56,
-            child: Material(
-              color: context.astraColors.surface.withValues(alpha: 0),
-              child: ListTile(
-                minVerticalPadding: 0,
-                hoverColor: context.astraColors.surfaceHover,
-                leading: TrackArtwork(track: track, size: 48),
-                title: Text(
-                  track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: current
-                      ? TextStyle(color: context.astraColors.accent)
-                      : null,
-                ),
-                subtitle: Text(
-                  track.artist ?? 'Artista desconocido',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: PopupMenuButton<_ShellTrackAction>(
-                  tooltip: 'Acciones de ${track.title}',
-                  onSelected: (action) {
-                    switch (action) {
-                      case _ShellTrackAction.playNext:
-                        controller.playNext(track);
-                      case _ShellTrackAction.addToQueue:
-                        controller.addToQueue(track);
-                      case _ShellTrackAction.delete:
-                        controller.deleteTrack(track);
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: _ShellTrackAction.playNext,
-                      child: Text('Reproducir a continuación'),
-                    ),
-                    PopupMenuItem(
-                      value: _ShellTrackAction.addToQueue,
-                      child: Text('Añadir a la cola'),
-                    ),
-                    PopupMenuItem(
-                      value: _ShellTrackAction.delete,
-                      child: Text('Eliminar de la biblioteca'),
-                    ),
-                  ],
-                ),
-                onTap: () => controller.playVisibleQueue(
-                  widget.tracks,
-                  startIndex: index,
+          return Opacity(
+            key: ValueKey('track-availability-${track.uri}'),
+            opacity: track.isAvailable ? 1 : 0.48,
+            child: SizedBox(
+              height: 56,
+              child: Material(
+                color: context.astraColors.surface.withValues(alpha: 0),
+                child: ListTile(
+                  minVerticalPadding: 0,
+                  hoverColor: context.astraColors.surfaceHover,
+                  leading: TrackArtwork(track: track, size: 48),
+                  title: Text(
+                    track.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: current
+                        ? TextStyle(color: context.astraColors.accent)
+                        : null,
+                  ),
+                  subtitle: Text(
+                    track.isAvailable
+                        ? track.artist ?? 'Artista desconocido'
+                        : 'No disponible',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: PopupMenuButton<_ShellTrackAction>(
+                    tooltip: 'Acciones de ${track.title}',
+                    enabled: track.isAvailable,
+                    onSelected: (action) {
+                      switch (action) {
+                        case _ShellTrackAction.playNext:
+                          controller.playNext(track);
+                        case _ShellTrackAction.addToQueue:
+                          controller.addToQueue(track);
+                        case _ShellTrackAction.delete:
+                          controller.deleteTrack(track);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: _ShellTrackAction.playNext,
+                        child: Text('Reproducir a continuación'),
+                      ),
+                      PopupMenuItem(
+                        value: _ShellTrackAction.addToQueue,
+                        child: Text('Añadir a la cola'),
+                      ),
+                      PopupMenuItem(
+                        value: _ShellTrackAction.delete,
+                        child: Text('Eliminar de la biblioteca'),
+                      ),
+                    ],
+                  ),
+                  onTap: track.isAvailable
+                      ? () => controller.playVisibleQueue(
+                          widget.tracks,
+                          startIndex: index,
+                        )
+                      : controller.showUnavailableMessage,
                 ),
               ),
             ),

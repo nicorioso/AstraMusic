@@ -56,7 +56,7 @@ void main() {
     expect(restored.repeatMode, RepeatMode.all);
   });
 
-  test('omite no disponibles y ajusta el índice hacia la siguiente', () async {
+  test('conserva la cola para validar disponibilidad al restaurar', () async {
     final rows = await database.select(database.tracks).get();
     final tracks = rows.map(_track).toList();
     await repository.save(
@@ -74,9 +74,10 @@ void main() {
 
     final restored = await repository.load();
 
-    expect(restored!.queue.map((item) => item.track.id), [1, 3]);
+    expect(restored!.queue.map((item) => item.track.id), [1, 2, 3]);
     expect(restored.currentIndex, 1);
-    expect(restored.queue[restored.currentIndex!].track.id, 3);
+    expect(restored.queue[restored.currentIndex!].track.id, 2);
+    expect(restored.queue[restored.currentIndex!].track.isAvailable, isFalse);
   });
 }
 

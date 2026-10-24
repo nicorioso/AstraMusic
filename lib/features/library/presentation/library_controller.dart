@@ -397,6 +397,10 @@ final class LibraryController extends Notifier<LibraryViewState> {
     }
   }
 
+  void showUnavailableMessage() {
+    state = state.copyWith(message: 'No disponible');
+  }
+
   Future<bool> _requestAndroidPermission() async {
     state = state.copyWith(isBusy: true, message: null, offerSettings: false);
     try {
