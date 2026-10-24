@@ -73,6 +73,7 @@ class LibraryScreen extends ConsumerWidget {
             ),
           PopupMenuButton<_LibraryAction>(
             tooltip: 'Más acciones',
+            enabled: !libraryState.actionsDisabled,
             onSelected: (action) {
               switch (action) {
                 case _LibraryAction.update:
@@ -125,10 +126,12 @@ class LibraryScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            if (libraryState.isScanning)
+            if (libraryState.scanActive)
               _ScanProgressCard(
                 foundCount: libraryState.foundCount,
                 errorCount: libraryState.scanErrorCount,
+                unchangedCount: libraryState.unchangedCount,
+                isCancelling: libraryState.isCancelling,
                 onCancel: libraryController.cancelScan,
               ),
             Expanded(
@@ -228,11 +231,15 @@ class _ScanProgressCard extends StatelessWidget {
   const _ScanProgressCard({
     required this.foundCount,
     required this.errorCount,
+    required this.unchangedCount,
+    required this.isCancelling,
     required this.onCancel,
   });
 
   final int foundCount;
   final int errorCount;
+  final int unchangedCount;
+  final bool isCancelling;
   final VoidCallback onCancel;
 
   @override
@@ -251,11 +258,15 @@ class _ScanProgressCard extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Escaneando: $foundCount encontradas, $errorCount errores',
+                isCancelling
+                    ? 'Cancelando...'
+                    : 'Escaneando: $foundCount encontradas, '
+                          '$unchangedCount sin cambios, $errorCount errores',
                 key: const Key('scan-progress-text'),
               ),
             ),
-            TextButton(onPressed: onCancel, child: const Text('Cancelar')),
+            if (!isCancelling)
+              TextButton(onPressed: onCancel, child: const Text('Cancelar')),
           ],
         ),
       ),

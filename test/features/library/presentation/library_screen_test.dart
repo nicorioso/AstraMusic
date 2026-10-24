@@ -66,7 +66,10 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('scan-progress')), findsOneWidget);
-    expect(find.text('Escaneando: 7 encontradas, 1 errores'), findsOneWidget);
+    expect(
+      find.text('Escaneando: 7 encontradas, 0 sin cambios, 1 errores'),
+      findsOneWidget,
+    );
 
     await scanner.complete([
       const ScannedTrack(
@@ -78,9 +81,42 @@ void main() {
 
     expect(find.byKey(const Key('scan-progress')), findsNothing);
     expect(
-      find.text('1 nuevas, 0 actualizadas, 0 no disponibles, 1 errores.'),
+      find.text(
+        '1 nuevas, 0 actualizadas, 0 sin cambios, '
+        '0 no disponibles, 1 errores.',
+      ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('bloquea nuevos escaneos mientras termina la cancelación', (
+    tester,
+  ) async {
+    final scanner = ControlledLibraryScanner()..delayCancellation();
+    await tester.pumpWidget(
+      _testApp(const FakeTrackRepository([]), scanner: scanner),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('scan-library-button')));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pump();
+
+    expect(find.text('Cancelando...'), findsOneWidget);
+    expect(
+      tester
+          .widget<FloatingActionButton>(
+            find.byKey(const Key('scan-library-button')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    scanner.completeCancellation();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('scan-progress')), findsNothing);
   });
 }
 
@@ -106,17 +142,30 @@ Widget _testApp(TrackRepository repository, {LibraryScanner? scanner}) {
 
 final class ControlledLibraryScanner implements LibraryScanner {
   StreamController<ScanEvent>? _controller;
+  Completer<void>? _cancellationGate;
 
   @override
-  Future<LibraryScanTask> startScan({String? rootPath}) async {
+  Future<LibraryScanTask> startScan({
+    String? rootPath,
+    Map<String, KnownFileStats> knownFiles = const {},
+  }) async {
     final controller = StreamController<ScanEvent>();
     _controller = controller;
     return LibraryScanTask(controller.stream, () async {
+      await _cancellationGate?.future;
       if (!controller.isClosed) {
         controller.add(const ScanCancelled());
         await controller.close();
       }
     });
+  }
+
+  void delayCancellation() {
+    _cancellationGate = Completer<void>();
+  }
+
+  void completeCancellation() {
+    _cancellationGate?.complete();
   }
 
   void addProgress({required int foundCount, required int errorCount}) {

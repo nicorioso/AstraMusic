@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:isolate';
 
 import 'package:astramusic/core/platform/library_scanner.dart';
 import 'package:astramusic/core/platform/media_library_permission.dart';
+import 'package:astramusic/core/platform/tag_reader.dart';
 import 'package:astramusic/features/library/application/library_sync_service.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
+import 'package:astramusic/features/library/presentation/scan_state_machine.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,34 +20,41 @@ final libraryControllerProvider =
 class LibraryViewState {
   const LibraryViewState({
     this.isBusy = false,
-    this.isScanning = false,
+    this.scanPhase = ScanPhase.idle,
     this.foundCount = 0,
+    this.unchangedCount = 0,
     this.scanErrorCount = 0,
     this.message,
     this.offerSettings = false,
   });
 
   final bool isBusy;
-  final bool isScanning;
+  final ScanPhase scanPhase;
   final int foundCount;
+  final int unchangedCount;
   final int scanErrorCount;
   final String? message;
   final bool offerSettings;
 
-  bool get actionsDisabled => isBusy || isScanning;
+  bool get isScanning => scanPhase == ScanPhase.scanning;
+  bool get isCancelling => scanPhase == ScanPhase.cancelling;
+  bool get scanActive => scanPhase != ScanPhase.idle;
+  bool get actionsDisabled => isBusy || scanActive;
 
   LibraryViewState copyWith({
     bool? isBusy,
-    bool? isScanning,
+    ScanPhase? scanPhase,
     int? foundCount,
+    int? unchangedCount,
     int? scanErrorCount,
     Object? message = _notProvided,
     bool? offerSettings,
   }) {
     return LibraryViewState(
       isBusy: isBusy ?? this.isBusy,
-      isScanning: isScanning ?? this.isScanning,
+      scanPhase: scanPhase ?? this.scanPhase,
       foundCount: foundCount ?? this.foundCount,
+      unchangedCount: unchangedCount ?? this.unchangedCount,
       scanErrorCount: scanErrorCount ?? this.scanErrorCount,
       message: message == _notProvided ? this.message : message as String?,
       offerSettings: offerSettings ?? this.offerSettings,
@@ -57,6 +67,7 @@ class LibraryViewState {
 final class LibraryController extends Notifier<LibraryViewState> {
   LibraryScanTask? _activeScan;
   bool _cancelRequested = false;
+  final ScanStateMachine _scanStateMachine = ScanStateMachine();
 
   @override
   LibraryViewState build() {
@@ -133,15 +144,21 @@ final class LibraryController extends Notifier<LibraryViewState> {
       await _runScanOperation(() async {
         var total = const LibrarySyncSummary();
         var foundOffset = 0;
+        var unchangedOffset = 0;
+        var errorOffset = 0;
         for (final folder in folders) {
           if (_cancelRequested) throw const _ScanWasCancelled();
           final summary = await _scanOne(
             rootPath: folder.path,
             scope: DesktopFolderScanScope(folder.path),
             foundOffset: foundOffset,
+            unchangedOffset: unchangedOffset,
+            errorOffset: errorOffset,
           );
           total += summary;
           foundOffset = state.foundCount;
+          unchangedOffset = state.unchangedCount;
+          errorOffset = state.scanErrorCount;
           await ref
               .read(libraryFoldersRepositoryProvider)
               .markScanned(folder.id, DateTime.now());
@@ -158,9 +175,16 @@ final class LibraryController extends Notifier<LibraryViewState> {
   }
 
   Future<void> cancelScan() async {
-    if (!state.isScanning) return;
+    if (!_scanStateMachine.requestCancellation()) return;
     _cancelRequested = true;
-    await _activeScan?.cancel();
+    state = state.copyWith(scanPhase: ScanPhase.cancelling);
+    final scan = _activeScan;
+    if (scan == null) return;
+    try {
+      await scan.cancel();
+    } catch (error) {
+      if (ref.mounted) state = state.copyWith(message: _messageFor(error));
+    }
   }
 
   Future<void> removeFolder(LibraryFolder folder) async {
@@ -191,13 +215,48 @@ final class LibraryController extends Notifier<LibraryViewState> {
       if (files.isEmpty || !ref.mounted) return;
 
       final addedAt = DateTime.now();
-      final tracks = files
-          .map(
-            (file) =>
-                Track(uri: file.path, title: file.title, dateAdded: addedAt),
-          )
-          .toList(growable: false);
+      final tracks = <Track>[];
+      var tagErrors = 0;
+      for (final file in files) {
+        final localPath = localFilePathFromLocation(file.path);
+        LocalAudioFileInfo? info;
+        if (localPath != null) {
+          try {
+            final readInfo = await Isolate.run(
+              () => readLocalAudioFile(localPath),
+            );
+            info = readInfo;
+            if (readInfo.hadTagError) tagErrors++;
+          } catch (_) {
+            tagErrors++;
+          }
+        }
+        tracks.add(
+          Track(
+            uri: file.path,
+            title: info?.tags.title ?? file.title,
+            artist: info?.tags.artist,
+            album: info?.tags.album,
+            duration: switch (info?.tags.durationMs) {
+              final int milliseconds => Duration(milliseconds: milliseconds),
+              null => null,
+            },
+            trackNumber: info?.tags.trackNumber,
+            year: info?.tags.year,
+            fileSize: info?.fileSize,
+            dateAdded: addedAt,
+            dateModified: info?.dateModified,
+          ),
+        );
+      }
       await ref.read(trackRepositoryProvider).upsertAll(tracks);
+      if (tagErrors > 0 && ref.mounted) {
+        state = state.copyWith(
+          message:
+              '$tagErrors archivos se añadieron usando su nombre porque '
+              'no fue posible leer sus etiquetas.',
+        );
+      }
     } catch (error) {
       if (ref.mounted) state = state.copyWith(message: _messageFor(error));
     } finally {
@@ -312,11 +371,13 @@ final class LibraryController extends Notifier<LibraryViewState> {
   Future<void> _runScanOperation(
     Future<LibrarySyncSummary> Function() operation,
   ) async {
+    if (!_scanStateMachine.start()) return;
     _cancelRequested = false;
     state = state.copyWith(
       isBusy: false,
-      isScanning: true,
+      scanPhase: ScanPhase.scanning,
       foundCount: 0,
+      unchangedCount: 0,
       scanErrorCount: 0,
       message: null,
       offerSettings: false,
@@ -332,8 +393,9 @@ final class LibraryController extends Notifier<LibraryViewState> {
     } finally {
       _activeScan = null;
       _cancelRequested = false;
+      _scanStateMachine.finish();
       if (ref.mounted) {
-        state = state.copyWith(isScanning: false, isBusy: false);
+        state = state.copyWith(scanPhase: ScanPhase.idle, isBusy: false);
       }
     }
   }
@@ -342,20 +404,40 @@ final class LibraryController extends Notifier<LibraryViewState> {
     required LibraryScanScope scope,
     String? rootPath,
     int foundOffset = 0,
+    int unchangedOffset = 0,
+    int errorOffset = 0,
   }) async {
+    final knownFiles = <String, KnownFileStats>{};
+    if (scope is DesktopFolderScanScope) {
+      final existing = await ref.read(trackRepositoryProvider).watchAll().first;
+      for (final track in existing) {
+        if (track.fileSize != null && track.dateModified != null) {
+          knownFiles[track.uri] = KnownFileStats(
+            fileSize: track.fileSize,
+            dateModified: track.dateModified,
+          );
+        }
+      }
+    }
     final task = await ref
         .read(libraryScannerProvider)
-        .startScan(rootPath: rootPath);
+        .startScan(rootPath: rootPath, knownFiles: knownFiles);
     _activeScan = task;
+    if (_cancelRequested) unawaited(task.cancel());
     ScanCompleted? completed;
 
     await for (final event in task.events) {
       switch (event) {
-        case ScanProgress(:final foundCount, :final errorCount):
+        case ScanProgress(
+          :final foundCount,
+          :final errorCount,
+          :final unchangedCount,
+        ):
           if (ref.mounted) {
             state = state.copyWith(
               foundCount: foundOffset + foundCount,
-              scanErrorCount: errorCount,
+              unchangedCount: unchangedOffset + unchangedCount,
+              scanErrorCount: errorOffset + errorCount,
             );
           }
         case ScanCompleted():
@@ -363,7 +445,8 @@ final class LibraryController extends Notifier<LibraryViewState> {
           if (ref.mounted) {
             state = state.copyWith(
               foundCount: foundOffset + event.tracks.length,
-              scanErrorCount: event.errorCount,
+              unchangedCount: unchangedOffset + event.unchangedCount,
+              scanErrorCount: errorOffset + event.errorCount,
             );
           }
         case ScanCancelled():
