@@ -28,6 +28,7 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 - Un error fatal impide reproducir la canción, la marca como no disponible y avanza sin crear bucles; un error no fatal de una operación auxiliar solo informa al usuario y no deshabilita controles.
 - Con aleatorio activo, añadir agrega al final de ambos órdenes, “reproducir a continuación” inserta después de la actual en ambos, quitar elimina de ambos y mover cambia únicamente el orden de reproducción. Al desactivar se restaura el orden original restante.
 - Mantener activos los lints adicionales de `analysis_options.yaml`: tipos estrictos, `avoid_print`, `cancel_subscriptions`, `close_sinks`, `prefer_const_constructors`, `unawaited_futures` y `use_build_context_synchronously`.
+- El slider de posición nunca llama a `seek` desde `onChanged`: actualiza solo su estado local y confirma un único seek en `onChangeEnd`. Los seeks pendientes se coalescen y gana siempre el último.
 
 ## Arquitectura
 
