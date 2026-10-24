@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/db/app_database.dart';
+import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/application/playback_persistence_coordinator.dart';
@@ -118,7 +119,9 @@ class AstraMusicApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'AstraMusic',
-      theme: ThemeData(colorSchemeSeed: Colors.deepPurple),
+      theme: buildAstraTheme(),
+      darkTheme: buildAstraTheme(),
+      themeMode: ThemeMode.dark,
       home: const LibraryScreen(),
     );
   }
