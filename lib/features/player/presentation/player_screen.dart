@@ -1,4 +1,7 @@
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/theme/astra_colors.dart';
+import 'package:astramusic/core/widgets/astra_background.dart';
+import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
@@ -31,38 +34,40 @@ class PlayerScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 560,
-                  minHeight: constraints.maxHeight,
-                ),
-                child: IntrinsicHeight(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (notificationWarning) const _NotificationWarning(),
-                        const Spacer(),
-                        const _CurrentTrack(),
-                        const SizedBox(height: 24),
-                        const _PlaybackControls(),
-                        const SizedBox(height: 24),
-                        const _ProgressControls(),
-                        const _PlayerError(),
-                        const Spacer(),
-                        FilledButton.icon(
-                          key: const Key('choose-audio-button'),
-                          onPressed: controller.chooseFile,
-                          icon: const Icon(Icons.audio_file),
-                          label: const Text('Elegir archivo'),
-                        ),
-                      ],
+      body: AstraBackground(
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 560,
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (notificationWarning) const _NotificationWarning(),
+                          const Spacer(),
+                          const _CurrentTrack(),
+                          const SizedBox(height: 24),
+                          const _PlaybackControls(),
+                          const SizedBox(height: 24),
+                          const _ProgressControls(),
+                          const _PlayerError(),
+                          const Spacer(),
+                          FilledButton.icon(
+                            key: const Key('choose-audio-button'),
+                            onPressed: controller.chooseFile,
+                            icon: const Icon(Icons.audio_file),
+                            label: const Text('Elegir archivo'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -176,12 +181,11 @@ class _PlaybackControls extends ConsumerWidget {
                 ),
               )
             else
-              IconButton.filled(
+              PlayCircleButton(
                 key: const Key('play-pause-button'),
                 onPressed: enabled ? controller.togglePlayback : null,
-                tooltip: isPlaying ? 'Pausar' : 'Reproducir',
-                iconSize: 48,
-                icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                isPlaying: isPlaying,
+                size: 64,
               ),
             IconButton(
               key: const Key('next-button'),
@@ -271,7 +275,7 @@ class _NotificationWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      color: context.astraColors.surfaceRaised,
       child: const Padding(
         padding: EdgeInsets.all(12),
         child: Row(

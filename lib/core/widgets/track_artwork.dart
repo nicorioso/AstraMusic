@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:flutter/material.dart';
@@ -68,9 +69,17 @@ class _TrackArtworkState extends ConsumerState<TrackArtwork> {
     width: widget.size,
     height: widget.size,
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [context.astraColors.surfaceHover, context.astraColors.ember],
+      ),
       borderRadius: BorderRadius.circular(4),
     ),
-    child: Icon(Icons.music_note, size: widget.size * 0.5),
+    child: Icon(
+      Icons.music_note,
+      color: context.astraColors.accent,
+      size: widget.size * 0.5,
+    ),
   );
 }

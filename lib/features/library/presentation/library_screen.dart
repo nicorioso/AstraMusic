@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/theme/astra_colors.dart';
+import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/track.dart';
@@ -465,7 +467,7 @@ class _MiniPlayer extends ConsumerWidget {
     return SafeArea(
       top: false,
       child: Material(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: context.astraColors.surfaceRaised,
         child: InkWell(
           key: const Key('mini-player'),
           onTap: () => Navigator.of(
@@ -503,13 +505,13 @@ class _MiniPlayer extends ConsumerWidget {
                     ),
                   )
                 else
-                  IconButton(
+                  PlayCircleButton(
                     key: const Key('mini-player-play-pause'),
-                    tooltip: isPlaying ? 'Pausar' : 'Reproducir',
                     onPressed: status == AudioPlaybackStatus.error
                         ? null
                         : controller.togglePlayback,
-                    icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                    isPlaying: isPlaying,
+                    size: 48,
                   ),
                 IconButton(
                   key: const Key('mini-player-next'),
