@@ -199,6 +199,57 @@ void main() {
       completes,
     );
   });
+
+  test('clearLibrary vacía todas las tablas relacionadas', () async {
+    await repository.upsertAll([
+      _track(uri: 'file:///todo.mp3', title: 'Todo'),
+    ]);
+    final track = (await repository.watchAll().first).single;
+    final now = DateTime(2026);
+    final playlistId = await database
+        .into(database.playlists)
+        .insert(
+          PlaylistsCompanion.insert(
+            name: 'Lista',
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+    await database
+        .into(database.playlistTracks)
+        .insert(
+          PlaylistTracksCompanion.insert(
+            playlistId: playlistId,
+            trackId: track.id!,
+            position: 0,
+            addedAt: now,
+          ),
+        );
+    await database
+        .into(database.queueItems)
+        .insert(QueueItemsCompanion.insert(position: 0, trackId: track.id!));
+    await database
+        .into(database.playbackState)
+        .insert(PlaybackStateCompanion.insert(updatedAt: now));
+    await database
+        .into(database.libraryFolders)
+        .insert(LibraryFoldersCompanion.insert(path: '/música', addedAt: now));
+    await database
+        .into(database.excludedUris)
+        .insert(
+          const ExcludedUrisCompanion.insert(uri: 'file:///excluida.mp3'),
+        );
+
+    await repository.clearLibrary();
+
+    expect(await database.select(database.tracks).get(), isEmpty);
+    expect(await database.select(database.playlists).get(), isEmpty);
+    expect(await database.select(database.playlistTracks).get(), isEmpty);
+    expect(await database.select(database.queueItems).get(), isEmpty);
+    expect(await database.select(database.playbackState).get(), isEmpty);
+    expect(await database.select(database.libraryFolders).get(), isEmpty);
+    expect(await database.select(database.excludedUris).get(), isEmpty);
+  });
 }
 
 Track _track({

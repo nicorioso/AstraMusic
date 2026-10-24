@@ -375,6 +375,22 @@ final class LibraryController extends Notifier<LibraryViewState> {
     }
   }
 
+  Future<void> clearLibrary() async {
+    if (state.actionsDisabled) return;
+    state = state.copyWith(isBusy: true, message: null, offerSettings: false);
+    try {
+      final player = ref.read(playerControllerProvider.notifier);
+      await player.stopAndClearQueue();
+      await ref.read(trackRepositoryProvider).clearLibrary();
+      await ref.read(artworkCacheProvider).clear();
+      if (ref.mounted) state = state.copyWith(message: 'Biblioteca vaciada');
+    } catch (error) {
+      if (ref.mounted) state = state.copyWith(message: _messageFor(error));
+    } finally {
+      if (ref.mounted) state = state.copyWith(isBusy: false);
+    }
+  }
+
   void clearMessage() {
     if (state.message != null || state.offerSettings) {
       state = state.copyWith(message: null, offerSettings: false);

@@ -357,6 +357,8 @@ final class FakeTrackRepository implements TrackRepository {
   @override
   Future<void> restoreExcluded(Set<String> uris) async {}
   @override
+  Future<void> clearLibrary() async {}
+  @override
   Future<void> deleteByUris(Set<String> uris) async {}
   @override
   Future<Track?> getById(int id) async => null;

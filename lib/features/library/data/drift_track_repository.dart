@@ -122,6 +122,19 @@ final class DriftTrackRepository implements TrackRepository {
     )..where((row) => row.uri.isIn(uris))).go();
   }
 
+  @override
+  Future<void> clearLibrary() async {
+    await _database.transaction(() async {
+      await _database.delete(_database.playlistTracks).go();
+      await _database.delete(_database.queueItems).go();
+      await _database.delete(_database.playbackState).go();
+      await _database.delete(_database.playlists).go();
+      await _database.delete(_database.tracks).go();
+      await _database.delete(_database.libraryFolders).go();
+      await _database.delete(_database.excludedUris).go();
+    });
+  }
+
   List<Track> _toDomainList(List<TrackRow> rows) =>
       List.unmodifiable(rows.map((row) => row.toDomain()));
 }

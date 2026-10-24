@@ -210,6 +210,11 @@ class PlayerController extends Notifier<PlayerViewState> {
 
   Future<void> clearQueue() => _run(_service.clearQueue);
 
+  Future<void> stopAndClearQueue() => _run(() async {
+    await _service.stop();
+    await _service.clearQueue();
+  });
+
   Future<void> removeTrackFromQueue(String uri) async {
     final indices = <int>[
       for (var index = 0; index < state.queue.length; index++)

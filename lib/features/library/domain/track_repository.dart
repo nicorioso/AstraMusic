@@ -12,4 +12,5 @@ abstract interface class TrackRepository {
   Future<Set<String>> excludedUris();
   Future<void> excludeAndDelete(Track track);
   Future<void> restoreExcluded(Set<String> uris);
+  Future<void> clearLibrary();
 }
