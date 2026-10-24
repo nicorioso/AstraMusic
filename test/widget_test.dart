@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_file_picker.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/player_screen.dart';
+import 'package:astramusic/features/player/presentation/queue_screen.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,12 +28,14 @@ void main() {
     );
     await tester.pump();
 
+    await tester.ensureVisible(find.byKey(const Key('choose-audio-button')));
     await tester.tap(find.byKey(const Key('choose-audio-button')));
     await tester.pump();
 
     expect(find.text('cancion'), findsOneWidget);
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const Key('play-pause-button')));
     await tester.tap(find.byKey(const Key('play-pause-button')));
     await tester.pump();
 
@@ -59,6 +63,7 @@ void main() {
     );
     await tester.pump();
 
+    await tester.ensureVisible(find.byKey(const Key('choose-audio-button')));
     await tester.tap(find.byKey(const Key('choose-audio-button')));
     await tester.pump();
 
@@ -86,6 +91,7 @@ void main() {
     await tester.tap(find.byKey(const Key('choose-audio-button')));
     await tester.pump();
 
+    await tester.ensureVisible(find.byKey(const Key('shuffle-button')));
     await tester.tap(find.byKey(const Key('shuffle-button')));
     await tester.pump();
     expect(find.byIcon(Icons.shuffle_on), findsOneWidget);
@@ -123,6 +129,7 @@ void main() {
     await tester.tap(find.byKey(const Key('choose-audio-button')));
     await tester.pump();
 
+    await tester.ensureVisible(find.byKey(const Key('shuffle-button')));
     await tester.tap(find.byKey(const Key('shuffle-button')));
     await tester.pump();
 
@@ -175,6 +182,39 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(const Key('play-pause-button')), findsOneWidget);
   });
+
+  for (final size in const [Size(360, 800), Size(1200, 800)]) {
+    testWidgets('reproductor y cola no desbordan a ${size.width.toInt()} px', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final service = FakeAudioPlayerService();
+      addTearDown(service.dispose);
+
+      await tester.pumpWidget(
+        _testApp(
+          service: service,
+          picker: const FakeAudioFilePicker(
+            PickedAudioFile(
+              path: 'file:///tmp/星間の非常に長い曲名.mp3',
+              title: '星間の非常に長い曲名とコロンビアの夜空',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('choose-audio-button')));
+      await tester.tap(find.byKey(const Key('choose-audio-button')));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const Key('open-queue-button')));
+      await tester.pumpAndSettle();
+      expect(find.byType(QueueScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 Widget _testApp({
@@ -186,7 +226,13 @@ Widget _testApp({
       audioPlayerServiceProvider.overrideWithValue(service),
       audioFilePickerProvider.overrideWithValue(picker),
     ],
-    child: const MaterialApp(home: PlayerScreen()),
+    child: MaterialApp(
+      theme: buildAstraTheme(),
+      darkTheme: buildAstraTheme(),
+      themeMode: ThemeMode.dark,
+      themeAnimationDuration: Duration.zero,
+      home: const PlayerScreen(),
+    ),
   );
 }
 

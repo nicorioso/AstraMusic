@@ -4,6 +4,7 @@ import 'package:astramusic/core/platform/audio_file_picker.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/library_scanner.dart';
 import 'package:astramusic/core/platform/media_library_permission.dart';
+import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
@@ -127,6 +128,31 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.byKey(const Key('scan-progress')), findsNothing);
   });
+
+  for (final size in const [Size(360, 800), Size(1200, 800)]) {
+    testWidgets('biblioteca no desborda a ${size.width.toInt()} px', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final tracks = [
+        Track(
+          id: 1,
+          uri: 'file:///長い曲.mp3',
+          title: '星間の非常に長い曲名とコロンビアの夜空を巡る歌',
+          artist: 'とても長い名前のアーティストと仲間たち',
+          duration: const Duration(hours: 1, minutes: 2, seconds: 3),
+          dateAdded: DateTime(2026),
+        ),
+      ];
+
+      await tester.pumpWidget(_testApp(FakeTrackRepository(tracks)));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LibraryScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 Widget _testApp(TrackRepository repository, {LibraryScanner? scanner}) {
@@ -145,7 +171,13 @@ Widget _testApp(TrackRepository repository, {LibraryScanner? scanner}) {
       ),
       audioFilePickerProvider.overrideWithValue(const FakeAudioFilePicker()),
     ],
-    child: const MaterialApp(home: LibraryScreen()),
+    child: MaterialApp(
+      theme: buildAstraTheme(),
+      darkTheme: buildAstraTheme(),
+      themeMode: ThemeMode.dark,
+      themeAnimationDuration: Duration.zero,
+      home: const LibraryScreen(),
+    ),
   );
 }
 
