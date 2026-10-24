@@ -12,11 +12,13 @@ class SeekBar extends StatefulWidget {
     required this.position,
     required this.duration,
     required this.onSeek,
+    this.compact = false,
   });
 
   final Duration position;
   final Duration? duration;
   final ValueChanged<Duration>? onSeek;
+  final bool compact;
 
   @override
   State<SeekBar> createState() => _SeekBarState();
@@ -57,30 +59,40 @@ class _SeekBarState extends State<SeekBar> {
     );
     final maxMilliseconds = enabled ? duration.inMilliseconds.toDouble() : 1.0;
 
+    final slider = MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: SliderTheme(
+        data: Theme.of(context).sliderTheme.copyWith(
+          activeTrackColor: _hovered
+              ? context.astraColors.accent
+              : context.astraColors.photon,
+          thumbColor: _hovered
+              ? context.astraColors.accent
+              : context.astraColors.photon,
+        ),
+        child: Slider(
+          key: const Key('seek-slider'),
+          value: displayedPosition.inMilliseconds.toDouble(),
+          max: maxMilliseconds,
+          onChangeStart: enabled ? _startDrag : null,
+          onChanged: enabled ? _updateDrag : null,
+          onChangeEnd: enabled ? _finishDrag : null,
+        ),
+      ),
+    );
+    if (widget.compact) {
+      return Row(
+        children: [
+          Text(_formatDuration(displayedPosition)),
+          Expanded(child: slider),
+          Text(_formatDuration(duration)),
+        ],
+      );
+    }
     return Column(
       children: [
-        MouseRegion(
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: SliderTheme(
-            data: Theme.of(context).sliderTheme.copyWith(
-              activeTrackColor: _hovered
-                  ? context.astraColors.accent
-                  : context.astraColors.photon,
-              thumbColor: _hovered
-                  ? context.astraColors.accent
-                  : context.astraColors.photon,
-            ),
-            child: Slider(
-              key: const Key('seek-slider'),
-              value: displayedPosition.inMilliseconds.toDouble(),
-              max: maxMilliseconds,
-              onChangeStart: enabled ? _startDrag : null,
-              onChanged: enabled ? _updateDrag : null,
-              onChangeEnd: enabled ? _finishDrag : null,
-            ),
-          ),
-        ),
+        slider,
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [

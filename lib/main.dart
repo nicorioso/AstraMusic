@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/db/app_database.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
-import 'package:astramusic/features/library/presentation/library_screen.dart';
+import 'package:astramusic/core/widgets/responsive_shell.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/application/playback_persistence_coordinator.dart';
 import 'package:astramusic/features/player/data/astra_audio_handler.dart';
@@ -122,7 +122,7 @@ class AstraMusicApp extends StatelessWidget {
       theme: buildAstraTheme(),
       darkTheme: buildAstraTheme(),
       themeMode: ThemeMode.dark,
-      home: const LibraryScreen(),
+      home: const ResponsiveShell(),
     );
   }
 }

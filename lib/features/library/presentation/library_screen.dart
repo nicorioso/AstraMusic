@@ -72,7 +72,7 @@ class LibraryScreen extends ConsumerWidget {
               tooltip: 'Carpetas de música',
               onPressed: () => showDialog<void>(
                 context: context,
-                builder: (_) => const _MusicFoldersDialog(),
+                builder: (_) => const MusicFoldersDialog(),
               ),
               icon: const Icon(Icons.folder_copy_outlined),
             ),
@@ -285,8 +285,8 @@ class _ScanProgressCard extends StatelessWidget {
   }
 }
 
-class _MusicFoldersDialog extends ConsumerWidget {
-  const _MusicFoldersDialog();
+class MusicFoldersDialog extends ConsumerWidget {
+  const MusicFoldersDialog({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
