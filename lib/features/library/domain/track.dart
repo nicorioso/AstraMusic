@@ -13,6 +13,7 @@ class Track {
     this.dateModified,
     this.isAvailable = true,
     this.isFavorite = false,
+    this.artworkPath,
   });
 
   final int? id;
@@ -28,4 +29,5 @@ class Track {
   final DateTime? dateModified;
   final bool isAvailable;
   final bool isFavorite;
+  final String? artworkPath;
 }

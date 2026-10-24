@@ -11,6 +11,7 @@ class ScannedTrack {
     this.dateAdded,
     this.dateModified,
     this.unchanged = false,
+    this.artworkPath,
   });
 
   final String uri;
@@ -24,6 +25,7 @@ class ScannedTrack {
   final DateTime? dateAdded;
   final DateTime? dateModified;
   final bool unchanged;
+  final String? artworkPath;
 }
 
 class KnownFileStats {

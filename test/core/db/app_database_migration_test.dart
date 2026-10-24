@@ -66,11 +66,31 @@ void main() {
         )
         .getSingleOrNull();
 
-    expect(database.schemaVersion, 3);
+    expect(database.schemaVersion, 4);
     expect(tracks.single.title, 'Existente');
     expect(tracks.single.searchText, 'existente');
     expect(tracks.single.sortTitle, 'existente');
     expect(table?.read<String>('name'), 'library_folders');
+  });
+
+  test('migra de 3 a 4 y añade artwork_path nullable', () async {
+    final executor = NativeDatabase.memory(
+      setup: (database) {
+        _createVersionThreeTracks(database);
+        database.execute(
+          "INSERT INTO tracks (uri, title, date_added, search_text, sort_title) "
+          "VALUES ('file:///tema.mp3', 'Tema', 1767225600000, 'tema', 'tema')",
+        );
+        database.userVersion = 3;
+      },
+    );
+    final database = AppDatabase(executor);
+    addTearDown(database.close);
+
+    final track = await database.select(database.tracks).getSingle();
+    expect(track.title, 'Tema');
+    expect(track.artworkPath, isNull);
+    expect(database.schemaVersion, 4);
   });
 
   test('migra de 2 a 3, hace backfill y conserva todas las tablas', () async {
@@ -126,6 +146,31 @@ void main() {
       'tracks_sort_title_idx',
     ]);
   });
+}
+
+void _createVersionThreeTracks(dynamic database) {
+  database.execute('''
+    CREATE TABLE tracks (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      uri TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      artist TEXT NULL,
+      album TEXT NULL,
+      duration_ms INTEGER NULL,
+      track_number INTEGER NULL,
+      year INTEGER NULL,
+      file_size INTEGER NULL,
+      date_added INTEGER NOT NULL,
+      date_modified INTEGER NULL,
+      search_text TEXT NOT NULL DEFAULT '',
+      sort_title TEXT NOT NULL DEFAULT '',
+      is_available INTEGER NOT NULL DEFAULT 1 CHECK (is_available IN (0, 1)),
+      is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1))
+    )
+  ''');
+  database.execute(
+    'CREATE INDEX tracks_sort_title_idx ON tracks (sort_title, id)',
+  );
 }
 
 void _createVersionTwoSchema(dynamic database) {

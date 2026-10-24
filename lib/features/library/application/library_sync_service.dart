@@ -89,6 +89,7 @@ final class LibrarySyncService {
         dateModified: scanned.dateModified ?? old?.dateModified,
         isAvailable: true,
         isFavorite: old?.isFavorite ?? false,
+        artworkPath: preserveMetadata ? old.artworkPath : scanned.artworkPath,
       );
       upserts.add(track);
 
@@ -191,5 +192,6 @@ final class LibrarySyncService {
       old.dateAdded == current.dateAdded &&
       old.dateModified == current.dateModified &&
       old.isAvailable == current.isAvailable &&
-      old.isFavorite == current.isFavorite;
+      old.isFavorite == current.isFavorite &&
+      old.artworkPath == current.artworkPath;
 }

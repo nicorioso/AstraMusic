@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'package:astramusic/core/platform/library_scanner.dart';
 import 'package:astramusic/core/platform/tag_reader.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 
 const supportedAudioExtensions = <String>{
   '.mp3',
@@ -18,7 +19,9 @@ const supportedAudioExtensions = <String>{
 const desktopScanProgressInterval = 100;
 
 final class DesktopLibraryScanner implements LibraryScanner {
-  const DesktopLibraryScanner();
+  const DesktopLibraryScanner({this.cacheDirectory});
+
+  final String? cacheDirectory;
 
   @override
   Future<LibraryScanTask> startScan({
@@ -41,13 +44,22 @@ final class DesktopLibraryScanner implements LibraryScanner {
       );
     }
 
+    var cachePath = cacheDirectory;
+    if (cachePath == null) {
+      try {
+        cachePath = (await getApplicationCacheDirectory()).path;
+      } on Object {
+        // Solo aplica a entornos sin plugin, como pruebas unitarias.
+        cachePath = Directory.systemTemp.path;
+      }
+    }
     final receivePort = ReceivePort();
     final controller = StreamController<ScanEvent>();
     var finished = false;
     late final StreamSubscription<Object?> subscription;
     final isolate = await Isolate.spawn<_DesktopScanRequest>(
       _scanDirectory,
-      _DesktopScanRequest(root.path, receivePort.sendPort, {
+      _DesktopScanRequest(root.path, cachePath, receivePort.sendPort, {
         for (final entry in knownFiles.entries)
           entry.key: [
             entry.value.fileSize,
@@ -109,9 +121,15 @@ final class DesktopLibraryScanner implements LibraryScanner {
 }
 
 final class _DesktopScanRequest {
-  const _DesktopScanRequest(this.rootPath, this.sendPort, this.knownFiles);
+  const _DesktopScanRequest(
+    this.rootPath,
+    this.cachePath,
+    this.sendPort,
+    this.knownFiles,
+  );
 
   final String rootPath;
+  final String cachePath;
   final SendPort sendPort;
   final Map<String, List<int?>> knownFiles;
 }
@@ -156,10 +174,15 @@ void _scanDirectory(_DesktopScanRequest request) {
         if (isUnchanged) unchanged++;
 
         AudioTags? tags;
+        String? artworkPath;
         if (!isUnchanged) {
-          final result = readTagsSafely(const AudioMetadataTagReader(), entry);
+          final result = readLocalAudioFileWithArtwork(
+            entry.path,
+            request.cachePath,
+          );
           tags = result.tags;
-          if (result.hadError) errors++;
+          artworkPath = result.artworkPath;
+          if (result.hadTagError) errors++;
         }
         tracks.add({
           'uri': entry.path,
@@ -173,6 +196,7 @@ void _scanDirectory(_DesktopScanRequest request) {
           'dateAddedMs': stat.modified.millisecondsSinceEpoch,
           'dateModifiedMs': modifiedMs,
           'unchanged': isUnchanged,
+          'artworkPath': artworkPath,
         });
         if (tracks.length % desktopScanProgressInterval == 0) {
           reportProgress();
@@ -216,4 +240,5 @@ ScannedTrack _trackFromMessage(Map<Object?, Object?> message) => ScannedTrack(
     _ => null,
   },
   unchanged: message['unchanged'] as bool? ?? false,
+  artworkPath: message['artworkPath'] as String?,
 );

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
+import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:path/path.dart' as path;
 
 class AudioTags {
@@ -34,12 +35,14 @@ class LocalAudioFileInfo {
     required this.fileSize,
     required this.dateModified,
     required this.hadTagError,
+    this.artworkPath,
   });
 
   final AudioTags tags;
   final int fileSize;
   final DateTime dateModified;
   final bool hadTagError;
+  final String? artworkPath;
 }
 
 abstract interface class TagReader {
@@ -87,6 +90,66 @@ LocalAudioFileInfo readLocalAudioFile(String filePath) {
     dateModified: stat.modified,
     hadTagError: result.hadError,
   );
+}
+
+LocalAudioFileInfo readLocalAudioFileWithArtwork(
+  String filePath,
+  String cacheDirectory,
+) {
+  final file = File(filePath);
+  final stat = file.statSync();
+  try {
+    final metadata = readMetadata(file, getImage: true);
+    final tags = normalizeAudioTags(
+      fallbackTitle: path.basenameWithoutExtension(file.path),
+      title: metadata.title,
+      artists: [metadata.artist, ...metadata.performers],
+      album: metadata.album,
+      trackNumber: metadata.trackNumber,
+      year: metadata.year?.year,
+      durationMs: metadata.duration?.inMilliseconds,
+    );
+    final key = artworkCacheKey(
+      artist: tags.artist,
+      album: tags.album,
+      uri: file.path,
+    );
+    final artworkDirectory = Directory(path.join(cacheDirectory, 'artwork'))
+      ..createSync(recursive: true);
+    String? artworkPath;
+    if (metadata.pictures.isNotEmpty) {
+      final picture = metadata.pictures.first;
+      final extension = picture.mimetype.toLowerCase().contains('png')
+          ? '.png'
+          : '.jpg';
+      final target = File(path.join(artworkDirectory.path, '$key$extension'));
+      if (!target.existsSync()) target.writeAsBytesSync(picture.bytes);
+      artworkPath = target.path;
+    } else {
+      final folderImage = selectFolderArtwork(file.parent);
+      if (folderImage != null) {
+        final extension = path.extension(folderImage.path).toLowerCase();
+        final target = File(path.join(artworkDirectory.path, '$key$extension'));
+        if (!target.existsSync()) folderImage.copySync(target.path);
+        artworkPath = target.path;
+      }
+    }
+    return LocalAudioFileInfo(
+      tags: tags,
+      fileSize: stat.size,
+      dateModified: stat.modified,
+      hadTagError: false,
+      artworkPath: artworkPath,
+    );
+  } catch (_) {
+    final fallback = readTagsSafely(const AudioMetadataTagReader(), file);
+    return LocalAudioFileInfo(
+      tags: fallback.tags,
+      fileSize: stat.size,
+      dateModified: stat.modified,
+      hadTagError: true,
+    );
+  }
 }
 
 String? localFilePathFromLocation(String location) {

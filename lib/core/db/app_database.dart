@@ -22,6 +22,7 @@ class Tracks extends Table {
   TextColumn get sortTitle => text().withDefault(const Constant(''))();
   BoolColumn get isAvailable => boolean().withDefault(const Constant(true))();
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
+  TextColumn get artworkPath => text().nullable()();
 }
 
 @DataClassName('PlaylistRow')
@@ -61,7 +62,7 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -107,6 +108,9 @@ final class AppDatabase extends _$AppDatabase {
         });
         await customStatement('DROP INDEX IF EXISTS tracks_title_idx');
         await migrator.createIndex(tracksSortTitleIdx);
+      }
+      if (from < 4) {
+        await migrator.addColumn(tracks, tracks.artworkPath);
       }
     },
     beforeOpen: (details) async {

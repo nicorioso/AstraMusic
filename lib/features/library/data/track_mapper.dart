@@ -18,6 +18,7 @@ extension TrackRowMapper on TrackRow {
     dateModified: dateModified,
     isAvailable: isAvailable,
     isFavorite: isFavorite,
+    artworkPath: artworkPath,
   );
 }
 
@@ -39,5 +40,6 @@ extension TrackCompanionMapper on Track {
     sortTitle: Value(normalizeForSearch(title)),
     isAvailable: Value(isAvailable),
     isFavorite: Value(isFavorite),
+    artworkPath: Value(artworkPath),
   );
 }
