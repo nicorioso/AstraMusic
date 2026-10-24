@@ -2117,10 +2117,11 @@ class $$TracksTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (playlistTracksRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       TrackRow,
                       $TracksTable,
-                      PlaylistTrackRow
+                      PlaylistTrackRow,
+                      $PlaylistTracksTable
                     >(
                       currentTable: table,
                       referencedTable: $$TracksTableReferences
@@ -2130,8 +2131,8 @@ class $$TracksTableTableManager
                         table,
                         p0,
                       ).playlistTracksRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.trackId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'track_id',
                       typedResults: items,
                     ),
                 ];
@@ -2392,10 +2393,11 @@ class $$PlaylistsTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (playlistTracksRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       PlaylistRow,
                       $PlaylistsTable,
-                      PlaylistTrackRow
+                      PlaylistTrackRow,
+                      $PlaylistTracksTable
                     >(
                       currentTable: table,
                       referencedTable: $$PlaylistsTableReferences
@@ -2406,8 +2408,8 @@ class $$PlaylistsTableTableManager
                             table,
                             p0,
                           ).playlistTracksRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.playlistId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'playlist_id',
                       typedResults: items,
                     ),
                 ];
