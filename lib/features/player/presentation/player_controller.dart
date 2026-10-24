@@ -30,6 +30,7 @@ class PlayerViewState {
     this.currentIndex,
     this.shuffleEnabled = false,
     this.repeatMode = RepeatMode.off,
+    this.volume = 1,
     this.errorMessage,
     this.notificationWarning = false,
   });
@@ -42,6 +43,7 @@ class PlayerViewState {
   final int? currentIndex;
   final bool shuffleEnabled;
   final RepeatMode repeatMode;
+  final double volume;
   final String? errorMessage;
   final bool notificationWarning;
 
@@ -57,6 +59,7 @@ class PlayerViewState {
     Object? currentIndex = _notProvided,
     bool? shuffleEnabled,
     RepeatMode? repeatMode,
+    double? volume,
     Object? errorMessage = _notProvided,
     bool? notificationWarning,
   }) {
@@ -75,6 +78,7 @@ class PlayerViewState {
           : currentIndex as int?,
       shuffleEnabled: shuffleEnabled ?? this.shuffleEnabled,
       repeatMode: repeatMode ?? this.repeatMode,
+      volume: volume ?? this.volume,
       errorMessage: errorMessage == _notProvided
           ? this.errorMessage
           : errorMessage as String?,
@@ -190,6 +194,9 @@ class PlayerController extends Notifier<PlayerViewState> {
     return _service.setRepeatMode(next);
   });
 
+  Future<void> setVolume(double volume) =>
+      _run(() => _service.setVolume(volume.clamp(0.0, 1.0)));
+
   Future<void> addToQueue(Track track) =>
       _run(() => _service.addToQueue(track));
 
@@ -254,6 +261,9 @@ class PlayerController extends Notifier<PlayerViewState> {
     });
     _subscribe(_service.repeatModeStream, (mode) {
       if (ref.mounted) state = state.copyWith(repeatMode: mode);
+    });
+    _subscribe(_service.volumeStream, (volume) {
+      if (ref.mounted) state = state.copyWith(volume: volume);
     });
     _subscribe(
       _service.failureStream,

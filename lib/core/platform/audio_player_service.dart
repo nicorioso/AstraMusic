@@ -56,6 +56,7 @@ abstract interface class AudioPlayerService {
   Stream<int?> get currentIndexStream;
   Stream<bool> get shuffleEnabledStream;
   Stream<RepeatMode> get repeatModeStream;
+  Stream<double> get volumeStream;
   Stream<AudioPlaybackFailure> get failureStream;
 
   Future<void> loadFile({required String path, required String title});
@@ -69,6 +70,7 @@ abstract interface class AudioPlayerService {
   Future<void> skipToIndex(int index);
   Future<void> setShuffle(bool enabled);
   Future<void> setRepeatMode(RepeatMode mode);
+  Future<void> setVolume(double volume);
   Future<void> addToQueue(Track track);
   Future<void> playNext(Track track);
   Future<void> removeFromQueue(int index);

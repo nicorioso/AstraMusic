@@ -408,6 +408,9 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   Stream<RepeatMode> get repeatModeStream => const Stream.empty();
 
   @override
+  Stream<double> get volumeStream => const Stream.empty();
+
+  @override
   Stream<bool> get shuffleEnabledStream => const Stream.empty();
 
   @override
@@ -448,6 +451,9 @@ final class FakeAudioPlayerService implements AudioPlayerService {
 
   @override
   Future<void> setRepeatMode(RepeatMode mode) async {}
+
+  @override
+  Future<void> setVolume(double volume) async {}
 
   @override
   Future<void> setShuffle(bool enabled) async {}

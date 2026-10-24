@@ -147,6 +147,8 @@ final class QueueFakeAudioPlayerService implements AudioPlayerService {
   @override
   Stream<RepeatMode> get repeatModeStream => _repeat.stream;
   @override
+  Stream<double> get volumeStream => const Stream.empty();
+  @override
   Stream<AudioPlaybackFailure> get failureStream => _failure.stream;
 
   @override
@@ -213,6 +215,9 @@ final class QueueFakeAudioPlayerService implements AudioPlayerService {
     repeatMode = mode;
     _repeat.add(mode);
   }
+
+  @override
+  Future<void> setVolume(double volume) async {}
 
   @override
   Future<void> addToQueue(Track track) async {

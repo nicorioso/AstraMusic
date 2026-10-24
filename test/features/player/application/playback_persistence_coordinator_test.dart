@@ -72,6 +72,8 @@ final class _FakePlayer implements AudioPlayerService {
   @override
   Stream<RepeatMode> get repeatModeStream => const Stream.empty();
   @override
+  Stream<double> get volumeStream => const Stream.empty();
+  @override
   Stream<AudioPlaybackFailure> get failureStream => const Stream.empty();
   @override
   Future<void> addToQueue(Track track) async {}
@@ -99,6 +101,8 @@ final class _FakePlayer implements AudioPlayerService {
   Future<void> seek(Duration position) async {}
   @override
   Future<void> setRepeatMode(RepeatMode mode) async {}
+  @override
+  Future<void> setVolume(double volume) async {}
   @override
   Future<void> setShuffle(bool enabled) async {}
   @override

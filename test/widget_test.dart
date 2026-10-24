@@ -329,6 +329,8 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   final _indexController = StreamController<int?>.broadcast(sync: true);
   final _shuffleController = StreamController<bool>.broadcast(sync: true);
   final _repeatController = StreamController<RepeatMode>.broadcast(sync: true);
+  final _volumeController = StreamController<double>.broadcast(sync: true);
+  double volume = 1;
 
   void seedQueue(int count) {
     final tracks = List.generate(
@@ -381,6 +383,9 @@ final class FakeAudioPlayerService implements AudioPlayerService {
 
   @override
   Stream<RepeatMode> get repeatModeStream => _repeatController.stream;
+
+  @override
+  Stream<double> get volumeStream => _volumeController.stream;
 
   @override
   Stream<bool> get shuffleEnabledStream => _shuffleController.stream;
@@ -463,6 +468,12 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   }
 
   @override
+  Future<void> setVolume(double value) async {
+    volume = value;
+    _volumeController.add(value);
+  }
+
+  @override
   Future<void> setShuffle(bool enabled) async {
     if (failOnShuffle) {
       throw const AudioPlayerException(
@@ -511,6 +522,7 @@ final class FakeAudioPlayerService implements AudioPlayerService {
       _indexController.close(),
       _shuffleController.close(),
       _repeatController.close(),
+      _volumeController.close(),
     ]);
   }
 }

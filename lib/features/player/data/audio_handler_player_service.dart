@@ -66,6 +66,9 @@ final class AudioHandlerPlayerService
       _handler.playbackState.map(_toRepeatMode).distinct();
 
   @override
+  Stream<double> get volumeStream => _handler.volumeStream.distinct();
+
+  @override
   Stream<AudioPlaybackFailure> get failureStream => _handler.failureStream.map(
     (failure) => AudioPlaybackFailure(
       track: _toTrack(failure.item),
@@ -145,6 +148,10 @@ final class AudioHandlerPlayerService
       RepeatMode.one => AudioServiceRepeatMode.one,
     }),
   );
+
+  @override
+  Future<void> setVolume(double volume) =>
+      _commands.run(() => _handler.setVolume(volume.clamp(0.0, 1.0)));
 
   @override
   Future<void> addToQueue(Track track) async {
