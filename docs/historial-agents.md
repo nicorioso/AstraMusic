@@ -47,7 +47,8 @@ AstraMusic es un reproductor de música local, gratuito y multiplataforma para A
 - Las listas usan las APIs actuales de `just_audio`; no usar `ConcatenatingAudioSource`, que está deprecado. El aleatorio reordena la lista en Dart y recarga conservando canción, posición y estado play/pausa.
 - `QueueLoadStrategy` aísla la carga completa mediante `setAudioSources` y mide su duración en debug para poder cambiar la estrategia si las bibliotecas grandes lo requieren.
 - `LibraryScanner` abstrae el escaneo cancelable: `DesktopLibraryScanner` recorre carpetas en un isolate y `AndroidMediaStoreLibraryScanner` usa un MethodChannel hacia MediaStore.
-- `TagReader` abstrae la lectura de etiquetas; el escritorio usa `audio_metadata_reader` sin cargar carátulas y conserva el nombre del archivo como fallback.
+- `TagReader` abstrae etiquetas; en archivos nuevos o cambiados, escritorio extrae la carátula original con `audio_metadata_reader` y la deduplica en caché.
+- `ArtworkProvider` y `TrackArtwork` resuelven carátulas sin bloquear la UI; `MediaItem.artUri` reutiliza el archivo local para notificación y MPRIS.
 - `LibrarySyncService` sincroniza los resultados por lotes y actualiza la disponibilidad sin exponer tipos drift.
 
 ## Esquema de base de datos
