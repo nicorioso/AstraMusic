@@ -91,6 +91,40 @@ void main() {
     );
   });
 
+  test('watchSearch encuentra títulos sin escribir sus acentos', () async {
+    await repository.upsertAll([
+      _track(uri: 'file:///cancion.mp3', title: 'Canción de la Niña'),
+    ]);
+
+    expect(
+      (await repository.watchSearch('cancion').first).single.uri,
+      'file:///cancion.mp3',
+    );
+    expect(
+      (await repository.watchSearch('nina').first).single.uri,
+      'file:///cancion.mp3',
+    );
+  });
+
+  test(
+    'watchAll ordena por el título normalizado y desempata por id',
+    () async {
+      await repository.upsertAll([
+        _track(uri: 'file:///exito.mp3', title: 'Éxito'),
+        _track(uri: 'file:///avion.mp3', title: 'avión'),
+        _track(uri: 'file:///arbol.mp3', title: 'Árbol'),
+        _track(uri: 'file:///arbol-2.mp3', title: 'árbol'),
+      ]);
+
+      expect((await repository.watchAll().first).map((track) => track.uri), [
+        'file:///arbol.mp3',
+        'file:///arbol-2.mp3',
+        'file:///avion.mp3',
+        'file:///exito.mp3',
+      ]);
+    },
+  );
+
   test('markUnavailable cambia la disponibilidad', () async {
     await repository.upsertAll([
       _track(uri: 'file:///ausente.mp3', title: 'Ausente'),

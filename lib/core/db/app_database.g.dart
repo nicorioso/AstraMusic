@@ -111,6 +111,41 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _dateModifiedMeta = const VerificationMeta(
+    'dateModified',
+  );
+  @override
+  late final GeneratedColumn<DateTime> dateModified = GeneratedColumn<DateTime>(
+    'date_modified',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _searchTextMeta = const VerificationMeta(
+    'searchText',
+  );
+  @override
+  late final GeneratedColumn<String> searchText = GeneratedColumn<String>(
+    'search_text',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _sortTitleMeta = const VerificationMeta(
+    'sortTitle',
+  );
+  @override
+  late final GeneratedColumn<String> sortTitle = GeneratedColumn<String>(
+    'sort_title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _isAvailableMeta = const VerificationMeta(
     'isAvailable',
   );
@@ -153,6 +188,9 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     year,
     fileSize,
     dateAdded,
+    dateModified,
+    searchText,
+    sortTitle,
     isAvailable,
     isFavorite,
   ];
@@ -234,6 +272,27 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     } else if (isInserting) {
       context.missing(_dateAddedMeta);
     }
+    if (data.containsKey('date_modified')) {
+      context.handle(
+        _dateModifiedMeta,
+        dateModified.isAcceptableOrUnknown(
+          data['date_modified']!,
+          _dateModifiedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('search_text')) {
+      context.handle(
+        _searchTextMeta,
+        searchText.isAcceptableOrUnknown(data['search_text']!, _searchTextMeta),
+      );
+    }
+    if (data.containsKey('sort_title')) {
+      context.handle(
+        _sortTitleMeta,
+        sortTitle.isAcceptableOrUnknown(data['sort_title']!, _sortTitleMeta),
+      );
+    }
     if (data.containsKey('is_available')) {
       context.handle(
         _isAvailableMeta,
@@ -298,6 +357,18 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}date_added'],
       )!,
+      dateModified: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date_modified'],
+      ),
+      searchText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}search_text'],
+      )!,
+      sortTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sort_title'],
+      )!,
       isAvailable: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_available'],
@@ -326,6 +397,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final int? year;
   final int? fileSize;
   final DateTime dateAdded;
+  final DateTime? dateModified;
+  final String searchText;
+  final String sortTitle;
   final bool isAvailable;
   final bool isFavorite;
   const TrackRow({
@@ -339,6 +413,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     this.year,
     this.fileSize,
     required this.dateAdded,
+    this.dateModified,
+    required this.searchText,
+    required this.sortTitle,
     required this.isAvailable,
     required this.isFavorite,
   });
@@ -367,6 +444,11 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       map['file_size'] = Variable<int>(fileSize);
     }
     map['date_added'] = Variable<DateTime>(dateAdded);
+    if (!nullToAbsent || dateModified != null) {
+      map['date_modified'] = Variable<DateTime>(dateModified);
+    }
+    map['search_text'] = Variable<String>(searchText);
+    map['sort_title'] = Variable<String>(sortTitle);
     map['is_available'] = Variable<bool>(isAvailable);
     map['is_favorite'] = Variable<bool>(isFavorite);
     return map;
@@ -394,6 +476,11 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ? const Value.absent()
           : Value(fileSize),
       dateAdded: Value(dateAdded),
+      dateModified: dateModified == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dateModified),
+      searchText: Value(searchText),
+      sortTitle: Value(sortTitle),
       isAvailable: Value(isAvailable),
       isFavorite: Value(isFavorite),
     );
@@ -415,6 +502,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       year: serializer.fromJson<int?>(json['year']),
       fileSize: serializer.fromJson<int?>(json['fileSize']),
       dateAdded: serializer.fromJson<DateTime>(json['dateAdded']),
+      dateModified: serializer.fromJson<DateTime?>(json['dateModified']),
+      searchText: serializer.fromJson<String>(json['searchText']),
+      sortTitle: serializer.fromJson<String>(json['sortTitle']),
       isAvailable: serializer.fromJson<bool>(json['isAvailable']),
       isFavorite: serializer.fromJson<bool>(json['isFavorite']),
     );
@@ -433,6 +523,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'year': serializer.toJson<int?>(year),
       'fileSize': serializer.toJson<int?>(fileSize),
       'dateAdded': serializer.toJson<DateTime>(dateAdded),
+      'dateModified': serializer.toJson<DateTime?>(dateModified),
+      'searchText': serializer.toJson<String>(searchText),
+      'sortTitle': serializer.toJson<String>(sortTitle),
       'isAvailable': serializer.toJson<bool>(isAvailable),
       'isFavorite': serializer.toJson<bool>(isFavorite),
     };
@@ -449,6 +542,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     Value<int?> year = const Value.absent(),
     Value<int?> fileSize = const Value.absent(),
     DateTime? dateAdded,
+    Value<DateTime?> dateModified = const Value.absent(),
+    String? searchText,
+    String? sortTitle,
     bool? isAvailable,
     bool? isFavorite,
   }) => TrackRow(
@@ -462,6 +558,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     year: year.present ? year.value : this.year,
     fileSize: fileSize.present ? fileSize.value : this.fileSize,
     dateAdded: dateAdded ?? this.dateAdded,
+    dateModified: dateModified.present ? dateModified.value : this.dateModified,
+    searchText: searchText ?? this.searchText,
+    sortTitle: sortTitle ?? this.sortTitle,
     isAvailable: isAvailable ?? this.isAvailable,
     isFavorite: isFavorite ?? this.isFavorite,
   );
@@ -481,6 +580,13 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       year: data.year.present ? data.year.value : this.year,
       fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
       dateAdded: data.dateAdded.present ? data.dateAdded.value : this.dateAdded,
+      dateModified: data.dateModified.present
+          ? data.dateModified.value
+          : this.dateModified,
+      searchText: data.searchText.present
+          ? data.searchText.value
+          : this.searchText,
+      sortTitle: data.sortTitle.present ? data.sortTitle.value : this.sortTitle,
       isAvailable: data.isAvailable.present
           ? data.isAvailable.value
           : this.isAvailable,
@@ -503,6 +609,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('year: $year, ')
           ..write('fileSize: $fileSize, ')
           ..write('dateAdded: $dateAdded, ')
+          ..write('dateModified: $dateModified, ')
+          ..write('searchText: $searchText, ')
+          ..write('sortTitle: $sortTitle, ')
           ..write('isAvailable: $isAvailable, ')
           ..write('isFavorite: $isFavorite')
           ..write(')'))
@@ -521,6 +630,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     year,
     fileSize,
     dateAdded,
+    dateModified,
+    searchText,
+    sortTitle,
     isAvailable,
     isFavorite,
   );
@@ -538,6 +650,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.year == this.year &&
           other.fileSize == this.fileSize &&
           other.dateAdded == this.dateAdded &&
+          other.dateModified == this.dateModified &&
+          other.searchText == this.searchText &&
+          other.sortTitle == this.sortTitle &&
           other.isAvailable == this.isAvailable &&
           other.isFavorite == this.isFavorite);
 }
@@ -553,6 +668,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<int?> year;
   final Value<int?> fileSize;
   final Value<DateTime> dateAdded;
+  final Value<DateTime?> dateModified;
+  final Value<String> searchText;
+  final Value<String> sortTitle;
   final Value<bool> isAvailable;
   final Value<bool> isFavorite;
   const TracksCompanion({
@@ -566,6 +684,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.year = const Value.absent(),
     this.fileSize = const Value.absent(),
     this.dateAdded = const Value.absent(),
+    this.dateModified = const Value.absent(),
+    this.searchText = const Value.absent(),
+    this.sortTitle = const Value.absent(),
     this.isAvailable = const Value.absent(),
     this.isFavorite = const Value.absent(),
   });
@@ -580,6 +701,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.year = const Value.absent(),
     this.fileSize = const Value.absent(),
     required DateTime dateAdded,
+    this.dateModified = const Value.absent(),
+    this.searchText = const Value.absent(),
+    this.sortTitle = const Value.absent(),
     this.isAvailable = const Value.absent(),
     this.isFavorite = const Value.absent(),
   }) : uri = Value(uri),
@@ -596,6 +720,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<int>? year,
     Expression<int>? fileSize,
     Expression<DateTime>? dateAdded,
+    Expression<DateTime>? dateModified,
+    Expression<String>? searchText,
+    Expression<String>? sortTitle,
     Expression<bool>? isAvailable,
     Expression<bool>? isFavorite,
   }) {
@@ -610,6 +737,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (year != null) 'year': year,
       if (fileSize != null) 'file_size': fileSize,
       if (dateAdded != null) 'date_added': dateAdded,
+      if (dateModified != null) 'date_modified': dateModified,
+      if (searchText != null) 'search_text': searchText,
+      if (sortTitle != null) 'sort_title': sortTitle,
       if (isAvailable != null) 'is_available': isAvailable,
       if (isFavorite != null) 'is_favorite': isFavorite,
     });
@@ -626,6 +756,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<int?>? year,
     Value<int?>? fileSize,
     Value<DateTime>? dateAdded,
+    Value<DateTime?>? dateModified,
+    Value<String>? searchText,
+    Value<String>? sortTitle,
     Value<bool>? isAvailable,
     Value<bool>? isFavorite,
   }) {
@@ -640,6 +773,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       year: year ?? this.year,
       fileSize: fileSize ?? this.fileSize,
       dateAdded: dateAdded ?? this.dateAdded,
+      dateModified: dateModified ?? this.dateModified,
+      searchText: searchText ?? this.searchText,
+      sortTitle: sortTitle ?? this.sortTitle,
       isAvailable: isAvailable ?? this.isAvailable,
       isFavorite: isFavorite ?? this.isFavorite,
     );
@@ -678,6 +814,15 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (dateAdded.present) {
       map['date_added'] = Variable<DateTime>(dateAdded.value);
     }
+    if (dateModified.present) {
+      map['date_modified'] = Variable<DateTime>(dateModified.value);
+    }
+    if (searchText.present) {
+      map['search_text'] = Variable<String>(searchText.value);
+    }
+    if (sortTitle.present) {
+      map['sort_title'] = Variable<String>(sortTitle.value);
+    }
     if (isAvailable.present) {
       map['is_available'] = Variable<bool>(isAvailable.value);
     }
@@ -700,6 +845,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('year: $year, ')
           ..write('fileSize: $fileSize, ')
           ..write('dateAdded: $dateAdded, ')
+          ..write('dateModified: $dateModified, ')
+          ..write('searchText: $searchText, ')
+          ..write('sortTitle: $sortTitle, ')
           ..write('isAvailable: $isAvailable, ')
           ..write('isFavorite: $isFavorite')
           ..write(')'))
@@ -1682,9 +1830,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $PlaylistsTable playlists = $PlaylistsTable(this);
   late final $PlaylistTracksTable playlistTracks = $PlaylistTracksTable(this);
   late final $LibraryFoldersTable libraryFolders = $LibraryFoldersTable(this);
-  late final Index tracksTitleIdx = Index(
-    'tracks_title_idx',
-    'CREATE INDEX tracks_title_idx ON tracks (title)',
+  late final Index tracksSortTitleIdx = Index(
+    'tracks_sort_title_idx',
+    'CREATE INDEX tracks_sort_title_idx ON tracks (sort_title, id)',
   );
   late final Index playlistTracksPlaylistPositionIdx = Index(
     'playlist_tracks_playlist_position_idx',
@@ -1699,7 +1847,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     playlists,
     playlistTracks,
     libraryFolders,
-    tracksTitleIdx,
+    tracksSortTitleIdx,
     playlistTracksPlaylistPositionIdx,
   ];
   @override
@@ -1732,6 +1880,9 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   Value<int?> year,
   Value<int?> fileSize,
   required DateTime dateAdded,
+  Value<DateTime?> dateModified,
+  Value<String> searchText,
+  Value<String> sortTitle,
   Value<bool> isAvailable,
   Value<bool> isFavorite,
 });
@@ -1746,6 +1897,9 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int?> year,
   Value<int?> fileSize,
   Value<DateTime> dateAdded,
+  Value<DateTime?> dateModified,
+  Value<String> searchText,
+  Value<String> sortTitle,
   Value<bool> isAvailable,
   Value<bool> isFavorite,
 });
@@ -1829,6 +1983,21 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<DateTime> get dateAdded => $composableBuilder(
     column: $table.dateAdded,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get dateModified => $composableBuilder(
+    column: $table.dateModified,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get searchText => $composableBuilder(
+    column: $table.searchText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sortTitle => $composableBuilder(
+    column: $table.sortTitle,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1927,6 +2096,21 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get dateModified => $composableBuilder(
+    column: $table.dateModified,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get searchText => $composableBuilder(
+    column: $table.searchText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sortTitle => $composableBuilder(
+    column: $table.sortTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isAvailable => $composableBuilder(
     column: $table.isAvailable,
     builder: (column) => ColumnOrderings(column),
@@ -1980,6 +2164,19 @@ class $$TracksTableAnnotationComposer
 
   GeneratedColumn<DateTime> get dateAdded =>
       $composableBuilder(column: $table.dateAdded, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get dateModified => $composableBuilder(
+    column: $table.dateModified,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get searchText => $composableBuilder(
+    column: $table.searchText,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sortTitle =>
+      $composableBuilder(column: $table.sortTitle, builder: (column) => column);
 
   GeneratedColumn<bool> get isAvailable => $composableBuilder(
     column: $table.isAvailable,
@@ -2055,6 +2252,9 @@ class $$TracksTableTableManager
                 Value<int?> year = const Value.absent(),
                 Value<int?> fileSize = const Value.absent(),
                 Value<DateTime> dateAdded = const Value.absent(),
+                Value<DateTime?> dateModified = const Value.absent(),
+                Value<String> searchText = const Value.absent(),
+                Value<String> sortTitle = const Value.absent(),
                 Value<bool> isAvailable = const Value.absent(),
                 Value<bool> isFavorite = const Value.absent(),
               }) => TracksCompanion(
@@ -2068,6 +2268,9 @@ class $$TracksTableTableManager
                 year: year,
                 fileSize: fileSize,
                 dateAdded: dateAdded,
+                dateModified: dateModified,
+                searchText: searchText,
+                sortTitle: sortTitle,
                 isAvailable: isAvailable,
                 isFavorite: isFavorite,
               ),
@@ -2083,6 +2286,9 @@ class $$TracksTableTableManager
                 Value<int?> year = const Value.absent(),
                 Value<int?> fileSize = const Value.absent(),
                 required DateTime dateAdded,
+                Value<DateTime?> dateModified = const Value.absent(),
+                Value<String> searchText = const Value.absent(),
+                Value<String> sortTitle = const Value.absent(),
                 Value<bool> isAvailable = const Value.absent(),
                 Value<bool> isFavorite = const Value.absent(),
               }) => TracksCompanion.insert(
@@ -2096,6 +2302,9 @@ class $$TracksTableTableManager
                 year: year,
                 fileSize: fileSize,
                 dateAdded: dateAdded,
+                dateModified: dateModified,
+                searchText: searchText,
+                sortTitle: sortTitle,
                 isAvailable: isAvailable,
                 isFavorite: isFavorite,
               ),

@@ -10,6 +10,7 @@ class Track {
     this.year,
     this.fileSize,
     required this.dateAdded,
+    this.dateModified,
     this.isAvailable = true,
     this.isFavorite = false,
   });
@@ -24,6 +25,7 @@ class Track {
   final int? year;
   final int? fileSize;
   final DateTime dateAdded;
+  final DateTime? dateModified;
   final bool isAvailable;
   final bool isFavorite;
 }

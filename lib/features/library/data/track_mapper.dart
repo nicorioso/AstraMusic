@@ -1,4 +1,5 @@
 import 'package:astramusic/core/db/app_database.dart';
+import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:drift/drift.dart';
 
@@ -14,6 +15,7 @@ extension TrackRowMapper on TrackRow {
     year: year,
     fileSize: fileSize,
     dateAdded: dateAdded,
+    dateModified: dateModified,
     isAvailable: isAvailable,
     isFavorite: isFavorite,
   );
@@ -30,6 +32,11 @@ extension TrackCompanionMapper on Track {
     year: Value(year),
     fileSize: Value(fileSize),
     dateAdded: dateAdded,
+    dateModified: Value(dateModified),
+    searchText: Value(
+      buildTrackSearchText(title: title, artist: artist, album: album),
+    ),
+    sortTitle: Value(normalizeForSearch(title)),
     isAvailable: Value(isAvailable),
     isFavorite: Value(isFavorite),
   );

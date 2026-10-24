@@ -1,9 +1,9 @@
 import 'package:astramusic/core/db/app_database.dart';
+import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/features/library/data/track_mapper.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:drift/drift.dart';
-import 'package:drift/extensions/native.dart';
 
 final class DriftTrackRepository implements TrackRepository {
   DriftTrackRepository(this._database);
@@ -14,25 +14,25 @@ final class DriftTrackRepository implements TrackRepository {
   Stream<List<Track>> watchAll() {
     final query = _database.select(_database.tracks)
       ..orderBy([
-        (track) => OrderingTerm.asc(track.title.collate(Collate.noCase)),
+        (track) => OrderingTerm.asc(track.sortTitle),
+        (track) => OrderingTerm.asc(track.id),
       ]);
     return query.watch().map(_toDomainList);
   }
 
   @override
   Stream<List<Track>> watchSearch(String query) {
-    final normalizedQuery = query.trim();
+    final normalizedQuery = normalizeForSearch(query);
     if (normalizedQuery.isEmpty) return watchAll();
+    final escapedQuery = _escapeLike(normalizedQuery);
 
     final statement = _database.select(_database.tracks)
       ..where(
-        (track) =>
-            track.title.containsCase(normalizedQuery) |
-            track.artist.containsCase(normalizedQuery) |
-            track.album.containsCase(normalizedQuery),
+        (track) => track.searchText.like('%$escapedQuery%', escapeChar: r'\'),
       )
       ..orderBy([
-        (track) => OrderingTerm.asc(track.title.collate(Collate.noCase)),
+        (track) => OrderingTerm.asc(track.sortTitle),
+        (track) => OrderingTerm.asc(track.id),
       ]);
     return statement.watch().map(_toDomainList);
   }
@@ -99,3 +99,6 @@ final class DriftTrackRepository implements TrackRepository {
   List<Track> _toDomainList(List<TrackRow> rows) =>
       List.unmodifiable(rows.map((row) => row.toDomain()));
 }
+
+String _escapeLike(String value) =>
+    value.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_');

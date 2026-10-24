@@ -3,7 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra de 1 a 2 conservando tracks y creando library_folders', () async {
+  test('migra de 1 a 3 conservando tracks y creando library_folders', () async {
     final executor = NativeDatabase.memory(
       setup: (database) {
         database.execute('''
@@ -66,8 +66,117 @@ void main() {
         )
         .getSingleOrNull();
 
-    expect(database.schemaVersion, 2);
+    expect(database.schemaVersion, 3);
     expect(tracks.single.title, 'Existente');
+    expect(tracks.single.searchText, 'existente');
+    expect(tracks.single.sortTitle, 'existente');
     expect(table?.read<String>('name'), 'library_folders');
   });
+
+  test('migra de 2 a 3, hace backfill y conserva todas las tablas', () async {
+    final executor = NativeDatabase.memory(
+      setup: (database) {
+        _createVersionTwoSchema(database);
+        database.execute('''
+          INSERT INTO tracks (
+            id, uri, title, artist, album, date_added
+          ) VALUES (
+            1, 'file:///cancion.mp3', 'Canción', 'NIÑA', 'Álbum',
+            1767225600000
+          )
+        ''');
+        database.execute('''
+          INSERT INTO playlists (id, name, created_at, updated_at)
+          VALUES (1, 'Favoritas', 1767225600000, 1767225600000)
+        ''');
+        database.execute('''
+          INSERT INTO playlist_tracks (
+            id, playlist_id, track_id, position, added_at
+          ) VALUES (1, 1, 1, 0, 1767225600000)
+        ''');
+        database.execute('''
+          INSERT INTO library_folders (id, path, added_at)
+          VALUES (1, '/música', 1767225600000)
+        ''');
+        database.userVersion = 2;
+      },
+    );
+    final database = AppDatabase(executor);
+    addTearDown(database.close);
+
+    final track = await database.select(database.tracks).getSingle();
+    final playlists = await database.select(database.playlists).get();
+    final relations = await database.select(database.playlistTracks).get();
+    final folders = await database.select(database.libraryFolders).get();
+    final indices = await database
+        .customSelect(
+          "SELECT name FROM sqlite_schema WHERE type = 'index' "
+          "AND name LIKE 'tracks_%_idx' ORDER BY name",
+        )
+        .get();
+
+    expect(track.title, 'Canción');
+    expect(track.searchText, 'cancion nina album');
+    expect(track.sortTitle, 'cancion');
+    expect(track.dateModified, isNull);
+    expect(playlists.single.name, 'Favoritas');
+    expect(relations.single.trackId, track.id);
+    expect(folders.single.path, '/música');
+    expect(indices.map((row) => row.read<String>('name')), [
+      'tracks_sort_title_idx',
+    ]);
+  });
+}
+
+void _createVersionTwoSchema(dynamic database) {
+  database.execute('''
+    CREATE TABLE tracks (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      uri TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      artist TEXT NULL,
+      album TEXT NULL,
+      duration_ms INTEGER NULL,
+      track_number INTEGER NULL,
+      year INTEGER NULL,
+      file_size INTEGER NULL,
+      date_added INTEGER NOT NULL,
+      is_available INTEGER NOT NULL DEFAULT 1
+        CHECK (is_available IN (0, 1)),
+      is_favorite INTEGER NOT NULL DEFAULT 0
+        CHECK (is_favorite IN (0, 1))
+    )
+  ''');
+  database.execute('CREATE INDEX tracks_title_idx ON tracks (title)');
+  database.execute('''
+    CREATE TABLE playlists (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE TABLE playlist_tracks (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      playlist_id INTEGER NOT NULL REFERENCES playlists (id)
+        ON DELETE CASCADE,
+      track_id INTEGER NOT NULL REFERENCES tracks (id)
+        ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      added_at INTEGER NOT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE INDEX playlist_tracks_playlist_position_idx
+    ON playlist_tracks (playlist_id, position)
+  ''');
+  database.execute('''
+    CREATE TABLE library_folders (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      path TEXT NOT NULL UNIQUE,
+      added_at INTEGER NOT NULL,
+      last_scanned_at INTEGER NULL
+    )
+  ''');
 }

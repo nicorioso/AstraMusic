@@ -1,10 +1,11 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:astramusic/core/utils/search_normalization.dart';
 
 part 'app_database.g.dart';
 
 @DataClassName('TrackRow')
-@TableIndex(name: 'tracks_title_idx', columns: {#title})
+@TableIndex(name: 'tracks_sort_title_idx', columns: {#sortTitle, #id})
 class Tracks extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get uri => text().unique()();
@@ -16,6 +17,9 @@ class Tracks extends Table {
   IntColumn get year => integer().nullable()();
   IntColumn get fileSize => integer().nullable()();
   DateTimeColumn get dateAdded => dateTime()();
+  DateTimeColumn get dateModified => dateTime().nullable()();
+  TextColumn get searchText => text().withDefault(const Constant(''))();
+  TextColumn get sortTitle => text().withDefault(const Constant(''))();
   BoolColumn get isAvailable => boolean().withDefault(const Constant(true))();
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
 }
@@ -57,7 +61,7 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -65,6 +69,44 @@ final class AppDatabase extends _$AppDatabase {
     onUpgrade: (migrator, from, to) async {
       if (from < 2) {
         await migrator.createTable(libraryFolders);
+      }
+      if (from < 3) {
+        await migrator.addColumn(tracks, tracks.dateModified);
+        await migrator.addColumn(tracks, tracks.searchText);
+        await migrator.addColumn(tracks, tracks.sortTitle);
+        await transaction(() async {
+          const batchSize = 500;
+          var offset = 0;
+          while (true) {
+            final rows =
+                await (select(tracks)
+                      ..orderBy([(track) => OrderingTerm.asc(track.id)])
+                      ..limit(batchSize, offset: offset))
+                    .get();
+            if (rows.isEmpty) break;
+            await batch((batch) {
+              for (final row in rows) {
+                batch.update(
+                  tracks,
+                  TracksCompanion(
+                    searchText: Value(
+                      buildTrackSearchText(
+                        title: row.title,
+                        artist: row.artist,
+                        album: row.album,
+                      ),
+                    ),
+                    sortTitle: Value(normalizeForSearch(row.title)),
+                  ),
+                  where: (track) => track.id.equals(row.id),
+                );
+              }
+            });
+            offset += rows.length;
+          }
+        });
+        await customStatement('DROP INDEX IF EXISTS tracks_title_idx');
+        await migrator.createIndex(tracksSortTitleIdx);
       }
     },
     beforeOpen: (details) async {
