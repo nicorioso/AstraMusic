@@ -30,7 +30,7 @@ final class SystemAudioFilePicker implements AudioFilePicker {
   }
 
   PickedAudioFile _toPickedAudioFile(PlatformFile file) => PickedAudioFile(
-    path: file.uri.toString(),
+    path: pickedFileLocation(localPath: file.path, uri: file.uri),
     title: _withoutExtension(file.name),
   );
 
@@ -39,4 +39,8 @@ final class SystemAudioFilePicker implements AudioFilePicker {
     if (extensionStart <= 0) return fileName;
     return fileName.substring(0, extensionStart);
   }
+}
+
+String pickedFileLocation({required String? localPath, required Uri uri}) {
+  return localPath ?? uri.toString();
 }
