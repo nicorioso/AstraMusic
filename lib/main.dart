@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/features/library/presentation/library_screen.dart';
+import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/data/astra_audio_handler.dart';
 import 'package:astramusic/features/player/data/audio_handler_player_service.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
@@ -27,7 +29,11 @@ Future<void> main() async {
       androidStopForegroundOnPause: false,
     ),
   );
-  final playerService = AudioHandlerPlayerService(handler);
+  final artworkProvider = CachedArtworkProvider();
+  final playerService = AudioHandlerPlayerService(
+    handler,
+    artworkProvider: artworkProvider,
+  );
 
   runApp(
     ProviderScope(
@@ -36,6 +42,7 @@ Future<void> main() async {
         notificationPermissionGrantedProvider.overrideWithValue(
           notificationPermissionGranted,
         ),
+        artworkProviderProvider.overrideWithValue(artworkProvider),
       ],
       child: const AstraMusicApp(),
     ),

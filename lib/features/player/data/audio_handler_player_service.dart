@@ -1,13 +1,27 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/player/data/astra_audio_handler.dart';
 import 'package:astramusic/features/player/data/serial_command_queue.dart';
 import 'package:audio_service/audio_service.dart';
 
 final class AudioHandlerPlayerService implements AudioPlayerService {
-  AudioHandlerPlayerService(this._handler);
+  AudioHandlerPlayerService(this._handler, {ArtworkProvider? artworkProvider})
+    : _artworkProvider = artworkProvider {
+    if (artworkProvider != null) {
+      _handler.mediaItem.listen((item) {
+        if (item != null && item.artUri == null) {
+          unawaited(_attachArtwork(item));
+        }
+      });
+    }
+  }
 
   final AstraAudioHandler _handler;
+  final ArtworkProvider? _artworkProvider;
   final SerialCommandQueue _commands = SerialCommandQueue();
 
   @override
@@ -163,7 +177,9 @@ final class AudioHandlerPlayerService implements AudioPlayerService {
       'fileSize': track.fileSize,
       'dateAddedMs': track.dateAdded.millisecondsSinceEpoch,
       'isFavorite': track.isFavorite,
+      'artworkPath': track.artworkPath,
     },
+    artUri: _existingArtworkUri(track.artworkPath),
   );
 
   Track _toTrack(MediaItem item) {
@@ -185,6 +201,7 @@ final class AudioHandlerPlayerService implements AudioPlayerService {
         _ => DateTime.fromMillisecondsSinceEpoch(0),
       },
       isFavorite: extras['isFavorite'] as bool? ?? false,
+      artworkPath: extras['artworkPath'] as String?,
     );
   }
 
@@ -194,7 +211,26 @@ final class AudioHandlerPlayerService implements AudioPlayerService {
     artist: item.artist,
     duration: item.duration,
     trackId: item.extras?['trackId'] as int?,
+    artworkPath: item.extras?['artworkPath'] as String?,
   );
+
+  Uri? _existingArtworkUri(String? artworkPath) {
+    if (artworkPath == null) return null;
+    final file = File(artworkPath);
+    return file.existsSync() ? Uri.file(file.path) : null;
+  }
+
+  Future<void> _attachArtwork(MediaItem item) async {
+    final provider = _artworkProvider;
+    if (provider == null) return;
+    final artworkPath = await provider.artworkFor(_toTrack(item), size: 512);
+    if (artworkPath == null || !File(artworkPath).existsSync()) return;
+    final updatedExtras = Map<String, dynamic>.of(item.extras ?? const {})
+      ..['artworkPath'] = artworkPath;
+    await _handler.updateMediaItem(
+      item.copyWith(artUri: Uri.file(artworkPath), extras: updatedExtras),
+    );
+  }
 
   AudioPlaybackState _toPlaybackState(PlaybackState state) {
     final status = switch (state.processingState) {

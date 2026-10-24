@@ -1,4 +1,5 @@
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -64,9 +65,7 @@ class QueueScreen extends ConsumerWidget {
                                 .withValues(alpha: 0.6)
                           : Colors.transparent,
                       child: ListTile(
-                        leading: Icon(
-                          isCurrent ? Icons.graphic_eq : Icons.music_note,
-                        ),
+                        leading: TrackArtwork(track: track, size: 48),
                         title: Text(
                           track.title,
                           maxLines: 1,

@@ -20,6 +20,7 @@ class AudioItem {
     this.artist,
     this.duration,
     this.trackId,
+    this.artworkPath,
   });
 
   final String path;
@@ -27,6 +28,7 @@ class AudioItem {
   final String? artist;
   final Duration? duration;
   final int? trackId;
+  final String? artworkPath;
 }
 
 class AudioPlaybackFailure {

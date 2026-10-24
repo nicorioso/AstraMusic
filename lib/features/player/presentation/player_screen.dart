@@ -1,4 +1,6 @@
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/widgets/track_artwork.dart';
+import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/queue_screen.dart';
 import 'package:astramusic/features/player/presentation/seek_bar.dart';
@@ -83,6 +85,20 @@ class _CurrentTrack extends ConsumerWidget {
     );
     return Column(
       children: [
+        if (item != null) ...[
+          TrackArtwork(
+            track: Track(
+              uri: item.path,
+              title: item.title,
+              artist: item.artist,
+              duration: item.duration,
+              dateAdded: DateTime.fromMillisecondsSinceEpoch(0),
+              artworkPath: item.artworkPath,
+            ),
+            size: 280,
+          ),
+          const SizedBox(height: 24),
+        ],
         Text(
           item?.title ?? 'Ningún archivo seleccionado',
           key: const Key('current-audio-title'),

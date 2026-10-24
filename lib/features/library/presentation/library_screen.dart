@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
@@ -383,7 +384,7 @@ class _TrackList extends StatelessWidget {
         final track = tracks[index];
         return ListTile(
           enabled: enabled,
-          leading: Icon(track.isAvailable ? Icons.music_note : Icons.music_off),
+          leading: TrackArtwork(track: track, size: 48),
           title: Text(
             track.title,
             maxLines: 1,
@@ -474,11 +475,21 @@ class _MiniPlayer extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.music_note),
+                TrackArtwork(
+                  track: Track(
+                    uri: currentItem!.path,
+                    title: currentItem.title,
+                    artist: currentItem.artist,
+                    duration: currentItem.duration,
+                    dateAdded: DateTime.fromMillisecondsSinceEpoch(0),
+                    artworkPath: currentItem.artworkPath,
+                  ),
+                  size: 48,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    currentItem!.title,
+                    currentItem.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
