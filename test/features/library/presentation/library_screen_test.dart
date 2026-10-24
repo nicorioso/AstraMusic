@@ -6,6 +6,7 @@ import 'package:astramusic/core/platform/library_scanner.dart';
 import 'package:astramusic/core/platform/media_library_permission.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
+import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
@@ -101,8 +102,14 @@ void main() {
     await tester.tap(find.byKey(const Key('scan-library-button')));
     await tester.pump();
     await tester.pump();
-    await tester.tap(find.text('Cancelar'));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(LibraryScreen)),
+    );
+    final cancellation = container
+        .read(libraryControllerProvider.notifier)
+        .cancelScan();
     await tester.pump();
+    await scanner.cancellationStarted;
 
     expect(find.text('Cancelando...'), findsOneWidget);
     expect(
@@ -115,7 +122,9 @@ void main() {
     );
 
     scanner.completeCancellation();
-    await tester.pumpAndSettle();
+    await cancellation;
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     expect(find.byKey(const Key('scan-progress')), findsNothing);
   });
 }
@@ -143,6 +152,9 @@ Widget _testApp(TrackRepository repository, {LibraryScanner? scanner}) {
 final class ControlledLibraryScanner implements LibraryScanner {
   StreamController<ScanEvent>? _controller;
   Completer<void>? _cancellationGate;
+  final Completer<void> _cancellationStarted = Completer<void>();
+
+  Future<void> get cancellationStarted => _cancellationStarted.future;
 
   @override
   Future<LibraryScanTask> startScan({
@@ -152,10 +164,14 @@ final class ControlledLibraryScanner implements LibraryScanner {
     final controller = StreamController<ScanEvent>();
     _controller = controller;
     return LibraryScanTask(controller.stream, () async {
-      await _cancellationGate?.future;
+      if (!_cancellationStarted.isCompleted) _cancellationStarted.complete();
+      final gate = _cancellationGate;
+      if (gate != null) {
+        await gate.future;
+      }
       if (!controller.isClosed) {
         controller.add(const ScanCancelled());
-        await controller.close();
+        unawaited(controller.close());
       }
     });
   }

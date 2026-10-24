@@ -425,6 +425,7 @@ final class LibraryController extends Notifier<LibraryViewState> {
     _activeScan = task;
     if (_cancelRequested) unawaited(task.cancel());
     ScanCompleted? completed;
+    var scanWasCancelled = false;
 
     await for (final event in task.events) {
       switch (event) {
@@ -450,12 +451,12 @@ final class LibraryController extends Notifier<LibraryViewState> {
             );
           }
         case ScanCancelled():
-          throw const _ScanWasCancelled();
+          scanWasCancelled = true;
       }
     }
 
     _activeScan = null;
-    if (_cancelRequested || completed == null) {
+    if (_cancelRequested || scanWasCancelled || completed == null) {
       throw const _ScanWasCancelled();
     }
     return ref
