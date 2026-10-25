@@ -29,6 +29,8 @@ lib/core (platform, db, utils) y lib/features (library, player, playlists, setti
 - Los fondos decorativos van en Stack, nunca envolviendo el contenido con altura fija.
 - La raíz responsive usa `DesktopShell` y `MobileShell` con navegación Riverpod.
 - Breakpoint único: escritorio desde 840 dp; móvil por debajo de 840 dp.
+- La rejilla de Inicio muestra hasta 8 playlists: recientes primero; si faltan,
+  favoritos y luego las más nuevas por creación, sin duplicados.
 - Cambio de esquema: migración con backfill + test + build_runner + commitear lo generado.
 
 ## Audio (no romper)
