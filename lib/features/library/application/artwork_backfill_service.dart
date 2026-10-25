@@ -9,7 +9,11 @@ typedef ArtworkExtractor = LocalAudioFileInfo Function(
   String cacheDirectory,
 );
 
-final class ArtworkBackfillService {
+abstract interface class ArtworkBackfill {
+  Future<void> runOnce();
+}
+
+final class ArtworkBackfillService implements ArtworkBackfill {
   ArtworkBackfillService(
     this._repository, {
     required this.cacheDirectory,
@@ -25,6 +29,7 @@ final class ArtworkBackfillService {
   final bool useIsolate;
   bool _started = false;
 
+  @override
   Future<void> runOnce() async {
     if (_started) return;
     _started = true;

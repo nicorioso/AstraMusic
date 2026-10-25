@@ -8,6 +8,7 @@ import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
+import 'package:astramusic/features/library/application/artwork_backfill_service.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
@@ -19,6 +20,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('inicia el relleno de carátulas desde el shell real', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+
+    await tester.pumpWidget(fixture.app());
+    await tester.pump();
+
+    expect(fixture.backfill.runCount, 1);
+  });
+
   testWidgets('confirma antes de vaciar la biblioteca', (tester) async {
     final fixture = _Fixture();
     addTearDown(fixture.dispose);
@@ -531,6 +544,7 @@ final class _Fixture {
 
   final player = _FakePlayer();
   final cache = _FakeArtworkCache();
+  final backfill = _RecordingArtworkBackfill();
   final _FakeTrackRepository repository;
   late final _FakePlaylistRepository playlists = _FakePlaylistRepository(
     repository.tracks,
@@ -542,6 +556,7 @@ final class _Fixture {
       trackRepositoryProvider.overrideWithValue(repository),
       isAndroidPlatformProvider.overrideWithValue(true),
       artworkCacheProvider.overrideWithValue(cache),
+      artworkBackfillServiceProvider.overrideWithValue(backfill),
       playlistRepositoryProvider.overrideWithValue(playlists),
     ],
     child: MaterialApp(
@@ -554,6 +569,13 @@ final class _Fixture {
   );
 
   Future<void> dispose() => player.dispose();
+}
+
+final class _RecordingArtworkBackfill implements ArtworkBackfill {
+  int runCount = 0;
+
+  @override
+  Future<void> runOnce() async => runCount++;
 }
 
 final class _FakePlaylistRepository implements PlaylistRepository {

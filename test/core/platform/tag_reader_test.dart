@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:astramusic/core/platform/tag_reader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -71,6 +72,21 @@ void main() {
 
     expect(result.artworkPath, isNotNull);
     expect(await File(result.artworkPath!).readAsBytes(), image);
+  });
+
+  test('prefiere la portada frontal entre varias imágenes incrustadas', () {
+    final back = Picture(
+      Uint8List.fromList([1]),
+      'image/jpeg',
+      PictureType.coverBack,
+    );
+    final front = Picture(
+      Uint8List.fromList([2]),
+      'image/jpeg',
+      PictureType.coverFront,
+    );
+
+    expect(selectPrimaryArtwork([back, front]), same(front));
   });
 }
 

@@ -118,7 +118,7 @@ LocalAudioFileInfo readLocalAudioFileWithArtwork(
       ..createSync(recursive: true);
     String? artworkPath;
     if (metadata.pictures.isNotEmpty) {
-      final picture = metadata.pictures.first;
+      final picture = selectPrimaryArtwork(metadata.pictures);
       final extension = picture.mimetype.toLowerCase().contains('png')
           ? '.png'
           : '.jpg';
@@ -150,6 +150,13 @@ LocalAudioFileInfo readLocalAudioFileWithArtwork(
       hadTagError: true,
     );
   }
+}
+
+Picture selectPrimaryArtwork(List<Picture> pictures) {
+  return pictures.firstWhere(
+    (picture) => picture.pictureType == PictureType.coverFront,
+    orElse: () => pictures.first,
+  );
 }
 
 String? localFilePathFromLocation(String location) {

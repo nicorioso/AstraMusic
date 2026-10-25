@@ -29,8 +29,21 @@ import 'package:flutter/services.dart';
 
 const desktopBreakpoint = 840.0;
 
-class ResponsiveShell extends StatelessWidget {
+class ResponsiveShell extends ConsumerStatefulWidget {
   const ResponsiveShell({super.key});
+
+  @override
+  ConsumerState<ResponsiveShell> createState() => _ResponsiveShellState();
+}
+
+class _ResponsiveShellState extends ConsumerState<ResponsiveShell> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(ref.read(artworkBackfillServiceProvider).runOnce());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

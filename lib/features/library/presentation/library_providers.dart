@@ -68,7 +68,7 @@ final artworkCacheProvider = Provider<ArtworkCache>((ref) {
   return const FileArtworkCache();
 });
 
-final artworkBackfillServiceProvider = Provider<ArtworkBackfillService>((ref) {
+final artworkBackfillServiceProvider = Provider<ArtworkBackfill>((ref) {
   return ArtworkBackfillService(
     ref.watch(trackRepositoryProvider),
     cacheDirectory: () async => (await getApplicationCacheDirectory()).path,
