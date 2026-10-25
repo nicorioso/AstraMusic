@@ -4,6 +4,8 @@ import 'package:astramusic/core/platform/audio_file_picker.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/domain/track_repository.dart';
+import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/player_screen.dart';
 import 'package:astramusic/features/player/presentation/queue_screen.dart';
@@ -12,6 +14,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('el corazón del reproductor alterna el favorito', (tester) async {
+    final service = FakeAudioPlayerService();
+    final repository = _FavoriteTrackRepository();
+    addTearDown(service.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        service: service,
+        picker: const FakeAudioFilePicker(null),
+        trackRepository: repository,
+      ),
+    );
+    await tester.pump();
+    service.seedQueue(1);
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('favorite-current-track-button')));
+    await tester.pump();
+    expect(repository.changes, [(1, true)]);
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('favorite-current-track-button')));
+    await tester.pump();
+    expect(repository.changes, [(1, true), (1, false)]);
+  });
+
   testWidgets('elige un archivo y alterna entre reproducción y pausa', (
     tester,
   ) async {
@@ -289,11 +317,14 @@ Widget _testApp({
   required AudioPlayerService service,
   required AudioFilePicker picker,
   Widget home = const PlayerScreen(),
+  TrackRepository? trackRepository,
 }) {
+  final repository = trackRepository ?? _FavoriteTrackRepository();
   return ProviderScope(
     overrides: [
       audioPlayerServiceProvider.overrideWithValue(service),
       audioFilePickerProvider.overrideWithValue(picker),
+      trackRepositoryProvider.overrideWithValue(repository),
     ],
     child: MaterialApp(
       theme: buildAstraTheme(),
@@ -303,6 +334,64 @@ Widget _testApp({
       home: home,
     ),
   );
+}
+
+final class _FavoriteTrackRepository implements TrackRepository {
+  final _favorites = <int>{};
+  final _controller = StreamController<List<Track>>.broadcast(sync: true);
+  final List<(int, bool)> changes = [];
+
+  List<Track> get _current => _favorites
+      .map(
+        (id) => Track(
+          id: id,
+          uri: 'file:///favorite-$id.mp3',
+          title: 'Favorita $id',
+          dateAdded: DateTime(2026),
+          favoritedAt: DateTime(2026),
+        ),
+      )
+      .toList();
+
+  @override
+  Stream<List<Track>> watchFavorites() async* {
+    yield _current;
+    yield* _controller.stream;
+  }
+
+  @override
+  Future<void> setFavorite(int id, bool favorite) async {
+    changes.add((id, favorite));
+    favorite ? _favorites.add(id) : _favorites.remove(id);
+    _controller.add(_current);
+  }
+
+  @override
+  Stream<List<Track>> watchAll() => const Stream.empty();
+  @override
+  Stream<List<Track>> watchSearch(String query) => const Stream.empty();
+  @override
+  Future<void> clearLibrary() async {}
+  @override
+  Future<int> count() async => 0;
+  @override
+  Future<void> deleteAll() async {}
+  @override
+  Future<void> deleteByUris(Set<String> uris) async {}
+  @override
+  Future<Set<String>> excludedUris() async => const {};
+  @override
+  Future<void> excludeAndDelete(Track track) async {}
+  @override
+  Future<Track?> getById(int id) async => null;
+  @override
+  Future<void> markUnavailable(Set<String> uris) async {}
+  @override
+  Future<void> restoreExcluded(Set<String> uris) async {}
+  @override
+  Future<void> setAvailability(Map<String, bool> availability) async {}
+  @override
+  Future<void> upsertAll(List<Track> tracks) async {}
 }
 
 Widget _queueTestApp(AudioPlayerService service) => _testApp(

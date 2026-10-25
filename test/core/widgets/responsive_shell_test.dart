@@ -433,6 +433,10 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   Stream<List<Playlist>> watchRecent(int limit) => Stream.value(const []);
 
   @override
+  Future<List<Track>> coverTracks(int playlistId, {int limit = 4}) async =>
+      tracks.take(limit).toList();
+
+  @override
   Future<void> rename(int id, String name) async {}
 
   @override

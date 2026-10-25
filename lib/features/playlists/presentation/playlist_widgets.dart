@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:astramusic/core/navigation/app_navigation.dart';
+import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
+import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
@@ -38,6 +40,53 @@ class PlaylistArtwork extends StatelessWidget {
       color: context.astraColors.photon,
     ),
   );
+}
+
+class PlaylistCover extends ConsumerWidget {
+  const PlaylistCover({required this.playlist, required this.size, super.key});
+
+  final Playlist playlist;
+  final double size;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (playlist.id == favoritesPlaylistId) {
+      return FavoritesArtwork(size: size);
+    }
+    final tracks = ref.watch(playlistCoverTracksProvider(playlist.id));
+    return tracks.when(
+      data: (items) {
+        if (items.isEmpty) return PlaylistArtwork(size: size);
+        if (items.length < 4) {
+          return TrackArtwork(
+            track: items.first,
+            size: size,
+            usage: ArtworkUsage.list,
+          );
+        }
+        final tileSize = size / 2;
+        return ClipRRect(
+          key: ValueKey('playlist-cover-grid-${playlist.id}'),
+          borderRadius: BorderRadius.circular(6),
+          child: SizedBox.square(
+            dimension: size,
+            child: Wrap(
+              children: [
+                for (final track in items.take(4))
+                  TrackArtwork(
+                    track: track,
+                    size: tileSize,
+                    usage: ArtworkUsage.list,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => PlaylistArtwork(size: size),
+      error: (_, _) => PlaylistArtwork(size: size),
+    );
+  }
 }
 
 class FavoritesArtwork extends StatelessWidget {
@@ -232,7 +281,7 @@ class _PlaylistChooser extends ConsumerWidget {
                     itemBuilder: (_, index) {
                       final playlist = items[index];
                       return ListTile(
-                        leading: const PlaylistArtwork(size: 40),
+                        leading: PlaylistCover(playlist: playlist, size: 40),
                         title: Text(playlist.name),
                         subtitle: Text(playlistTrackCount(playlist.trackCount)),
                         onTap: () => Navigator.of(context).pop(playlist.id),
@@ -362,7 +411,7 @@ class _PlaylistDetailBody extends ConsumerWidget {
               if (favorites)
                 const FavoritesArtwork(size: 104)
               else
-                PlaylistArtwork(size: 104),
+                PlaylistCover(playlist: playlist, size: 104),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -446,9 +495,8 @@ class _PlaylistDetailBody extends ConsumerWidget {
                   key: const Key('playlist-track-list'),
                   buildDefaultDragHandles:
                       !favorites && MediaQuery.sizeOf(context).width < 840,
-                  onReorder: (oldIndex, newIndex) {
+                  onReorderItem: (oldIndex, newIndex) {
                     if (favorites) return;
-                    if (newIndex > oldIndex) newIndex--;
                     // La cola en reproducción es una copia y no se reordena.
                     ref
                         .read(playlistRepositoryProvider)

@@ -37,5 +37,7 @@ lib/core (platform, db, utils) y lib/features (library, player, playlists, setti
 - Errores: fatales (canción actual) saltan a la siguiente; no fatales muestran mensaje y NO deshabilitan controles.
 - Búsqueda: usar search_text y normalizeForSearch; orden por sort_title.
 - Borrar es solo de la app; excluded_uris evita que los escaneos revivan canciones.
+- Favoritos: `is_favorite` es verdadero si y solo si `favorited_at` no es nulo.
+- Playlists: `markPlayed` registra el inicio desde una playlist y `watchRecent` excluye las nunca reproducidas.
 
 Diseño: docs/diseno-ui.md (leer solo en tareas de UI)

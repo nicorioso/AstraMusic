@@ -208,12 +208,13 @@ class _DesktopSidebar extends ConsumerWidget {
                       key: const Key('desktop-playlist-list'),
                       itemCount: items.length + 1,
                       itemBuilder: (_, index) {
-                        if (index == 0)
+                        if (index == 0) {
                           return _FavoritesTile(count: favoriteCount);
+                        }
                         final playlist = items[index - 1];
                         return ListTile(
                           key: ValueKey('sidebar-playlist-${playlist.id}'),
-                          leading: const PlaylistArtwork(size: 44),
+                          leading: PlaylistCover(playlist: playlist, size: 44),
                           title: Text(
                             playlist.name,
                             maxLines: 1,
@@ -755,7 +756,7 @@ class _PlaylistTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListTile(
     key: ValueKey('library-playlist-${playlist.id}'),
-    leading: const PlaylistArtwork(size: 48),
+    leading: PlaylistCover(playlist: playlist, size: 48),
     title: Text(playlist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
     subtitle: Text(playlistTrackCount(playlist.trackCount)),
     onTap: onTap,

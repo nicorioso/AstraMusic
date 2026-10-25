@@ -15,13 +15,18 @@ void main() {
       now: () => DateTime.utc(2026, 1, 2),
     );
     await database.batch((batch) {
-      for (var id = 1; id <= 3; id++) {
+      for (var id = 1; id <= 6; id++) {
         batch.insert(
           database.tracks,
           TracksCompanion.insert(
             id: Value(id),
             uri: 'file:///track-$id.mp3',
             title: 'Canción $id',
+            artist: Value(id <= 2 ? 'Compartido' : 'Artista $id'),
+            album: Value(id <= 2 ? 'Álbum' : 'Álbum $id'),
+            artworkPath: Value(
+              id <= 2 ? '/cover/shared.jpg' : '/cover/$id.jpg',
+            ),
             dateAdded: DateTime.utc(2026),
           ),
         );
@@ -100,7 +105,7 @@ void main() {
     await repository.delete(playlist.id);
 
     expect(await database.select(database.playlistTracks).get(), isEmpty);
-    expect(await database.select(database.tracks).get(), hasLength(3));
+    expect(await database.select(database.tracks).get(), hasLength(6));
     expect(await repository.watchAll().first, isEmpty);
   });
 
@@ -121,4 +126,14 @@ void main() {
       expect(recent.every((playlist) => playlist.lastPlayedAt != null), isTrue);
     },
   );
+
+  test('coverTracks devuelve máximo cuatro carátulas distintas', () async {
+    final playlist = await repository.create('Portadas');
+    await repository.addTracks(playlist.id, [1, 2, 3, 4, 5, 6]);
+
+    final covers = await repository.coverTracks(playlist.id);
+
+    expect(covers.map((track) => track.id), [1, 3, 4, 5]);
+    expect(covers, hasLength(4));
+  });
 }

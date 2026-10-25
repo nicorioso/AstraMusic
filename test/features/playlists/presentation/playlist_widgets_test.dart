@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
+import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
@@ -149,6 +150,25 @@ void main() {
     expect(fixture.trackRepository.favoriteChanges, [(1, false)]);
   });
 
+  for (final scenario in const [(0, 0), (2, 1), (5, 4)]) {
+    testWidgets(
+      'PlaylistCover usa ${scenario.$2} carátulas con ${scenario.$1}',
+      (tester) async {
+        final fixture = _Fixture(trackCount: scenario.$1);
+        await tester.pumpWidget(fixture.coverApp());
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('cover-under-test')),
+            matching: find.byType(TrackArtwork),
+          ),
+          findsNWidgets(scenario.$2),
+        );
+      },
+    );
+  }
+
   testWidgets('añade una canción a una playlist desde su menú', (tester) async {
     final fixture = _Fixture();
     await _setSize(tester, const Size(1400, 900));
@@ -193,7 +213,7 @@ void main() {
     final list = tester.widget<ReorderableListView>(
       find.byKey(const Key('playlist-track-list')),
     );
-    list.onReorder!(0, 3);
+    list.onReorderItem!(0, 2);
     await tester.pump();
 
     expect(fixture.playlists.moves, [(0, 2)]);
@@ -397,6 +417,21 @@ final class _Fixture {
       home: const QueueScreen(),
     ),
   );
+
+  Widget coverApp() => ProviderScope(
+    overrides: [playlistRepositoryProvider.overrideWithValue(playlists)],
+    child: MaterialApp(
+      theme: buildAstraTheme(),
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            key: const Key('cover-under-test'),
+            child: PlaylistCover(playlist: playlists.playlist, size: 96),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 final class _FakePlaylistRepository implements PlaylistRepository {
@@ -475,6 +510,10 @@ final class _FakePlaylistRepository implements PlaylistRepository {
 
   @override
   Stream<List<Playlist>> watchRecent(int limit) => Stream.value(const []);
+
+  @override
+  Future<List<Track>> coverTracks(int playlistId, {int limit = 4}) async =>
+      tracks.take(limit).toList();
 
   @override
   Future<void> rename(int id, String name) async {}

@@ -20,4 +20,5 @@ abstract interface class PlaylistRepository {
   Future<void> move(int playlistId, int oldIndex, int newIndex);
   Future<void> markPlayed(int id);
   Stream<List<Playlist>> watchRecent(int limit);
+  Future<List<Track>> coverTracks(int playlistId, {int limit = 4});
 }

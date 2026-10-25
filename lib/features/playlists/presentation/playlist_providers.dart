@@ -6,7 +6,10 @@ import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final playlistRepositoryProvider = Provider<PlaylistRepository>((ref) {
-  return DriftPlaylistRepository(ref.watch(appDatabaseProvider));
+  return DriftPlaylistRepository(
+    ref.watch(appDatabaseProvider),
+    useAlbumArtworkIdentity: ref.watch(isAndroidPlatformProvider),
+  );
 });
 
 final playlistsProvider = StreamProvider<List<Playlist>>((ref) {
@@ -22,4 +25,11 @@ final playlistTracksProvider = StreamProvider.family<List<Track>, int>((
   id,
 ) {
   return ref.watch(playlistRepositoryProvider).watchTracks(id);
+});
+
+final playlistCoverTracksProvider = FutureProvider.family<List<Track>, int>((
+  ref,
+  id,
+) {
+  return ref.watch(playlistRepositoryProvider).coverTracks(id);
 });

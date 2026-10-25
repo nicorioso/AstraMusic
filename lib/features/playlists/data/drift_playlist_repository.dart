@@ -6,11 +6,15 @@ import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:drift/drift.dart';
 
 final class DriftPlaylistRepository implements PlaylistRepository {
-  DriftPlaylistRepository(this._database, {DateTime Function()? now})
-    : _now = now ?? DateTime.now;
+  DriftPlaylistRepository(
+    this._database, {
+    DateTime Function()? now,
+    this.useAlbumArtworkIdentity = false,
+  }) : _now = now ?? DateTime.now;
 
   final AppDatabase _database;
   final DateTime Function() _now;
+  final bool useAlbumArtworkIdentity;
   late final Expression<int> _trackCount = _database.playlistTracks.id.count();
 
   @override
@@ -204,6 +208,42 @@ final class DriftPlaylistRepository implements PlaylistRepository {
     return query.watch().map(
       (rows) => List.unmodifiable(rows.map(_mapPlaylist)),
     );
+  }
+
+  @override
+  Future<List<Track>> coverTracks(int playlistId, {int limit = 4}) async {
+    if (limit <= 0) return const [];
+    final rows =
+        await (_database.select(_database.playlistTracks).join([
+                innerJoin(
+                  _database.tracks,
+                  _database.tracks.id.equalsExp(
+                    _database.playlistTracks.trackId,
+                  ),
+                ),
+              ])
+              ..where(_database.playlistTracks.playlistId.equals(playlistId))
+              ..orderBy([OrderingTerm.asc(_database.playlistTracks.position)]))
+            .get();
+    final keys = <String>{};
+    final result = <Track>[];
+    for (final row in rows) {
+      final track = row.readTable(_database.tracks).toDomain();
+      final artworkPath = track.artworkPath?.trim();
+      final artist = track.artist?.trim().toLowerCase();
+      final album = track.album?.trim().toLowerCase();
+      final key = useAlbumArtworkIdentity
+          ? artist != null || album != null
+                ? 'album:${artist ?? ''}\u0000${album ?? ''}'
+                : 'track:${track.id}'
+          : artworkPath != null && artworkPath.isNotEmpty
+          ? 'artwork:$artworkPath'
+          : 'track:${track.id}';
+      if (!keys.add(key)) continue;
+      result.add(track);
+      if (result.length == limit) break;
+    }
+    return List.unmodifiable(result);
   }
 
   JoinedSelectStatement<HasResultSet, dynamic> _playlistQuery() {
