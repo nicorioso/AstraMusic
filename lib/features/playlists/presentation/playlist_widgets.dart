@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
+import 'package:astramusic/core/theme/dynamic_artwork_color.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
@@ -403,52 +404,77 @@ class _PlaylistDetailBody extends ConsumerWidget {
       key: const Key('playlist-detail'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (favorites)
-                const FavoritesArtwork(size: 104)
-              else
-                PlaylistCover(playlist: playlist, size: 104),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      playlist.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.headlineSmall,
+        DynamicArtworkColorBuilder(
+          track: tracks.isEmpty ? null : tracks.first,
+          builder: (context, dynamicColor) => DecoratedBox(
+            key: const Key('playlist-detail-header'),
+            decoration: BoxDecoration(
+              gradient: dynamicColor == null
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        context.astraColors.gradientTop,
+                        context.astraColors.surface.withValues(alpha: 0),
+                      ],
+                    )
+                  : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        dynamicColor,
+                        context.astraColors.surface.withValues(alpha: 0),
+                      ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${playlistTrackCount(playlist.trackCount)} · ${_durationLabel(duration)}',
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (favorites)
+                    const FavoritesArtwork(size: 104)
+                  else
+                    PlaylistCover(playlist: playlist, size: 104),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          playlist.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${playlistTrackCount(playlist.trackCount)} · ${_durationLabel(duration)}',
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  if (!favorites)
+                    PopupMenuButton<_PlaylistAction>(
+                      key: const Key('playlist-menu-button'),
+                      onSelected: (action) => switch (action) {
+                        _PlaylistAction.rename => _rename(context, ref),
+                        _PlaylistAction.delete => _delete(context, ref),
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: _PlaylistAction.rename,
+                          child: Text('Renombrar'),
+                        ),
+                        PopupMenuItem(
+                          value: _PlaylistAction.delete,
+                          child: Text('Eliminar'),
+                        ),
+                      ],
+                    ),
+                ],
               ),
-              if (!favorites)
-                PopupMenuButton<_PlaylistAction>(
-                  key: const Key('playlist-menu-button'),
-                  onSelected: (action) => switch (action) {
-                    _PlaylistAction.rename => _rename(context, ref),
-                    _PlaylistAction.delete => _delete(context, ref),
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: _PlaylistAction.rename,
-                      child: Text('Renombrar'),
-                    ),
-                    PopupMenuItem(
-                      value: _PlaylistAction.delete,
-                      child: Text('Eliminar'),
-                    ),
-                  ],
-                ),
-            ],
+            ),
           ),
         ),
         Padding(

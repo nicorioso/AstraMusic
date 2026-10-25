@@ -1,7 +1,7 @@
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
-import 'package:astramusic/core/widgets/astra_background.dart';
+import 'package:astramusic/core/theme/dynamic_artwork_color.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/track.dart';
@@ -20,16 +20,16 @@ class PlayerScreen extends ConsumerWidget {
     final notificationWarning = ref.watch(
       playerControllerProvider.select((state) => state.notificationWarning),
     );
+    final currentItem = ref.watch(
+      playerControllerProvider.select((state) => state.currentItem),
+    );
     final desktop = MediaQuery.sizeOf(context).width >= 840;
     final content = desktop
-        ? _DesktopPlayer(
-            notificationWarning: notificationWarning,
-          )
-        : _MobilePlayer(
-            notificationWarning: notificationWarning,
-          );
+        ? _DesktopPlayer(notificationWarning: notificationWarning)
+        : _MobilePlayer(notificationWarning: notificationWarning);
     return Scaffold(
-      body: AstraBackground(
+      body: DynamicArtworkBackground(
+        track: currentItem == null ? null : _trackFor(currentItem),
         child: SafeArea(
           child: desktop
               ? content
@@ -93,10 +93,7 @@ class _MobilePlayer extends StatelessWidget {
                       icon: const Icon(Icons.keyboard_arrow_down),
                     ),
                     const Expanded(
-                      child: Text(
-                        'Reproduciendo',
-                        textAlign: TextAlign.center,
-                      ),
+                      child: Text('Reproduciendo', textAlign: TextAlign.center),
                     ),
                     const SizedBox(width: 48),
                   ],
@@ -177,8 +174,7 @@ class _DesktopPlayer extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (notificationWarning)
-                          const _NotificationWarning(),
+                        if (notificationWarning) const _NotificationWarning(),
                         const SizedBox(height: 12),
                         _CurrentTrack(
                           artworkSize: (constraints.maxWidth - 48).clamp(
@@ -263,14 +259,7 @@ class _CurrentTrack extends ConsumerWidget {
       children: [
         if (item != null) ...[
           TrackArtwork(
-            track: Track(
-              uri: item.path,
-              title: item.title,
-              artist: item.artist,
-              duration: item.duration,
-              dateAdded: DateTime.fromMillisecondsSinceEpoch(0),
-              artworkPath: item.artworkPath,
-            ),
+            track: _trackFor(item),
             size: artworkSize,
             usage: ArtworkUsage.player,
           ),
@@ -321,6 +310,16 @@ class _CurrentTrack extends ConsumerWidget {
     );
   }
 }
+
+Track _trackFor(AudioItem item) => Track(
+  id: item.trackId,
+  uri: item.path,
+  title: item.title,
+  artist: item.artist,
+  duration: item.duration,
+  dateAdded: DateTime.fromMillisecondsSinceEpoch(0),
+  artworkPath: item.artworkPath,
+);
 
 class _PlaybackControls extends ConsumerWidget {
   const _PlaybackControls();

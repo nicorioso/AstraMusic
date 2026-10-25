@@ -4,6 +4,7 @@ import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
+import 'package:astramusic/core/theme/dynamic_artwork_color.dart';
 import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
@@ -1297,58 +1298,61 @@ class MobileMiniPlayer extends ConsumerWidget {
     );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Material(
-        key: const Key('mobile-mini-player'),
-        color: context.astraColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(8),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: (_) => const PlayerScreen())),
-          child: SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: TrackArtwork(
-                    track: track,
+      child: DynamicArtworkColorBuilder(
+        track: track,
+        builder: (context, dynamicColor) => Material(
+          key: const Key('mobile-mini-player'),
+          color: dynamicColor ?? context.astraColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(8),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
+            ),
+            child: SizedBox(
+              height: 64,
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: TrackArtwork(
+                      track: track,
+                      size: 48,
+                      usage: ArtworkUsage.miniPlayer,
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          item.artist ?? 'Artista desconocido',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  PlayCircleButton(
+                    key: const Key('mobile-mini-play-button'),
+                    onPressed: state.status == AudioPlaybackStatus.error
+                        ? null
+                        : ref
+                              .read(playerControllerProvider.notifier)
+                              .togglePlayback,
+                    isPlaying: state.isPlaying,
                     size: 48,
-                    usage: ArtworkUsage.miniPlayer,
                   ),
-                ),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        item.artist ?? 'Artista desconocido',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                PlayCircleButton(
-                  key: const Key('mobile-mini-play-button'),
-                  onPressed: state.status == AudioPlaybackStatus.error
-                      ? null
-                      : ref
-                            .read(playerControllerProvider.notifier)
-                            .togglePlayback,
-                  isPlaying: state.isPlaying,
-                  size: 48,
-                ),
-                const SizedBox(width: 8),
-              ],
+                  const SizedBox(width: 8),
+                ],
+              ),
             ),
           ),
         ),
