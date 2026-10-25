@@ -10,6 +10,7 @@ import 'package:astramusic/core/platform/library_folder_picker.dart';
 import 'package:astramusic/core/platform/library_scanner.dart';
 import 'package:astramusic/core/platform/media_library_permission.dart';
 import 'package:astramusic/features/library/application/library_sync_service.dart';
+import 'package:astramusic/features/library/application/artwork_backfill_service.dart';
 import 'package:astramusic/features/library/data/drift_library_folders_repository.dart';
 import 'package:astramusic/features/library/data/drift_track_repository.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
@@ -17,6 +18,7 @@ import 'package:astramusic/features/library/domain/library_folders_repository.da
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();
@@ -64,6 +66,13 @@ final artworkProviderProvider = Provider<ArtworkProvider>((ref) {
 
 final artworkCacheProvider = Provider<ArtworkCache>((ref) {
   return const FileArtworkCache();
+});
+
+final artworkBackfillServiceProvider = Provider<ArtworkBackfillService>((ref) {
+  return ArtworkBackfillService(
+    ref.watch(trackRepositoryProvider),
+    cacheDirectory: () async => (await getApplicationCacheDirectory()).path,
+  );
 });
 
 final librarySearchQueryProvider = NotifierProvider<LibrarySearchQuery, String>(

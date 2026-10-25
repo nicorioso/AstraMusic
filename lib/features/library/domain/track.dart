@@ -49,4 +49,21 @@ class Track {
     favoritedAt: favoritedAt,
     artworkPath: artworkPath,
   );
+
+  Track withArtworkPath(String value) => Track(
+    id: id,
+    uri: uri,
+    title: title,
+    artist: artist,
+    album: album,
+    duration: duration,
+    trackNumber: trackNumber,
+    year: year,
+    fileSize: fileSize,
+    dateAdded: dateAdded,
+    dateModified: dateModified,
+    isAvailable: isAvailable,
+    favoritedAt: favoritedAt,
+    artworkPath: value,
+  );
 }
