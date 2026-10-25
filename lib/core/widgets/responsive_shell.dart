@@ -25,6 +25,7 @@ import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 const desktopBreakpoint = 840.0;
 
@@ -284,7 +285,7 @@ class _DesktopCenter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final destination = ref.watch(appDestinationProvider);
     final navigation = ref.read(appDestinationProvider.notifier);
-    return AstraBackground(
+    final content = AstraBackground(
       child: Column(
         children: [
           Padding(
@@ -294,7 +295,7 @@ class _DesktopCenter extends ConsumerWidget {
                 if (navigation.canGoBack)
                   IconButton(
                     key: const Key('desktop-back-button'),
-                    tooltip: 'Atrás',
+                    tooltip: 'Volver',
                     onPressed: navigation.back,
                     icon: const Icon(Icons.arrow_back),
                   ),
@@ -332,6 +333,14 @@ class _DesktopCenter extends ConsumerWidget {
           ),
         ],
       ),
+    );
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          if (navigation.canGoBack) navigation.back();
+        },
+      },
+      child: Focus(autofocus: true, child: content),
     );
   }
 }

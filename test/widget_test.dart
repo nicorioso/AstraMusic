@@ -11,6 +11,7 @@ import 'package:astramusic/features/player/presentation/player_screen.dart';
 import 'package:astramusic/features/player/presentation/queue_screen.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -425,6 +426,130 @@ void main() {
     expect(find.byKey(const Key('playing-indicator')), findsOneWidget);
     expect(tester.binding.transientCallbackCount, 0);
   });
+
+  for (final size in const [Size(360, 800), Size(937, 1029), Size(1400, 900)]) {
+    testWidgets(
+      'salida visible vuelve sin perder scroll a ${size.width.toInt()} px',
+      (tester) async {
+        await tester.binding.setSurfaceSize(size);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = size;
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final service = FakeAudioPlayerService();
+        final scrollController = ScrollController();
+        addTearDown(service.dispose);
+        addTearDown(scrollController.dispose);
+        await tester.pumpWidget(
+          _testApp(
+            service: service,
+            picker: const FakeAudioFilePicker(null),
+            home: _PlayerLaunchHost(controller: scrollController),
+          ),
+        );
+        scrollController.jumpTo(240);
+        await tester.pump();
+        final previousOffset = scrollController.offset;
+        await tester.tap(find.byKey(const Key('launch-player')));
+        await tester.pumpAndSettle();
+
+        final close = find.byKey(const Key('close-player-button'));
+        expect(close, findsOneWidget);
+        expect(close.hitTestable(), findsOneWidget);
+        final touchArea = tester.getSize(close);
+        expect(touchArea.width, greaterThanOrEqualTo(48));
+        expect(touchArea.height, greaterThanOrEqualTo(48));
+        expect(
+          find.byTooltip(size.width < 840 ? 'Cerrar' : 'Volver'),
+          findsOneWidget,
+        );
+        await tester.tap(close);
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('previous-screen')), findsOneWidget);
+        expect(scrollController.offset, previousOffset);
+      },
+    );
+  }
+
+  testWidgets('Escape cierra el reproductor en escritorio', (tester) async {
+    const size = Size(937, 1029);
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = size;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final service = FakeAudioPlayerService();
+    addTearDown(service.dispose);
+    await tester.pumpWidget(
+      _testApp(
+        service: service,
+        picker: const FakeAudioFilePicker(null),
+        home: _PlayerLaunchHost(controller: ScrollController()),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('launch-player')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PlayerScreen), findsNothing);
+    expect(find.byKey(const Key('previous-screen')), findsOneWidget);
+  });
+
+  testWidgets('la cola es translúcida y no tiene separador vertical', (
+    tester,
+  ) async {
+    const size = Size(1400, 900);
+    await tester.binding.setSurfaceSize(size);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = size;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final service = FakeAudioPlayerService();
+    addTearDown(service.dispose);
+    await tester.pumpWidget(
+      _testApp(service: service, picker: const FakeAudioFilePicker(null)),
+    );
+    service.seedQueue(1);
+    await tester.pump();
+
+    final panel = tester.widget<DecoratedBox>(
+      find.byKey(const Key('queue-panel')),
+    );
+    final decoration = panel.decoration as BoxDecoration;
+    expect(decoration.color!.a, lessThan(1));
+    expect(find.byType(VerticalDivider), findsNothing);
+  });
+}
+
+class _PlayerLaunchHost extends StatelessWidget {
+  const _PlayerLaunchHost({required this.controller});
+
+  final ScrollController controller;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    key: const Key('previous-screen'),
+    body: ListView(
+      controller: controller,
+      children: [
+        const SizedBox(height: 520),
+        Center(
+          child: TextButton(
+            key: const Key('launch-player'),
+            onPressed: () =>
+                Navigator.of(context).push(playerScreenRoute(context)),
+            child: const Text('Abrir reproductor'),
+          ),
+        ),
+        const SizedBox(height: 900),
+      ],
+    ),
+  );
 }
 
 Widget _testApp({

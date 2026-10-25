@@ -15,6 +15,7 @@ import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -80,6 +81,26 @@ void main() {
     await tester.tap(find.text('Biblioteca'));
     await tester.pump();
     expect(find.byKey(const Key('library-destination')), findsOneWidget);
+  });
+
+  testWidgets('Escape vuelve desde una pantalla secundaria de escritorio', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(1200, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pump();
+
+    await tester.tap(find.text('Ajustes'));
+    await tester.pump();
+    expect(find.byKey(const Key('settings-destination')), findsOneWidget);
+    expect(find.byKey(const Key('desktop-back-button')), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.byKey(const Key('settings-destination')), findsNothing);
+    expect(find.byKey(const Key('home-destination')), findsOneWidget);
   });
 
   testWidgets('pliega la barra lateral entre 300 y 72 dp', (tester) async {

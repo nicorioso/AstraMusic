@@ -11,6 +11,7 @@ import 'package:astramusic/features/player/presentation/queue_screen.dart';
 import 'package:astramusic/features/player/presentation/seek_bar.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 Route<void> playerScreenRoute(BuildContext context) {
   final animationsDisabled = MediaQuery.disableAnimationsOf(context);
@@ -59,13 +60,25 @@ class PlayerScreen extends ConsumerWidget {
     final content = desktop
         ? _DesktopPlayer(notificationWarning: notificationWarning)
         : _MobilePlayer(notificationWarning: notificationWarning);
-    return Scaffold(
-      body: DynamicArtworkBackground(
-        track: currentItem == null ? null : _trackFor(currentItem),
-        child: SafeArea(
-          child: desktop
-              ? content
-              : _SwipeToClose(key: const Key('swipe-to-close'), child: content),
+    final navigator = Navigator.of(context);
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): navigator.maybePop,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          body: DynamicArtworkBackground(
+            track: currentItem == null ? null : _trackFor(currentItem),
+            child: SafeArea(
+              child: desktop
+                  ? content
+                  : _SwipeToClose(
+                      key: const Key('swipe-to-close'),
+                      child: content,
+                    ),
+            ),
+          ),
         ),
       ),
     );
@@ -120,7 +133,7 @@ class _MobilePlayer extends StatelessWidget {
                   children: [
                     IconButton(
                       key: const Key('close-player-button'),
-                      tooltip: 'Cerrar reproductor',
+                      tooltip: 'Cerrar',
                       onPressed: () => Navigator.of(context).maybePop(),
                       icon: const Icon(Icons.keyboard_arrow_down),
                     ),
@@ -163,20 +176,28 @@ class _MobilePlayer extends StatelessWidget {
       builder: (_) => const SafeArea(
         child: FractionallySizedBox(
           heightFactor: 0.72,
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'A continuación',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: PlayerQueuePanel(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'A continuación',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  Expanded(child: PlayerQueueView()),
+                ],
               ),
-              Expanded(child: PlayerQueueView()),
-            ],
+            ),
           ),
         ),
       ),
@@ -191,55 +212,87 @@ class _DesktopPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(24),
-    child: Row(
+    padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox.square(
+            dimension: 48,
+            child: IconButton(
+              key: const Key('close-player-button'),
+              tooltip: 'Volver',
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.arrow_back),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
         Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) => SingleChildScrollView(
-              key: const Key('desktop-player-scroll'),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
+          child: Row(
+            children: [
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    key: const Key('desktop-player-scroll'),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 520),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (notificationWarning)
+                                const _NotificationWarning(),
+                              const SizedBox(height: 12),
+                              _CurrentTrack(
+                                artworkSize: (constraints.maxWidth - 48).clamp(
+                                  180.0,
+                                  420.0,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              const RepaintBoundary(child: _ProgressControls()),
+                              const SizedBox(height: 12),
+                              const _PlaybackControls(),
+                              const _PlayerError(),
+                              const _ChooseFileButton(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 32),
+              const Expanded(
+                child: PlayerQueuePanel(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: EdgeInsets.only(top: 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (notificationWarning) const _NotificationWarning(),
-                        const SizedBox(height: 12),
-                        _CurrentTrack(
-                          artworkSize: (constraints.maxWidth - 48).clamp(
-                            180.0,
-                            420.0,
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            'A continuación',
+                            key: Key('desktop-queue-title'),
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        const RepaintBoundary(child: _ProgressControls()),
-                        const SizedBox(height: 12),
-                        const _PlaybackControls(),
-                        const _PlayerError(),
-                        const _ChooseFileButton(),
+                        SizedBox(height: 16),
+                        Expanded(child: PlayerQueueView()),
                       ],
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-        ),
-        const VerticalDivider(width: 32),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'A continuación',
-                key: Key('desktop-queue-title'),
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-              ),
-              SizedBox(height: 16),
-              Expanded(child: PlayerQueueView()),
             ],
           ),
         ),

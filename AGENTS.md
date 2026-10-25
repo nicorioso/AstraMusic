@@ -33,6 +33,7 @@ lib/core (platform, db, utils) y lib/features (library, player, playlists, setti
   favoritos y luego las más nuevas por creación, sin duplicados.
 - El color dinámico se cachea por carátula, se oscurece y solo se usa con contraste ≥ 4,5; en otro caso conserva Gargantua.
 - Toda animación de UI respeta `MediaQuery.disableAnimations` y evita reconstrucciones por ticks fuera del widget de progreso.
+- Toda pantalla a pantalla completa tiene botón visible de salida y Escape en escritorio.
 - Cambio de esquema: migración con backfill + test + build_runner + commitear lo generado.
 
 ## Audio (no romper)
