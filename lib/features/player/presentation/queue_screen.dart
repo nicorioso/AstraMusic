@@ -1,4 +1,6 @@
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/core/theme/astra_colors.dart';
+import 'package:astramusic/core/theme/queue_colors.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/section_title.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
@@ -18,7 +20,7 @@ class QueueScreen extends ConsumerWidget {
       playerControllerProvider.select((state) => state.queue),
     );
     final controller = ref.read(playerControllerProvider.notifier);
-    final body = const PlayerQueueView();
+    final body = const PlayerQueuePanel(child: PlayerQueueView());
     if (embedded) {
       return Column(
         key: const Key('queue-destination'),
@@ -47,6 +49,36 @@ class QueueScreen extends ConsumerWidget {
         ],
       ),
       body: AstraBackground(child: SafeArea(child: body)),
+    );
+  }
+}
+
+class PlayerQueuePanel extends StatelessWidget {
+  const PlayerQueuePanel({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.astraColors;
+    final fill = queuePanelFillColor(
+      surface: colors.surface,
+      text: colors.text,
+      // El color dinámico ya está limitado a luminosidad HSL 0,2. Este es
+      // el caso de mayor luminancia aproximada dentro de ese límite.
+      background: const Color(0xFF666600),
+    );
+    return DecoratedBox(
+      key: const Key('queue-panel'),
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.07),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
     );
   }
 }
@@ -94,6 +126,10 @@ class PlayerQueueView extends ConsumerWidget {
             child: TrackTile(
               track: track,
               currentKey: const Key('current-queue-item'),
+              currentColor: context.astraColors.accent.withValues(
+                alpha: queueCurrentRowOpacity,
+              ),
+              hoverColor: Colors.white.withValues(alpha: queueHoverOpacity),
               onTap: () => controller.skipToIndex(index),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,

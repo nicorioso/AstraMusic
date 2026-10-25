@@ -13,6 +13,7 @@ class TrackTile extends ConsumerStatefulWidget {
     this.trailing,
     this.enabled = true,
     this.currentKey,
+    this.currentColor,
     this.hoverColor,
     super.key,
   });
@@ -22,6 +23,7 @@ class TrackTile extends ConsumerStatefulWidget {
   final Widget? trailing;
   final bool enabled;
   final Key? currentKey;
+  final Color? currentColor;
   final Color? hoverColor;
 
   @override
@@ -42,7 +44,7 @@ class _TrackTileState extends ConsumerState<TrackTile> {
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     final desktop = MediaQuery.sizeOf(context).width >= 840;
     final baseColor = isCurrent
-        ? context.astraColors.surfaceHover
+        ? widget.currentColor ?? context.astraColors.surfaceHover
         : context.astraColors.surface.withValues(alpha: 0);
     final hoveredColor = widget.hoverColor ?? context.astraColors.surfaceHover;
     return Opacity(
