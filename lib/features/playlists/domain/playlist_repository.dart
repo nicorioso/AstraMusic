@@ -18,4 +18,6 @@ abstract interface class PlaylistRepository {
   Future<AddTracksResult> addTracks(int playlistId, List<int> trackIds);
   Future<void> removeTrack(int playlistId, int trackId);
   Future<void> move(int playlistId, int oldIndex, int newIndex);
+  Future<void> markPlayed(int id);
+  Stream<List<Playlist>> watchRecent(int limit);
 }

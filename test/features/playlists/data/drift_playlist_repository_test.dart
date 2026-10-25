@@ -103,4 +103,22 @@ void main() {
     expect(await database.select(database.tracks).get(), hasLength(3));
     expect(await repository.watchAll().first, isEmpty);
   });
+
+  test(
+    'markPlayed y watchRecent ordenan y excluyen nunca reproducidas',
+    () async {
+      var now = DateTime.utc(2026, 1, 1);
+      repository = DriftPlaylistRepository(database, now: () => now);
+      final first = await repository.create('Primera');
+      final second = await repository.create('Segunda');
+      await repository.create('Nunca');
+      await repository.markPlayed(first.id);
+      now = now.add(const Duration(minutes: 1));
+      await repository.markPlayed(second.id);
+
+      final recent = await repository.watchRecent(2).first;
+      expect(recent.map((playlist) => playlist.name), ['Segunda', 'Primera']);
+      expect(recent.every((playlist) => playlist.lastPlayedAt != null), isTrue);
+    },
+  );
 }

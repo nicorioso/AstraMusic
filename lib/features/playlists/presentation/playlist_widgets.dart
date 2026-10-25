@@ -410,7 +410,9 @@ class _PlaylistDetailBody extends ConsumerWidget {
                 key: const Key('playlist-play-button'),
                 onPressed: available.isEmpty
                     ? null
-                    : () => library.playAll(tracks),
+                    : () => favorites
+                          ? library.playAll(tracks)
+                          : library.playPlaylist(playlist.id, tracks),
                 isPlaying: player.isPlaying,
               ),
               const SizedBox(width: 12),
@@ -418,7 +420,13 @@ class _PlaylistDetailBody extends ConsumerWidget {
                 key: const Key('playlist-shuffle-button'),
                 onPressed: available.isEmpty
                     ? null
-                    : () => library.playAll(tracks, shuffle: true),
+                    : () => favorites
+                          ? library.playAll(tracks, shuffle: true)
+                          : library.playPlaylist(
+                              playlist.id,
+                              tracks,
+                              shuffle: true,
+                            ),
                 icon: const Icon(Icons.shuffle),
                 label: const Text('Aleatorio'),
               ),
@@ -452,10 +460,16 @@ class _PlaylistDetailBody extends ConsumerWidget {
                     final tile = TrackTile(
                       track: track,
                       onTap: track.isAvailable
-                          ? () => library.playVisibleQueue(
-                              tracks,
-                              startIndex: index,
-                            )
+                          ? () => favorites
+                                ? library.playVisibleQueue(
+                                    tracks,
+                                    startIndex: index,
+                                  )
+                                : library.playPlaylist(
+                                    playlist.id,
+                                    tracks,
+                                    startIndex: index,
+                                  )
                           : library.showUnavailableMessage,
                       trailing: PopupMenuButton<bool>(
                         tooltip: 'Acciones de ${track.title}',

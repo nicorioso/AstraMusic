@@ -427,6 +427,12 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   Future<void> move(int playlistId, int oldIndex, int newIndex) async {}
 
   @override
+  Future<void> markPlayed(int id) async {}
+
+  @override
+  Stream<List<Playlist>> watchRecent(int limit) => Stream.value(const []);
+
+  @override
   Future<void> rename(int id, String name) async {}
 
   @override

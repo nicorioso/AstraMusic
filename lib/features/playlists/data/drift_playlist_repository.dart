@@ -188,6 +188,24 @@ final class DriftPlaylistRepository implements PlaylistRepository {
     });
   }
 
+  @override
+  Future<void> markPlayed(int id) async {
+    await (_database.update(_database.playlists)
+          ..where((row) => row.id.equals(id)))
+        .write(PlaylistsCompanion(lastPlayedAt: Value(_now())));
+  }
+
+  @override
+  Stream<List<Playlist>> watchRecent(int limit) {
+    if (limit <= 0) return Stream.value(const []);
+    final query = _playlistQuery()
+      ..where(_database.playlists.lastPlayedAt.isNotNull())
+      ..limit(limit);
+    return query.watch().map(
+      (rows) => List.unmodifiable(rows.map(_mapPlaylist)),
+    );
+  }
+
   JoinedSelectStatement<HasResultSet, dynamic> _playlistQuery() {
     final query = _database.select(_database.playlists).join([
       leftOuterJoin(

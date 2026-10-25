@@ -180,6 +180,7 @@ void main() {
     expect(fixture.player.loaded.map((track) => track.id), [1, 3]);
     expect(fixture.player.startIndex, 1);
     expect(fixture.player.playCalls, 1);
+    expect(fixture.playlists.playedIds, [7]);
   });
 
   testWidgets('reordenar en el detalle llama move con el índice final', (
@@ -427,6 +428,7 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   final List<int> deletedIds = [];
   final List<int> removedTrackIds = [];
   final List<(int, int)> moves = [];
+  final List<int> playedIds = [];
   Playlist get playlist => items.isEmpty
       ? Playlist(
           id: 7,
@@ -467,6 +469,12 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   Future<void> move(int playlistId, int oldIndex, int newIndex) async {
     moves.add((oldIndex, newIndex));
   }
+
+  @override
+  Future<void> markPlayed(int id) async => playedIds.add(id);
+
+  @override
+  Stream<List<Playlist>> watchRecent(int limit) => Stream.value(const []);
 
   @override
   Future<void> rename(int id, String name) async {}

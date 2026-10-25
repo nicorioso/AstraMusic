@@ -11,6 +11,7 @@ import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/library/presentation/scan_state_machine.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
+import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final libraryControllerProvider =
@@ -283,6 +284,16 @@ final class LibraryController extends Notifier<LibraryViewState> {
   Future<void> playAll(List<Track> tracks, {bool shuffle = false}) async {
     if (tracks.isEmpty) return;
     await playVisibleQueue(tracks, startIndex: 0, shuffle: shuffle);
+  }
+
+  Future<void> playPlaylist(
+    int playlistId,
+    List<Track> tracks, {
+    int startIndex = 0,
+    bool shuffle = false,
+  }) async {
+    await playVisibleQueue(tracks, startIndex: startIndex, shuffle: shuffle);
+    await ref.read(playlistRepositoryProvider).markPlayed(playlistId);
   }
 
   Future<void> playNext(Track track) async {
