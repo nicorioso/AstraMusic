@@ -4,6 +4,7 @@ import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
+import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
@@ -24,6 +25,8 @@ void main() {
     await tester.pumpWidget(fixture.app());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Biblioteca'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-settings-button')));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('clear-library-button')));
@@ -203,12 +206,22 @@ void main() {
         isTrue,
       );
 
+      await tester.drag(
+        find.byKey(const Key('shell-track-list')),
+        const Offset(0, -2000),
+      );
+      await tester.pump();
       expect(
         find.byKey(const ValueKey('current-track-indicator-0')),
         findsOneWidget,
       );
       await tester.tap(find.text('Buscar'));
-      await tester.pump();
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('mobile-search-field')),
+        'cancion 0',
+      );
+      await tester.pump(const Duration(milliseconds: 350));
       expect(
         find.byKey(const ValueKey('current-track-indicator-0')),
         findsOneWidget,
@@ -308,6 +321,131 @@ void main() {
     );
   });
 
+  testWidgets('la rejilla abre y reproduce una playlist marcándola', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-shortcut-7')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('playlist-detail')), findsOneWidget);
+
+    await tester.tap(find.text('Inicio'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('home-shortcut-play-7')));
+    await tester.pumpAndSettle();
+    expect(fixture.playlists.markedPlayedIds, [7]);
+    expect(fixture.player.playQueueCalls, 1);
+  });
+
+  testWidgets('buscar separa canciones y playlists ignorando acentos', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Busca canciones, artistas, álbumes o playlists.'),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const Key('mobile-search-field')),
+      'exitos',
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('Playlists'), findsOneWidget);
+    expect(find.text('Éxitos acústicos'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('mobile-search-field')),
+      'cancion 2',
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('Canciones'), findsOneWidget);
+    expect(find.text('Canción 2'), findsOneWidget);
+  });
+
+  testWidgets('Inicio ordena por fecha de adición descendente', (tester) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+
+    final titles = tester.widgetList<Text>(
+      find.descendant(
+        of: find.byKey(const Key('shell-track-list')),
+        matching: find.byType(Text),
+      ),
+    );
+    expect(titles.first.data, 'Canción 29');
+  });
+
+  testWidgets('tabla adapta la columna de álbum al ancho del panel', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(1200, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('desktop-album-header')), findsNothing);
+
+    await _setSize(tester, const Size(1600, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const Key('destination-content'))).width,
+      greaterThan(1100),
+    );
+    expect(find.byKey(const Key('desktop-album-header')), findsOneWidget);
+  });
+
+  testWidgets('muestra las acciones vacías correctas por shell', (
+    tester,
+  ) async {
+    final fixture = _Fixture(trackCount: 0);
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    expect(find.text('Añadir archivos'), findsOneWidget);
+
+    await _setSize(tester, const Size(1400, 900));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    expect(find.text('Añadir carpeta'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Biblioteca conserva favoritos, creación y acceso a Ajustes', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Canciones que te gustan'), findsOneWidget);
+    expect(find.byKey(const Key('create-playlist-button')), findsOneWidget);
+    expect(find.byKey(const Key('library-settings-button')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('library-settings-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-destination')), findsOneWidget);
+  });
+
   for (final size in const [Size(360, 800), Size(937, 1029), Size(1400, 900)]) {
     testWidgets('contenido y controles válidos a ${size.width.toInt()} px', (
       tester,
@@ -354,20 +492,27 @@ Future<void> _setSize(WidgetTester tester, Size size) async {
 }
 
 final class _Fixture {
+  _Fixture({int trackCount = 30})
+    : repository = _FakeTrackRepository(
+        List.generate(
+          trackCount,
+          (index) => Track(
+            id: index,
+            uri: 'file:///track-$index.mp3',
+            title: 'Canción $index',
+            artist: 'Artista $index',
+            album: 'Álbum $index',
+            duration: const Duration(minutes: 3),
+            dateAdded: DateTime(2026, 1, index + 1),
+          ),
+        ),
+      );
+
   final player = _FakePlayer();
   final cache = _FakeArtworkCache();
-  final repository = _FakeTrackRepository(
-    List.generate(
-      30,
-      (index) => Track(
-        id: index,
-        uri: 'file:///track-$index.mp3',
-        title: 'Canción $index',
-        artist: 'Artista $index',
-        duration: const Duration(minutes: 3),
-        dateAdded: DateTime(2026),
-      ),
-    ),
+  final _FakeTrackRepository repository;
+  late final _FakePlaylistRepository playlists = _FakePlaylistRepository(
+    repository.tracks,
   );
 
   Widget app() => ProviderScope(
@@ -376,9 +521,7 @@ final class _Fixture {
       trackRepositoryProvider.overrideWithValue(repository),
       isAndroidPlatformProvider.overrideWithValue(true),
       artworkCacheProvider.overrideWithValue(cache),
-      playlistRepositoryProvider.overrideWithValue(
-        _FakePlaylistRepository(repository.tracks),
-      ),
+      playlistRepositoryProvider.overrideWithValue(playlists),
     ],
     child: MaterialApp(
       theme: buildAstraTheme(),
@@ -396,12 +539,20 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   _FakePlaylistRepository(this.tracks);
 
   final List<Track> tracks;
+  final markedPlayedIds = <int>[];
   Playlist get playlist => Playlist(
     id: 7,
     name: 'Playlist de prueba',
     trackCount: tracks.length,
     createdAt: DateTime(2026),
     updatedAt: DateTime(2026),
+  );
+  Playlist get accentedPlaylist => Playlist(
+    id: 8,
+    name: 'Éxitos acústicos',
+    trackCount: 0,
+    createdAt: DateTime(2026, 2),
+    updatedAt: DateTime(2026, 2),
   );
 
   @override
@@ -427,7 +578,7 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   Future<void> move(int playlistId, int oldIndex, int newIndex) async {}
 
   @override
-  Future<void> markPlayed(int id) async {}
+  Future<void> markPlayed(int id) async => markedPlayedIds.add(id);
 
   @override
   Stream<List<Playlist>> watchRecent(int limit) => Stream.value(const []);
@@ -440,7 +591,8 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   Future<void> rename(int id, String name) async {}
 
   @override
-  Stream<List<Playlist>> watchAll() => Stream.value([playlist]);
+  Stream<List<Playlist>> watchAll() =>
+      Stream.value([playlist, accentedPlaylist]);
 
   @override
   Stream<Playlist?> watchById(int id) => Stream.value(playlist);
@@ -495,7 +647,9 @@ final class _FakeTrackRepository implements TrackRepository {
   Stream<List<Track>> watchSearch(String query) => Stream.value(
     tracks
         .where(
-          (track) => track.title.toLowerCase().contains(query.toLowerCase()),
+          (track) => normalizeForSearch(
+            '${track.title} ${track.artist ?? ''} ${track.album ?? ''}',
+          ).contains(normalizeForSearch(query)),
         )
         .toList(),
   );
@@ -522,6 +676,7 @@ final class _FakePlayer implements AudioPlayerService {
   final _repeat = StreamController<RepeatMode>.broadcast(sync: true);
   final _volume = StreamController<double>.broadcast(sync: true);
   double volume = 1;
+  int playQueueCalls = 0;
   List<Track> _tracks = const [];
   var _trackIndex = 0;
 
@@ -605,6 +760,7 @@ final class _FakePlayer implements AudioPlayerService {
   Future<void> playNext(Track track) async {}
   @override
   Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {
+    playQueueCalls++;
     _tracks = List.of(tracks);
     _trackIndex = startIndex;
     final track = tracks[startIndex];
