@@ -114,7 +114,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('desktop-playlist-list')), findsOneWidget);
-    expect(find.text('Viaje'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('desktop-playlist-list')),
+        matching: find.text('Viaje'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Playlist · 3 canciones'), findsOneWidget);
   });
 
