@@ -150,6 +150,22 @@ void main() {
     expect(fixture.player.playCalls, 1);
   });
 
+  testWidgets('reordenar en el detalle llama move con el índice final', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    await tester.pumpWidget(fixture.detailApp());
+    await tester.pumpAndSettle();
+
+    final list = tester.widget<ReorderableListView>(
+      find.byKey(const Key('playlist-track-list')),
+    );
+    list.onReorder!(0, 3);
+    await tester.pump();
+
+    expect(fixture.playlists.moves, [(0, 2)]);
+  });
+
   testWidgets('eliminar una playlist exige confirmación', (tester) async {
     final fixture = _Fixture();
     await tester.pumpWidget(fixture.detailApp());
@@ -374,6 +390,7 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   final List<int> addedTrackIds = [];
   final List<int> deletedIds = [];
   final List<int> removedTrackIds = [];
+  final List<(int, int)> moves = [];
   Playlist get playlist => items.isEmpty
       ? Playlist(
           id: 7,
@@ -408,6 +425,11 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   @override
   Future<void> removeTrack(int playlistId, int trackId) async {
     removedTrackIds.add(trackId);
+  }
+
+  @override
+  Future<void> move(int playlistId, int oldIndex, int newIndex) async {
+    moves.add((oldIndex, newIndex));
   }
 
   @override

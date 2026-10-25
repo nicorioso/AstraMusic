@@ -380,30 +380,43 @@ class _PlaylistDetailBody extends ConsumerWidget {
                     key: Key('empty-playlist-message'),
                   ),
                 )
-              : ListView.builder(
+              : ReorderableListView.builder(
                   key: const Key('playlist-track-list'),
+                  buildDefaultDragHandles:
+                      MediaQuery.sizeOf(context).width < 840,
+                  onReorder: (oldIndex, newIndex) {
+                    if (newIndex > oldIndex) newIndex--;
+                    // La cola en reproducción es una copia y no se reordena.
+                    ref
+                        .read(playlistRepositoryProvider)
+                        .move(playlist.id, oldIndex, newIndex);
+                  },
                   itemCount: tracks.length,
                   itemBuilder: (context, index) {
                     final track = tracks[index];
-                    return TrackTile(
-                      track: track,
-                      onTap: track.isAvailable
-                          ? () => library.playVisibleQueue(
-                              tracks,
-                              startIndex: index,
-                            )
-                          : library.showUnavailableMessage,
-                      trailing: PopupMenuButton<bool>(
-                        tooltip: 'Acciones de ${track.title}',
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: true,
-                            child: Text('Quitar de esta playlist'),
-                          ),
-                        ],
-                        onSelected: (_) => ref
-                            .read(playlistRepositoryProvider)
-                            .removeTrack(playlist.id, track.id!),
+                    return _ReorderableTrackRow(
+                      key: ValueKey('playlist-track-${track.id}'),
+                      index: index,
+                      child: TrackTile(
+                        track: track,
+                        onTap: track.isAvailable
+                            ? () => library.playVisibleQueue(
+                                tracks,
+                                startIndex: index,
+                              )
+                            : library.showUnavailableMessage,
+                        trailing: PopupMenuButton<bool>(
+                          tooltip: 'Acciones de ${track.title}',
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: true,
+                              child: Text('Quitar de esta playlist'),
+                            ),
+                          ],
+                          onSelected: (_) => ref
+                              .read(playlistRepositoryProvider)
+                              .removeTrack(playlist.id, track.id!),
+                        ),
                       ),
                     );
                   },
@@ -463,6 +476,49 @@ class _PlaylistDetailBody extends ConsumerWidget {
     } else {
       navigator.pop();
     }
+  }
+}
+
+class _ReorderableTrackRow extends StatefulWidget {
+  const _ReorderableTrackRow({
+    required this.index,
+    required this.child,
+    super.key,
+  });
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_ReorderableTrackRow> createState() => _ReorderableTrackRowState();
+}
+
+class _ReorderableTrackRowState extends State<_ReorderableTrackRow> {
+  var _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width < 840) return widget.child;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Row(
+        children: [
+          Expanded(child: widget.child),
+          AnimatedOpacity(
+            opacity: _hovered ? 1 : 0,
+            duration: const Duration(milliseconds: 120),
+            child: ReorderableDragStartListener(
+              index: widget.index,
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.drag_handle),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -424,6 +424,9 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   Future<void> removeTrack(int playlistId, int trackId) async {}
 
   @override
+  Future<void> move(int playlistId, int oldIndex, int newIndex) async {}
+
+  @override
   Future<void> rename(int id, String name) async {}
 
   @override

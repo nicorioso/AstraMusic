@@ -74,6 +74,25 @@ void main() {
     expect(rows.map((row) => row.position), [0, 1]);
   });
 
+  for (final scenario in <(String, int, int, List<int>)>[
+    ('hacia arriba', 2, 1, [1, 3, 2]),
+    ('hacia abajo', 0, 1, [2, 1, 3]),
+    ('entre extremos', 2, 0, [3, 1, 2]),
+    ('al extremo final', 0, 2, [2, 3, 1]),
+  ]) {
+    test('mueve ${scenario.$1} y conserva posiciones contiguas', () async {
+      final playlist = await repository.create('Lista');
+      await repository.addTracks(playlist.id, [1, 2, 3]);
+      await repository.move(playlist.id, scenario.$2, scenario.$3);
+
+      final rows = await (database.select(
+        database.playlistTracks,
+      )..orderBy([(row) => OrderingTerm.asc(row.position)])).get();
+      expect(rows.map((row) => row.trackId), scenario.$4);
+      expect(rows.map((row) => row.position), [0, 1, 2]);
+    });
+  }
+
   test('eliminar hace cascade sin borrar canciones', () async {
     final playlist = await repository.create('Lista');
     await repository.addTracks(playlist.id, [1, 2]);

@@ -155,6 +155,39 @@ final class DriftPlaylistRepository implements PlaylistRepository {
     });
   }
 
+  @override
+  Future<void> move(int playlistId, int oldIndex, int newIndex) async {
+    await _database.transaction(() async {
+      final rows =
+          await (_database.select(_database.playlistTracks)
+                ..where((row) => row.playlistId.equals(playlistId))
+                ..orderBy([(row) => OrderingTerm.asc(row.position)]))
+              .get();
+      if (oldIndex < 0 ||
+          oldIndex >= rows.length ||
+          newIndex < 0 ||
+          newIndex >= rows.length) {
+        throw RangeError('Índices de reordenamiento fuera de rango.');
+      }
+      if (oldIndex == newIndex) return;
+      final reordered = List<PlaylistTrackRow>.of(rows);
+      final moved = reordered.removeAt(oldIndex);
+      reordered.insert(newIndex, moved);
+      await _database.batch((batch) {
+        for (var position = 0; position < reordered.length; position++) {
+          batch.update(
+            _database.playlistTracks,
+            PlaylistTracksCompanion(position: Value(position)),
+            where: (row) => row.id.equals(reordered[position].id),
+          );
+        }
+      });
+      await (_database.update(_database.playlists)
+            ..where((row) => row.id.equals(playlistId)))
+          .write(PlaylistsCompanion(updatedAt: Value(_now())));
+    });
+  }
+
   JoinedSelectStatement<HasResultSet, dynamic> _playlistQuery() {
     final query = _database.select(_database.playlists).join([
       leftOuterJoin(
