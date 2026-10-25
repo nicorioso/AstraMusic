@@ -1,4 +1,3 @@
-import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
@@ -8,6 +7,7 @@ import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
+import 'package:astramusic/features/player/presentation/queue_screen.dart';
 import 'package:astramusic/features/player/presentation/seek_bar.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,67 +20,179 @@ class PlayerScreen extends ConsumerWidget {
     final notificationWarning = ref.watch(
       playerControllerProvider.select((state) => state.notificationWarning),
     );
-    final controller = ref.read(playerControllerProvider.notifier);
-
+    final desktop = MediaQuery.sizeOf(context).width >= 840;
+    final content = desktop
+        ? _DesktopPlayer(
+            notificationWarning: notificationWarning,
+          )
+        : _MobilePlayer(
+            notificationWarning: notificationWarning,
+          );
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('AstraMusic'),
-        actions: [
-          IconButton(
-            key: const Key('open-queue-button'),
-            tooltip: 'Ver cola',
-            onPressed: () {
-              final navigator = Navigator.of(context);
-              ref
-                  .read(appDestinationProvider.notifier)
-                  .select(AppDestination.queue);
-              if (navigator.canPop()) navigator.pop();
-            },
-            icon: const Icon(Icons.queue_music),
-          ),
-        ],
-      ),
       body: AstraBackground(
         child: SafeArea(
+          child: desktop
+              ? content
+              : _SwipeToClose(key: const Key('swipe-to-close'), child: content),
+        ),
+      ),
+    );
+  }
+}
+
+class _SwipeToClose extends StatefulWidget {
+  const _SwipeToClose({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  State<_SwipeToClose> createState() => _SwipeToCloseState();
+}
+
+class _SwipeToCloseState extends State<_SwipeToClose> {
+  double _distance = 0;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.translucent,
+    onVerticalDragStart: (_) => _distance = 0,
+    onVerticalDragUpdate: (details) {
+      if (details.delta.dy > 0) _distance += details.delta.dy;
+    },
+    onVerticalDragEnd: (_) {
+      if (_distance >= 80) Navigator.of(context).maybePop();
+    },
+    child: widget.child,
+  );
+}
+
+class _MobilePlayer extends StatelessWidget {
+  const _MobilePlayer({required this.notificationWarning});
+
+  final bool notificationWarning;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final artworkSize = (constraints.maxWidth - 48).clamp(180.0, 420.0);
+      return SingleChildScrollView(
+        key: const Key('mobile-player-scroll'),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      key: const Key('close-player-button'),
+                      tooltip: 'Cerrar reproductor',
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.keyboard_arrow_down),
+                    ),
+                    const Expanded(
+                      child: Text(
+                        'Reproduciendo',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(width: 48),
+                  ],
+                ),
+                if (notificationWarning) const _NotificationWarning(),
+                const SizedBox(height: 12),
+                _CurrentTrack(artworkSize: artworkSize),
+                const SizedBox(height: 20),
+                const RepaintBoundary(child: _ProgressControls()),
+                const SizedBox(height: 12),
+                const _PlaybackControls(),
+                const _PlayerError(),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  key: const Key('open-queue-button'),
+                  onPressed: () => _showQueue(context),
+                  icon: const Icon(Icons.queue_music),
+                  label: const Text('A continuación'),
+                ),
+                const _ChooseFileButton(),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+
+  void _showQueue(BuildContext context) {
+    final navigatorContext = context;
+    showModalBottomSheet<void>(
+      context: navigatorContext,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => const SafeArea(
+        child: FractionallySizedBox(
+          heightFactor: 0.72,
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'A continuación',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              Expanded(child: PlayerQueueView()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopPlayer extends StatelessWidget {
+  const _DesktopPlayer({required this.notificationWarning});
+
+  final bool notificationWarning;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(24),
+    child: Row(
+      children: [
+        Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) => SingleChildScrollView(
+              key: const Key('desktop-player-scroll'),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: 560,
-                    minHeight: constraints.maxHeight,
-                  ),
-                  child: IntrinsicHeight(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (notificationWarning) const _NotificationWarning(),
-                          const Spacer(),
-                          _CurrentTrack(
-                            artworkSize: constraints.maxHeight < 760
-                                ? 220
-                                : 280,
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (notificationWarning)
+                          const _NotificationWarning(),
+                        const SizedBox(height: 12),
+                        _CurrentTrack(
+                          artworkSize: (constraints.maxWidth - 48).clamp(
+                            180.0,
+                            420.0,
                           ),
-                          const SizedBox(height: 24),
-                          const _PlaybackControls(),
-                          const SizedBox(height: 24),
-                          const _ProgressControls(),
-                          const _PlayerError(),
-                          const Spacer(),
-                          FilledButton.icon(
-                            key: const Key('choose-audio-button'),
-                            onPressed: controller.chooseFile,
-                            icon: const Icon(Icons.audio_file),
-                            label: const Text('Elegir archivo'),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 20),
+                        const RepaintBoundary(child: _ProgressControls()),
+                        const SizedBox(height: 12),
+                        const _PlaybackControls(),
+                        const _PlayerError(),
+                        const _ChooseFileButton(),
+                      ],
                     ),
                   ),
                 ),
@@ -88,6 +200,42 @@ class PlayerScreen extends ConsumerWidget {
             ),
           ),
         ),
+        const VerticalDivider(width: 32),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'A continuación',
+                key: Key('desktop-queue-title'),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+              ),
+              SizedBox(height: 16),
+              Expanded(child: PlayerQueueView()),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ChooseFileButton extends ConsumerWidget {
+  const _ChooseFileButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasItem = ref.watch(
+      playerControllerProvider.select((state) => state.currentItem != null),
+    );
+    if (hasItem) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: FilledButton.icon(
+        key: const Key('choose-audio-button'),
+        onPressed: ref.read(playerControllerProvider.notifier).chooseFile,
+        icon: const Icon(Icons.audio_file),
+        label: const Text('Elegir archivo'),
       ),
     );
   }

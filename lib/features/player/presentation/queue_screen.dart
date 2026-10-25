@@ -18,74 +18,7 @@ class QueueScreen extends ConsumerWidget {
       playerControllerProvider.select((state) => state.queue),
     );
     final controller = ref.read(playerControllerProvider.notifier);
-
-    final body = queue.isEmpty
-        ? const Center(
-            child: Text('La cola está vacía.', key: Key('empty-queue-message')),
-          )
-        : ReorderableListView.builder(
-            key: const Key('queue-list'),
-            buildDefaultDragHandles: false,
-            itemCount: queue.length,
-            onReorderItem: controller.moveInQueue,
-            itemBuilder: (context, index) {
-              final track = queue[index];
-              final itemKey = ValueKey(_queueIdentity(queue, index));
-              return SizedBox(
-                key: itemKey,
-                height: 56,
-                child: Dismissible(
-                  key: ValueKey('dismiss-$itemKey'),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    color: Theme.of(context).colorScheme.error,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 24),
-                    child: const Icon(Icons.delete_outline),
-                  ),
-                  confirmDismiss: (_) async {
-                    await controller.removeFromQueue(index);
-                    return false;
-                  },
-                  child: TrackTile(
-                    track: track,
-                    currentKey: const Key('current-queue-item'),
-                    onTap: () => controller.skipToIndex(index),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        PopupMenuButton<bool>(
-                          tooltip: 'Acciones de ${track.title}',
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(
-                              value: true,
-                              child: Text('Añadir a playlist'),
-                            ),
-                          ],
-                          onSelected: (_) =>
-                              showAddTrackToPlaylist(context, ref, track),
-                        ),
-                        Semantics(
-                          button: true,
-                          label: 'Reordenar ${track.title}',
-                          child: ReorderableDragStartListener(
-                            index: index,
-                            child: const Tooltip(
-                              message: 'Mantener y arrastrar para reordenar',
-                              child: Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Icon(Icons.drag_handle),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
+    final body = const PlayerQueueView();
     if (embedded) {
       return Column(
         key: const Key('queue-destination'),
@@ -114,6 +47,94 @@ class QueueScreen extends ConsumerWidget {
         ],
       ),
       body: AstraBackground(child: SafeArea(child: body)),
+    );
+  }
+}
+
+/// Lista de cola reutilizable por su pantalla dedicada, el panel móvil y el
+/// reproductor de escritorio.
+class PlayerQueueView extends ConsumerWidget {
+  const PlayerQueueView({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final queue = ref.watch(
+      playerControllerProvider.select((state) => state.queue),
+    );
+    final controller = ref.read(playerControllerProvider.notifier);
+    if (queue.isEmpty) {
+      return const Center(
+        child: Text('La cola está vacía.', key: Key('empty-queue-message')),
+      );
+    }
+    return ReorderableListView.builder(
+      key: const Key('queue-list'),
+      buildDefaultDragHandles: false,
+      itemCount: queue.length,
+      onReorderItem: controller.moveInQueue,
+      itemBuilder: (context, index) {
+        final track = queue[index];
+        final itemKey = ValueKey(_queueIdentity(queue, index));
+        return SizedBox(
+          key: itemKey,
+          height: 56,
+          child: Dismissible(
+            key: ValueKey('dismiss-$itemKey'),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              color: Theme.of(context).colorScheme.error,
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 24),
+              child: const Icon(Icons.delete_outline),
+            ),
+            confirmDismiss: (_) async {
+              await controller.removeFromQueue(index);
+              return false;
+            },
+            child: TrackTile(
+              track: track,
+              currentKey: const Key('current-queue-item'),
+              onTap: () => controller.skipToIndex(index),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PopupMenuButton<bool>(
+                    tooltip: 'Acciones de ${track.title}',
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: true,
+                        child: Text('Añadir a playlist'),
+                      ),
+                    ],
+                    onSelected: (_) =>
+                        showAddTrackToPlaylist(context, ref, track),
+                  ),
+                  IconButton(
+                    key: ValueKey('remove-queue-item-$index'),
+                    tooltip: 'Quitar ${track.title}',
+                    onPressed: () => controller.removeFromQueue(index),
+                    icon: const Icon(Icons.close),
+                  ),
+                  Semantics(
+                    button: true,
+                    label: 'Reordenar ${track.title}',
+                    child: ReorderableDragStartListener(
+                      index: index,
+                      child: const Tooltip(
+                        message: 'Mantener y arrastrar para reordenar',
+                        child: Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Icon(Icons.drag_handle),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
