@@ -69,6 +69,10 @@ final class _AvailabilityRepository implements TrackRepository {
 
   @override
   Future<void> clearLibrary() async {}
+  @override
+  Future<void> setFavorite(int id, bool favorite) async {}
+  @override
+  Stream<List<Track>> watchFavorites() => const Stream.empty();
 
   @override
   Future<int> count() async => tracks.length;

@@ -194,6 +194,9 @@ class LibraryScreen extends ConsumerWidget {
                                 onAddToQueue: libraryController.addToQueue,
                                 onAddToPlaylist: (track) =>
                                     showAddTrackToPlaylist(context, ref, track),
+                                onFavorite: (track) => ref
+                                    .read(trackRepositoryProvider)
+                                    .setFavorite(track.id!, !track.isFavorite),
                                 onDelete: libraryController.deleteTrack,
                               ),
                             ),
@@ -438,6 +441,7 @@ class _TrackList extends StatelessWidget {
     required this.onPlayNext,
     required this.onAddToQueue,
     required this.onAddToPlaylist,
+    required this.onFavorite,
     required this.onDelete,
   });
 
@@ -448,6 +452,7 @@ class _TrackList extends StatelessWidget {
   final ValueChanged<Track> onPlayNext;
   final ValueChanged<Track> onAddToQueue;
   final ValueChanged<Track> onAddToPlaylist;
+  final ValueChanged<Track> onFavorite;
   final ValueChanged<Track> onDelete;
 
   @override
@@ -477,6 +482,8 @@ class _TrackList extends StatelessWidget {
                       onAddToQueue(track);
                     case _TrackAction.addToPlaylist:
                       onAddToPlaylist(track);
+                    case _TrackAction.favorite:
+                      onFavorite(track);
                     case _TrackAction.delete:
                       onDelete(track);
                   }
@@ -495,6 +502,14 @@ class _TrackList extends StatelessWidget {
                   const PopupMenuItem(
                     value: _TrackAction.addToPlaylist,
                     child: Text('Añadir a playlist'),
+                  ),
+                  PopupMenuItem(
+                    value: _TrackAction.favorite,
+                    child: Text(
+                      track.isFavorite
+                          ? 'Quitar de Me gusta'
+                          : 'Añadir a Me gusta',
+                    ),
                   ),
                   const PopupMenuItem(
                     value: _TrackAction.delete,
@@ -639,4 +654,4 @@ String _formatDuration(Duration duration) {
 
 enum _LibraryAction { update, addFiles, loadDebugTracks }
 
-enum _TrackAction { playNext, addToQueue, addToPlaylist, delete }
+enum _TrackAction { playNext, addToQueue, addToPlaylist, favorite, delete }

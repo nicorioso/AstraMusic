@@ -464,6 +464,12 @@ final class _FakeTrackRepository implements TrackRepository {
   }
 
   @override
+  Future<void> setFavorite(int id, bool favorite) async {}
+  @override
+  Stream<List<Track>> watchFavorites() =>
+      Stream.value(tracks.where((track) => track.isFavorite).toList());
+
+  @override
   Future<void> deleteByUris(Set<String> uris) async {}
   @override
   Future<Track?> getById(int id) async => null;

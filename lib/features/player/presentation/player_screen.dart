@@ -6,6 +6,7 @@ import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/seek_bar.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
@@ -102,6 +103,14 @@ class _CurrentTrack extends ConsumerWidget {
     final item = ref.watch(
       playerControllerProvider.select((state) => state.currentItem),
     );
+    final favoriteIds = ref
+        .watch(favoriteTracksProvider)
+        .value
+        ?.map((track) => track.id)
+        .toSet();
+    final isFavorite =
+        item?.trackId != null &&
+        (favoriteIds?.contains(item!.trackId) ?? false);
     return Column(
       children: [
         if (item != null) ...[
@@ -119,13 +128,34 @@ class _CurrentTrack extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
         ],
-        Text(
-          item?.title ?? 'Ningún archivo seleccionado',
-          key: const Key('current-audio-title'),
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleLarge,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Text(
+                item?.title ?? 'Ningún archivo seleccionado',
+                key: const Key('current-audio-title'),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            if (item?.trackId case final trackId?)
+              IconButton(
+                key: const Key('favorite-current-track-button'),
+                tooltip: isFavorite
+                    ? 'Quitar de Me gusta'
+                    : 'Añadir a Me gusta',
+                onPressed: () => ref
+                    .read(trackRepositoryProvider)
+                    .setFavorite(trackId, !isFavorite),
+                icon: Icon(
+                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: isFavorite ? context.astraColors.accent : null,
+                ),
+              ),
+          ],
         ),
         if (item?.artist case final artist?) ...[
           const SizedBox(height: 6),

@@ -6,9 +6,11 @@ import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:drift/drift.dart';
 
 final class DriftTrackRepository implements TrackRepository {
-  DriftTrackRepository(this._database);
+  DriftTrackRepository(this._database, {DateTime Function()? now})
+    : _now = now ?? DateTime.now;
 
   final AppDatabase _database;
+  final DateTime Function() _now;
 
   @override
   Stream<List<Track>> watchAll() {
@@ -35,6 +37,29 @@ final class DriftTrackRepository implements TrackRepository {
         (track) => OrderingTerm.asc(track.id),
       ]);
     return statement.watch().map(_toDomainList);
+  }
+
+  @override
+  Stream<List<Track>> watchFavorites() {
+    final query = _database.select(_database.tracks)
+      ..where((track) => track.favoritedAt.isNotNull())
+      ..orderBy([
+        (track) => OrderingTerm.desc(track.favoritedAt),
+        (track) => OrderingTerm.desc(track.id),
+      ]);
+    return query.watch().map(_toDomainList);
+  }
+
+  @override
+  Future<void> setFavorite(int id, bool favorite) async {
+    await (_database.update(
+      _database.tracks,
+    )..where((track) => track.id.equals(id))).write(
+      TracksCompanion(
+        isFavorite: Value(favorite),
+        favoritedAt: Value(favorite ? _now() : null),
+      ),
+    );
   }
 
   @override

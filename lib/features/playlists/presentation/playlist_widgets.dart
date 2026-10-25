@@ -7,6 +7,7 @@ import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
+import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
@@ -38,6 +39,33 @@ class PlaylistArtwork extends StatelessWidget {
     ),
   );
 }
+
+class FavoritesArtwork extends StatelessWidget {
+  const FavoritesArtwork({required this.size, super.key});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(6),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [context.astraColors.accent, context.astraColors.ember],
+      ),
+    ),
+    child: Icon(
+      Icons.favorite,
+      size: size * 0.5,
+      color: context.astraColors.photon,
+    ),
+  );
+}
+
+const favoritesPlaylistId = -1;
 
 String playlistTrackCount(int count) =>
     count == 1 ? 'Playlist · 1 canción' : 'Playlist · $count canciones';
@@ -253,6 +281,26 @@ class PlaylistDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (playlistId == favoritesPlaylistId) {
+      final favorites = ref.watch(favoriteTracksProvider);
+      return favorites.when(
+        data: (items) => _PlaylistDetailBody(
+          playlist: Playlist(
+            id: favoritesPlaylistId,
+            name: 'Canciones que te gustan',
+            trackCount: items.length,
+            createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+            updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+          ),
+          tracks: items,
+          embedded: embedded,
+          favorites: true,
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) =>
+            Center(child: Text('No fue posible cargar: $error')),
+      );
+    }
     final playlist = ref.watch(playlistProvider(playlistId));
     final tracks = ref.watch(playlistTracksProvider(playlistId));
     final body = playlist.when(
@@ -285,11 +333,13 @@ class _PlaylistDetailBody extends ConsumerWidget {
     required this.playlist,
     required this.tracks,
     required this.embedded,
+    this.favorites = false,
   });
 
   final Playlist playlist;
   final List<Track> tracks;
   final bool embedded;
+  final bool favorites;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -309,7 +359,10 @@ class _PlaylistDetailBody extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const PlaylistArtwork(size: 104),
+              if (favorites)
+                const FavoritesArtwork(size: 104)
+              else
+                PlaylistArtwork(size: 104),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -328,23 +381,24 @@ class _PlaylistDetailBody extends ConsumerWidget {
                   ],
                 ),
               ),
-              PopupMenuButton<_PlaylistAction>(
-                key: const Key('playlist-menu-button'),
-                onSelected: (action) => switch (action) {
-                  _PlaylistAction.rename => _rename(context, ref),
-                  _PlaylistAction.delete => _delete(context, ref),
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: _PlaylistAction.rename,
-                    child: Text('Renombrar'),
-                  ),
-                  PopupMenuItem(
-                    value: _PlaylistAction.delete,
-                    child: Text('Eliminar'),
-                  ),
-                ],
-              ),
+              if (!favorites)
+                PopupMenuButton<_PlaylistAction>(
+                  key: const Key('playlist-menu-button'),
+                  onSelected: (action) => switch (action) {
+                    _PlaylistAction.rename => _rename(context, ref),
+                    _PlaylistAction.delete => _delete(context, ref),
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: _PlaylistAction.rename,
+                      child: Text('Renombrar'),
+                    ),
+                    PopupMenuItem(
+                      value: _PlaylistAction.delete,
+                      child: Text('Eliminar'),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -383,8 +437,9 @@ class _PlaylistDetailBody extends ConsumerWidget {
               : ReorderableListView.builder(
                   key: const Key('playlist-track-list'),
                   buildDefaultDragHandles:
-                      MediaQuery.sizeOf(context).width < 840,
+                      !favorites && MediaQuery.sizeOf(context).width < 840,
                   onReorder: (oldIndex, newIndex) {
+                    if (favorites) return;
                     if (newIndex > oldIndex) newIndex--;
                     // La cola en reproducción es una copia y no se reordena.
                     ref
@@ -394,30 +449,45 @@ class _PlaylistDetailBody extends ConsumerWidget {
                   itemCount: tracks.length,
                   itemBuilder: (context, index) {
                     final track = tracks[index];
+                    final tile = TrackTile(
+                      track: track,
+                      onTap: track.isAvailable
+                          ? () => library.playVisibleQueue(
+                              tracks,
+                              startIndex: index,
+                            )
+                          : library.showUnavailableMessage,
+                      trailing: PopupMenuButton<bool>(
+                        tooltip: 'Acciones de ${track.title}',
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: true,
+                            child: Text(
+                              favorites
+                                  ? 'Quitar de Me gusta'
+                                  : 'Quitar de esta playlist',
+                            ),
+                          ),
+                        ],
+                        onSelected: (_) => favorites
+                            ? ref
+                                  .read(trackRepositoryProvider)
+                                  .setFavorite(track.id!, false)
+                            : ref
+                                  .read(playlistRepositoryProvider)
+                                  .removeTrack(playlist.id, track.id!),
+                      ),
+                    );
+                    if (favorites) {
+                      return KeyedSubtree(
+                        key: ValueKey('favorite-track-${track.id}'),
+                        child: tile,
+                      );
+                    }
                     return _ReorderableTrackRow(
                       key: ValueKey('playlist-track-${track.id}'),
                       index: index,
-                      child: TrackTile(
-                        track: track,
-                        onTap: track.isAvailable
-                            ? () => library.playVisibleQueue(
-                                tracks,
-                                startIndex: index,
-                              )
-                            : library.showUnavailableMessage,
-                        trailing: PopupMenuButton<bool>(
-                          tooltip: 'Acciones de ${track.title}',
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(
-                              value: true,
-                              child: Text('Quitar de esta playlist'),
-                            ),
-                          ],
-                          onSelected: (_) => ref
-                              .read(playlistRepositoryProvider)
-                              .removeTrack(playlist.id, track.id!),
-                        ),
-                      ),
+                      child: tile,
                     );
                   },
                 ),

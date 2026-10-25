@@ -137,6 +137,28 @@ void main() {
     expect((await repository.getById(id))?.isAvailable, isFalse);
   });
 
+  test('setFavorite ordena por fecha y quitar elimina de favoritos', () async {
+    var now = DateTime.utc(2026, 1, 1);
+    repository = DriftTrackRepository(database, now: () => now);
+    await repository.upsertAll([
+      _track(uri: 'file:///uno.mp3', title: 'Uno'),
+      _track(uri: 'file:///dos.mp3', title: 'Dos'),
+    ]);
+    final tracks = await repository.watchAll().first;
+    await repository.setFavorite(tracks.first.id!, true);
+    now = now.add(const Duration(minutes: 1));
+    await repository.setFavorite(tracks.last.id!, true);
+
+    var favorites = await repository.watchFavorites().first;
+    expect(favorites.map((track) => track.title), ['Uno', 'Dos']);
+    expect(favorites.every((track) => track.isFavorite), isTrue);
+
+    await repository.setFavorite(tracks.last.id!, false);
+    favorites = await repository.watchFavorites().first;
+    expect(favorites.map((track) => track.title), ['Dos']);
+    expect((await repository.getById(tracks.last.id!))!.favoritedAt, null);
+  });
+
   test('borrar una canción elimina sus relaciones por cascade', () async {
     await repository.upsertAll([
       _track(uri: 'file:///relacionada.mp3', title: 'Relacionada'),

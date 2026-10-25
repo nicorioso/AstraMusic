@@ -117,6 +117,38 @@ void main() {
     expect(find.text('Playlist · 3 canciones'), findsOneWidget);
   });
 
+  testWidgets('Canciones que te gustan aparece primero y sin administrar', (
+    tester,
+  ) async {
+    final fixture = _Fixture(favoriteFirst: true);
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.shellApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca'));
+    await tester.pumpAndSettle();
+
+    final favorites = find.byKey(const Key('favorites-playlist-tile'));
+    expect(favorites, findsOneWidget);
+    expect(
+      tester.getTopLeft(favorites).dy,
+      lessThan(
+        tester.getTopLeft(find.byKey(const Key('library-playlist-7'))).dy,
+      ),
+    );
+    await tester.tap(favorites);
+    await tester.pumpAndSettle();
+    expect(find.text('Canciones que te gustan'), findsOneWidget);
+    expect(find.byKey(const Key('playlist-menu-button')), findsNothing);
+
+    await tester.tap(find.byTooltip('Acciones de Canción 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Renombrar'), findsNothing);
+    expect(find.text('Eliminar'), findsNothing);
+    await tester.tap(find.text('Quitar de Me gusta'));
+    await tester.pump();
+    expect(fixture.trackRepository.favoriteChanges, [(1, false)]);
+  });
+
   testWidgets('añade una canción a una playlist desde su menú', (tester) async {
     final fixture = _Fixture();
     await _setSize(tester, const Size(1400, 900));
@@ -290,6 +322,7 @@ final class _Fixture {
     int trackCount = 3,
     int playlistCount = 1,
     bool useComplexPlaylistNames = false,
+    bool favoriteFirst = false,
   }) {
     tracks = List.generate(
       trackCount,
@@ -300,6 +333,7 @@ final class _Fixture {
         artist: 'Artista',
         duration: const Duration(minutes: 3),
         dateAdded: DateTime(2026),
+        favoritedAt: favoriteFirst && index == 0 ? DateTime(2026) : null,
         isAvailable: index != 1,
       ),
     );
@@ -309,17 +343,19 @@ final class _Fixture {
       useComplexNames: useComplexPlaylistNames,
     );
     player.seedQueue(tracks);
+    trackRepository = _TrackRepository(tracks);
   }
 
   late final List<Track> tracks;
   late final _FakePlaylistRepository playlists;
+  late final _TrackRepository trackRepository;
   final player = _RecordingPlayer();
 
   Widget shellApp() => ProviderScope(
     key: UniqueKey(),
     overrides: [
       playlistRepositoryProvider.overrideWithValue(playlists),
-      trackRepositoryProvider.overrideWithValue(_TrackRepository(tracks)),
+      trackRepositoryProvider.overrideWithValue(trackRepository),
       audioPlayerServiceProvider.overrideWithValue(player),
       isAndroidPlatformProvider.overrideWithValue(true),
     ],
@@ -335,7 +371,7 @@ final class _Fixture {
     key: UniqueKey(),
     overrides: [
       playlistRepositoryProvider.overrideWithValue(playlists),
-      trackRepositoryProvider.overrideWithValue(_TrackRepository(tracks)),
+      trackRepositoryProvider.overrideWithValue(trackRepository),
       audioPlayerServiceProvider.overrideWithValue(player),
       isAndroidPlatformProvider.overrideWithValue(true),
     ],
@@ -446,9 +482,10 @@ final class _FakePlaylistRepository implements PlaylistRepository {
 }
 
 final class _TrackRepository implements TrackRepository {
-  const _TrackRepository(this.tracks);
+  _TrackRepository(this.tracks);
 
   final List<Track> tracks;
+  final List<(int, bool)> favoriteChanges = [];
 
   @override
   Stream<List<Track>> watchAll() => Stream.value(tracks);
@@ -456,6 +493,14 @@ final class _TrackRepository implements TrackRepository {
   Stream<List<Track>> watchSearch(String query) => watchAll();
   @override
   Future<void> clearLibrary() async {}
+  @override
+  Future<void> setFavorite(int id, bool favorite) async {
+    favoriteChanges.add((id, favorite));
+  }
+
+  @override
+  Stream<List<Track>> watchFavorites() =>
+      Stream.value(tracks.where((track) => track.isFavorite).toList());
   @override
   Future<int> count() async => tracks.length;
   @override

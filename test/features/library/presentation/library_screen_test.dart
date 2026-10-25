@@ -439,6 +439,10 @@ final class FakeTrackRepository implements TrackRepository {
 
   @override
   Future<void> clearLibrary() async {}
+  @override
+  Future<void> setFavorite(int id, bool favorite) async {}
+  @override
+  Stream<List<Track>> watchFavorites() => const Stream.empty();
 
   @override
   Future<Track?> getById(int id) async {
@@ -504,6 +508,10 @@ final class RecordingTrackRepository implements TrackRepository {
 
   @override
   Future<void> clearLibrary() async => tracks.clear();
+  @override
+  Future<void> setFavorite(int id, bool favorite) async {}
+  @override
+  Stream<List<Track>> watchFavorites() => const Stream.empty();
 
   @override
   Future<void> deleteAll() async => tracks.clear();

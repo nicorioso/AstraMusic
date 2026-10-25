@@ -20,9 +20,9 @@ void main() {
     final database = AppDatabase(executor);
     addTearDown(database.close);
 
-    final tracks = await (database.select(database.tracks)
-          ..orderBy([(row) => OrderingTerm.asc(row.id)]))
-        .get();
+    final tracks = await (database.select(
+      database.tracks,
+    )..orderBy([(row) => OrderingTerm.asc(row.id)])).get();
 
     expect(database.schemaVersion, 8);
     expect(tracks.first.favoritedAt, tracks.first.dateAdded);
@@ -287,7 +287,9 @@ void main() {
 
 void _createVersionSevenSchema(dynamic database) {
   _createVersionSixPlaylistSchema(database);
-  database.execute('ALTER TABLE playlists ADD COLUMN last_played_at INTEGER NULL');
+  database.execute(
+    'ALTER TABLE playlists ADD COLUMN last_played_at INTEGER NULL',
+  );
   database.execute('''
     CREATE UNIQUE INDEX playlist_tracks_playlist_track_idx
     ON playlist_tracks (playlist_id, track_id)
@@ -317,7 +319,9 @@ void _createVersionSevenSchema(dynamic database) {
       original_position INTEGER NULL
     )
   ''');
-  database.execute('CREATE TABLE excluded_uris (uri TEXT NOT NULL PRIMARY KEY)');
+  database.execute(
+    'CREATE TABLE excluded_uris (uri TEXT NOT NULL PRIMARY KEY)',
+  );
 }
 
 void _createVersionSixPlaylistSchema(dynamic database) {

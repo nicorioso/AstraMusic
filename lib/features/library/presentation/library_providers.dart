@@ -76,6 +76,10 @@ final libraryTracksProvider = StreamProvider<List<Track>>((ref) {
   return query.isEmpty ? repository.watchAll() : repository.watchSearch(query);
 });
 
+final favoriteTracksProvider = StreamProvider<List<Track>>((ref) {
+  return ref.watch(trackRepositoryProvider).watchFavorites();
+});
+
 final class LibrarySearchQuery extends Notifier<String> {
   Timer? _debounce;
 

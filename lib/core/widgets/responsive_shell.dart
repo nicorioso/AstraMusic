@@ -100,6 +100,7 @@ class _DesktopSidebar extends ConsumerWidget {
         .read(appDestinationProvider.notifier)
         .select(AppDestination.library);
     final playlists = ref.watch(playlistsProvider);
+    final favoriteCount = ref.watch(favoriteTracksProvider).value?.length ?? 0;
 
     if (collapsed) {
       return Material(
@@ -126,30 +127,27 @@ class _DesktopSidebar extends ConsumerWidget {
             ),
             Expanded(
               child: playlists.when(
-                data: (items) => items.isEmpty
-                    ? Center(
-                        child: _CollapsedSidebarButton(
-                          key: const Key('collapsed-playlists-button'),
-                          tooltip: 'Playlists',
-                          icon: Icons.queue_music_outlined,
-                          onPressed: selectLibrary,
-                        ),
-                      )
-                    : ListView(
-                        children: [
-                          for (final playlist in items)
-                            _CollapsedSidebarButton(
-                              key: ValueKey(
-                                'collapsed-playlist-${playlist.id}',
-                              ),
-                              tooltip: playlist.name,
-                              icon: Icons.music_note,
-                              onPressed: () => ref
-                                  .read(appDestinationProvider.notifier)
-                                  .select(AppDestination.playlist(playlist.id)),
-                            ),
-                        ],
+                data: (items) => ListView(
+                  children: [
+                    _CollapsedSidebarButton(
+                      key: const Key('collapsed-favorites-button'),
+                      tooltip: 'Canciones que te gustan',
+                      icon: Icons.favorite,
+                      onPressed: () => ref
+                          .read(appDestinationProvider.notifier)
+                          .select(AppDestination.playlist(favoritesPlaylistId)),
+                    ),
+                    for (final playlist in items)
+                      _CollapsedSidebarButton(
+                        key: ValueKey('collapsed-playlist-${playlist.id}'),
+                        tooltip: playlist.name,
+                        icon: Icons.music_note,
+                        onPressed: () => ref
+                            .read(appDestinationProvider.notifier)
+                            .select(AppDestination.playlist(playlist.id)),
                       ),
+                  ],
+                ),
                 loading: () => const SizedBox(),
                 error: (_, _) => const SizedBox(),
               ),
@@ -194,20 +192,25 @@ class _DesktopSidebar extends ConsumerWidget {
           Expanded(
             child: playlists.when(
               data: (items) => items.isEmpty
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Text(
-                          'Aún no tienes playlists',
-                          textAlign: TextAlign.center,
+                  ? ListView(
+                      children: [
+                        _FavoritesTile(count: favoriteCount),
+                        const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text(
+                            'Aún no tienes playlists',
+                            textAlign: TextAlign.center,
+                          ),
                         ),
-                      ),
+                      ],
                     )
                   : ListView.builder(
                       key: const Key('desktop-playlist-list'),
-                      itemCount: items.length,
+                      itemCount: items.length + 1,
                       itemBuilder: (_, index) {
-                        final playlist = items[index];
+                        if (index == 0)
+                          return _FavoritesTile(count: favoriteCount);
+                        final playlist = items[index - 1];
                         return ListTile(
                           key: ValueKey('sidebar-playlist-${playlist.id}'),
                           leading: const PlaylistArtwork(size: 44),
@@ -541,6 +544,10 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
                     controller.addToQueue(track);
                   case _ShellTrackAction.addToPlaylist:
                     showAddTrackToPlaylist(context, ref, track);
+                  case _ShellTrackAction.favorite:
+                    ref
+                        .read(trackRepositoryProvider)
+                        .setFavorite(track.id!, !track.isFavorite);
                   case _ShellTrackAction.delete:
                     controller.deleteTrack(track);
                 }
@@ -559,6 +566,14 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
                 const PopupMenuItem(
                   value: _ShellTrackAction.addToPlaylist,
                   child: Text('Añadir a playlist'),
+                ),
+                PopupMenuItem(
+                  value: _ShellTrackAction.favorite,
+                  child: Text(
+                    track.isFavorite
+                        ? 'Quitar de Me gusta'
+                        : 'Añadir a Me gusta',
+                  ),
                 ),
                 const PopupMenuItem(
                   value: _ShellTrackAction.delete,
@@ -579,7 +594,7 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
   }
 }
 
-enum _ShellTrackAction { playNext, addToQueue, addToPlaylist, delete }
+enum _ShellTrackAction { playNext, addToQueue, addToPlaylist, favorite, delete }
 
 class PlaylistsDestination extends ConsumerWidget {
   const PlaylistsDestination({super.key});
@@ -590,6 +605,7 @@ class PlaylistsDestination extends ConsumerWidget {
     final state = ref.watch(libraryControllerProvider);
     final isAndroid = ref.watch(isAndroidPlatformProvider);
     final playlists = ref.watch(playlistsProvider);
+    final favoriteCount = ref.watch(favoriteTracksProvider).value?.length ?? 0;
     ref.listen<String?>(
       libraryControllerProvider.select((state) => state.message),
       (previous, next) {
@@ -618,17 +634,17 @@ class PlaylistsDestination extends ConsumerWidget {
           Expanded(
             key: const Key('destination-content'),
             child: playlists.when(
-              data: (items) => items.isEmpty
-                  ? const Center(child: Text('Aún no tienes playlists'))
-                  : ListView.builder(
-                      key: const Key('mobile-playlist-list'),
-                      itemCount: items.length,
-                      itemBuilder: (_, index) => _PlaylistTile(
-                        playlist: items[index],
+              data: (items) => ListView.builder(
+                key: const Key('mobile-playlist-list'),
+                itemCount: items.length + 1,
+                itemBuilder: (_, index) => index == 0
+                    ? _FavoritesTile(count: favoriteCount)
+                    : _PlaylistTile(
+                        playlist: items[index - 1],
                         onTap: () =>
-                            _openPlaylist(context, ref, items[index].id),
+                            _openPlaylist(context, ref, items[index - 1].id),
                       ),
-                    ),
+              ),
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => Center(child: Text('$error')),
             ),
@@ -743,6 +759,21 @@ class _PlaylistTile extends StatelessWidget {
     title: Text(playlist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
     subtitle: Text(playlistTrackCount(playlist.trackCount)),
     onTap: onTap,
+  );
+}
+
+class _FavoritesTile extends ConsumerWidget {
+  const _FavoritesTile({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => ListTile(
+    key: const Key('favorites-playlist-tile'),
+    leading: const FavoritesArtwork(size: 48),
+    title: const Text('Canciones que te gustan'),
+    subtitle: Text(playlistTrackCount(count)),
+    onTap: () => _openPlaylist(context, ref, favoritesPlaylistId),
   );
 }
 

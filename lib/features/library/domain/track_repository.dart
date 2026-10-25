@@ -14,4 +14,6 @@ abstract interface class TrackRepository {
   Future<void> excludeAndDelete(Track track);
   Future<void> restoreExcluded(Set<String> uris);
   Future<void> clearLibrary();
+  Future<void> setFavorite(int id, bool favorite);
+  Stream<List<Track>> watchFavorites();
 }
