@@ -13,6 +13,7 @@ import 'package:astramusic/features/library/presentation/library_controller.dart
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/player_screen.dart';
+import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -191,6 +192,8 @@ class LibraryScreen extends ConsumerWidget {
                                     libraryController.showUnavailableMessage,
                                 onPlayNext: libraryController.playNext,
                                 onAddToQueue: libraryController.addToQueue,
+                                onAddToPlaylist: (track) =>
+                                    showAddTrackToPlaylist(context, ref, track),
                                 onDelete: libraryController.deleteTrack,
                               ),
                             ),
@@ -401,6 +404,7 @@ class _TrackList extends StatelessWidget {
     required this.onUnavailable,
     required this.onPlayNext,
     required this.onAddToQueue,
+    required this.onAddToPlaylist,
     required this.onDelete,
   });
 
@@ -411,6 +415,7 @@ class _TrackList extends StatelessWidget {
   final VoidCallback onUnavailable;
   final ValueChanged<Track> onPlayNext;
   final ValueChanged<Track> onAddToQueue;
+  final ValueChanged<Track> onAddToPlaylist;
   final ValueChanged<Track> onDelete;
 
   @override
@@ -457,27 +462,35 @@ class _TrackList extends StatelessWidget {
                       Text(_formatDuration(duration)),
                     PopupMenuButton<_TrackAction>(
                       tooltip: 'Acciones de ${track.title}',
-                      enabled: enabled && track.isAvailable,
+                      enabled: enabled,
                       onSelected: (action) {
                         switch (action) {
                           case _TrackAction.playNext:
                             onPlayNext(track);
                           case _TrackAction.addToQueue:
                             onAddToQueue(track);
+                          case _TrackAction.addToPlaylist:
+                            onAddToPlaylist(track);
                           case _TrackAction.delete:
                             onDelete(track);
                         }
                       },
-                      itemBuilder: (context) => const [
+                      itemBuilder: (context) => [
                         PopupMenuItem(
                           value: _TrackAction.playNext,
-                          child: Text('Reproducir a continuación'),
+                          enabled: track.isAvailable,
+                          child: const Text('Reproducir a continuación'),
                         ),
                         PopupMenuItem(
                           value: _TrackAction.addToQueue,
-                          child: Text('Añadir a la cola'),
+                          enabled: track.isAvailable,
+                          child: const Text('Añadir a la cola'),
                         ),
-                        PopupMenuItem(
+                        const PopupMenuItem(
+                          value: _TrackAction.addToPlaylist,
+                          child: Text('Añadir a playlist'),
+                        ),
+                        const PopupMenuItem(
                           value: _TrackAction.delete,
                           child: Text('Eliminar de la biblioteca'),
                         ),
@@ -623,4 +636,4 @@ String _formatDuration(Duration duration) {
 
 enum _LibraryAction { update, addFiles, loadDebugTracks }
 
-enum _TrackAction { playNext, addToQueue, delete }
+enum _TrackAction { playNext, addToQueue, addToPlaylist, delete }

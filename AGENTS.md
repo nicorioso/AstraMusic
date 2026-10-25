@@ -20,6 +20,8 @@ Detalle histórico por fase: docs/historial-agents.md (leer solo si es necesario
 
 ## Arquitectura
 lib/core (platform, db, utils) y lib/features (library, player, playlists, settings). Riverpod 3.x, drift, just_audio + audio_service.
+- Playlists usa modelos/repositorios de dominio; la UI nunca recibe filas de drift.
+- La navegación admite destinos de playlist y conserva una pila simple en escritorio.
 - UI no usa tipos de drift. Lo específico de plataforma va detrás de interfaces en core/platform.
 - El tema Gargantua vive en `core/theme`; usa `AstraColors` y no colores fijos en widgets.
 - Los fondos decorativos van en Stack, nunca envolviendo el contenido con altura fija.

@@ -959,8 +959,25 @@ class $PlaylistsTable extends Playlists
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _lastPlayedAtMeta = const VerificationMeta(
+    'lastPlayedAt',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, name, createdAt, updatedAt];
+  late final GeneratedColumn<DateTime> lastPlayedAt = GeneratedColumn<DateTime>(
+    'last_played_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    createdAt,
+    updatedAt,
+    lastPlayedAt,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1000,6 +1017,15 @@ class $PlaylistsTable extends Playlists
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('last_played_at')) {
+      context.handle(
+        _lastPlayedAtMeta,
+        lastPlayedAt.isAcceptableOrUnknown(
+          data['last_played_at']!,
+          _lastPlayedAtMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1025,6 +1051,10 @@ class $PlaylistsTable extends Playlists
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      lastPlayedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_played_at'],
+      ),
     );
   }
 
@@ -1039,11 +1069,13 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
   final String name;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? lastPlayedAt;
   const PlaylistRow({
     required this.id,
     required this.name,
     required this.createdAt,
     required this.updatedAt,
+    this.lastPlayedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1052,6 +1084,9 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     map['name'] = Variable<String>(name);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || lastPlayedAt != null) {
+      map['last_played_at'] = Variable<DateTime>(lastPlayedAt);
+    }
     return map;
   }
 
@@ -1061,6 +1096,9 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       name: Value(name),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      lastPlayedAt: lastPlayedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPlayedAt),
     );
   }
 
@@ -1074,6 +1112,7 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       name: serializer.fromJson<String>(json['name']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      lastPlayedAt: serializer.fromJson<DateTime?>(json['lastPlayedAt']),
     );
   }
   @override
@@ -1084,6 +1123,7 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       'name': serializer.toJson<String>(name),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'lastPlayedAt': serializer.toJson<DateTime?>(lastPlayedAt),
     };
   }
 
@@ -1092,11 +1132,13 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     String? name,
     DateTime? createdAt,
     DateTime? updatedAt,
+    Value<DateTime?> lastPlayedAt = const Value.absent(),
   }) => PlaylistRow(
     id: id ?? this.id,
     name: name ?? this.name,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    lastPlayedAt: lastPlayedAt.present ? lastPlayedAt.value : this.lastPlayedAt,
   );
   PlaylistRow copyWithCompanion(PlaylistsCompanion data) {
     return PlaylistRow(
@@ -1104,6 +1146,9 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
       name: data.name.present ? data.name.value : this.name,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      lastPlayedAt: data.lastPlayedAt.present
+          ? data.lastPlayedAt.value
+          : this.lastPlayedAt,
     );
   }
 
@@ -1113,13 +1158,14 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('lastPlayedAt: $lastPlayedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, createdAt, updatedAt);
+  int get hashCode => Object.hash(id, name, createdAt, updatedAt, lastPlayedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1127,7 +1173,8 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
           other.id == this.id &&
           other.name == this.name &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.lastPlayedAt == this.lastPlayedAt);
 }
 
 class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
@@ -1135,17 +1182,20 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
   final Value<String> name;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<DateTime?> lastPlayedAt;
   const PlaylistsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.lastPlayedAt = const Value.absent(),
   });
   PlaylistsCompanion.insert({
     this.id = const Value.absent(),
     required String name,
     required DateTime createdAt,
     required DateTime updatedAt,
+    this.lastPlayedAt = const Value.absent(),
   }) : name = Value(name),
        createdAt = Value(createdAt),
        updatedAt = Value(updatedAt);
@@ -1154,12 +1204,14 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     Expression<String>? name,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
+    Expression<DateTime>? lastPlayedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (lastPlayedAt != null) 'last_played_at': lastPlayedAt,
     });
   }
 
@@ -1168,12 +1220,14 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     Value<String>? name,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<DateTime?>? lastPlayedAt,
   }) {
     return PlaylistsCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
     );
   }
 
@@ -1192,6 +1246,9 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (lastPlayedAt.present) {
+      map['last_played_at'] = Variable<DateTime>(lastPlayedAt.value);
+    }
     return map;
   }
 
@@ -1201,7 +1258,8 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('lastPlayedAt: $lastPlayedAt')
           ..write(')'))
         .toString();
   }
@@ -2724,6 +2782,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'playlist_tracks_playlist_position_idx',
     'CREATE INDEX playlist_tracks_playlist_position_idx ON playlist_tracks (playlist_id, position)',
   );
+  late final Index playlistTracksPlaylistTrackIdx = Index(
+    'playlist_tracks_playlist_track_idx',
+    'CREATE UNIQUE INDEX playlist_tracks_playlist_track_idx ON playlist_tracks (playlist_id, track_id)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2738,6 +2800,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     excludedUris,
     tracksSortTitleIdx,
     playlistTracksPlaylistPositionIdx,
+    playlistTracksPlaylistTrackIdx,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -3379,12 +3442,14 @@ typedef $$PlaylistsTableCreateCompanionBuilder = PlaylistsCompanion Function({
   required String name,
   required DateTime createdAt,
   required DateTime updatedAt,
+  Value<DateTime?> lastPlayedAt,
 });
 typedef $$PlaylistsTableUpdateCompanionBuilder = PlaylistsCompanion Function({
   Value<int> id,
   Value<String> name,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
+  Value<DateTime?> lastPlayedAt,
 });
 
 final class $$PlaylistsTableReferences
@@ -3436,6 +3501,11 @@ class $$PlaylistsTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastPlayedAt => $composableBuilder(
+    column: $table.lastPlayedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3493,6 +3563,11 @@ class $$PlaylistsTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get lastPlayedAt => $composableBuilder(
+    column: $table.lastPlayedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PlaylistsTableAnnotationComposer
@@ -3515,6 +3590,11 @@ class $$PlaylistsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastPlayedAt => $composableBuilder(
+    column: $table.lastPlayedAt,
+    builder: (column) => column,
+  );
 
   Expression<T> playlistTracksRefs<T extends Object>(
     Expression<T> Function($$PlaylistTracksTableAnnotationComposer a) f,
@@ -3574,11 +3654,13 @@ class $$PlaylistsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> lastPlayedAt = const Value.absent(),
               }) => PlaylistsCompanion(
                 id: id,
                 name: name,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                lastPlayedAt: lastPlayedAt,
               ),
           createCompanionCallback:
               ({
@@ -3586,11 +3668,13 @@ class $$PlaylistsTableTableManager
                 required String name,
                 required DateTime createdAt,
                 required DateTime updatedAt,
+                Value<DateTime?> lastPlayedAt = const Value.absent(),
               }) => PlaylistsCompanion.insert(
                 id: id,
                 name: name,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                lastPlayedAt: lastPlayedAt,
               ),
           withReferenceMapper: (p0) => p0
               .map(

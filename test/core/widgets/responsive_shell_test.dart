@@ -8,6 +8,9 @@ import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
+import 'package:astramusic/features/playlists/domain/playlist.dart';
+import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
+import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -279,6 +282,7 @@ final class _Fixture {
       trackRepositoryProvider.overrideWithValue(repository),
       isAndroidPlatformProvider.overrideWithValue(true),
       artworkCacheProvider.overrideWithValue(cache),
+      playlistRepositoryProvider.overrideWithValue(_FakePlaylistRepository()),
     ],
     child: MaterialApp(
       theme: buildAstraTheme(),
@@ -290,6 +294,39 @@ final class _Fixture {
   );
 
   Future<void> dispose() => player.dispose();
+}
+
+final class _FakePlaylistRepository implements PlaylistRepository {
+  @override
+  Future<Playlist> create(String name) async => Playlist(
+    id: 1,
+    name: name.trim(),
+    trackCount: 0,
+    createdAt: DateTime(2026),
+    updatedAt: DateTime(2026),
+  );
+
+  @override
+  Future<void> delete(int id) async {}
+
+  @override
+  Future<AddTracksResult> addTracks(int playlistId, List<int> trackIds) async =>
+      AddTracksResult(added: trackIds.length, alreadyPresent: 0);
+
+  @override
+  Future<void> removeTrack(int playlistId, int trackId) async {}
+
+  @override
+  Future<void> rename(int id, String name) async {}
+
+  @override
+  Stream<List<Playlist>> watchAll() => Stream.value(const []);
+
+  @override
+  Stream<Playlist?> watchById(int id) => Stream.value(null);
+
+  @override
+  Stream<List<Track>> watchTracks(int id) => Stream.value(const []);
 }
 
 final class _FakeTrackRepository implements TrackRepository {

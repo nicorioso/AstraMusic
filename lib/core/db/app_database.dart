@@ -31,12 +31,18 @@ class Playlists extends Table {
   TextColumn get name => text()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get lastPlayedAt => dateTime().nullable()();
 }
 
 @DataClassName('PlaylistTrackRow')
 @TableIndex(
   name: 'playlist_tracks_playlist_position_idx',
   columns: {#playlistId, #position},
+)
+@TableIndex(
+  name: 'playlist_tracks_playlist_track_idx',
+  columns: {#playlistId, #trackId},
+  unique: true,
 )
 class PlaylistTracks extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -104,7 +110,7 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -160,6 +166,18 @@ final class AppDatabase extends _$AppDatabase {
       }
       if (from < 6) {
         await migrator.createTable(excludedUris);
+      }
+      if (from < 7) {
+        await migrator.addColumn(playlists, playlists.lastPlayedAt);
+        await customStatement('''
+          DELETE FROM playlist_tracks
+          WHERE id NOT IN (
+            SELECT MIN(id)
+            FROM playlist_tracks
+            GROUP BY playlist_id, track_id
+          )
+        ''');
+        await migrator.createIndex(playlistTracksPlaylistTrackIdx);
       }
     },
     beforeOpen: (details) async {

@@ -3,6 +3,52 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('migra de 6 a 7, deduplica y crea el índice único', () async {
+    final executor = NativeDatabase.memory(
+      setup: (database) {
+        _createVersionSixPlaylistSchema(database);
+        database.execute('''
+          INSERT INTO tracks (id, uri, title, date_added)
+          VALUES (1, 'file:///uno.mp3', 'Uno', 1767225600000)
+        ''');
+        database.execute('''
+          INSERT INTO playlists (id, name, created_at, updated_at)
+          VALUES (1, 'Lista', 1767225600000, 1767225600000)
+        ''');
+        database.execute('''
+          INSERT INTO playlist_tracks
+            (id, playlist_id, track_id, position, added_at)
+          VALUES
+            (1, 1, 1, 0, 1767225600000),
+            (2, 1, 1, 1, 1767225600000)
+        ''');
+        database.userVersion = 6;
+      },
+    );
+    final database = AppDatabase(executor);
+    addTearDown(database.close);
+
+    final playlist = await database.select(database.playlists).getSingle();
+    final relations = await database.select(database.playlistTracks).get();
+
+    expect(database.schemaVersion, 7);
+    expect(playlist.lastPlayedAt, isNull);
+    expect(relations.map((row) => row.id), [1]);
+    await expectLater(
+      database
+          .into(database.playlistTracks)
+          .insert(
+            PlaylistTracksCompanion.insert(
+              playlistId: 1,
+              trackId: 1,
+              position: 2,
+              addedAt: DateTime(2026),
+            ),
+          ),
+      throwsA(anything),
+    );
+  });
+
   test('migra de 1 a 3 conservando tracks y creando library_folders', () async {
     final executor = NativeDatabase.memory(
       setup: (database) {
@@ -66,7 +112,7 @@ void main() {
         )
         .getSingleOrNull();
 
-    expect(database.schemaVersion, 6);
+    expect(database.schemaVersion, 7);
     expect(tracks.single.title, 'Existente');
     expect(tracks.single.searchText, 'existente');
     expect(tracks.single.sortTitle, 'existente');
@@ -77,6 +123,7 @@ void main() {
     final executor = NativeDatabase.memory(
       setup: (database) {
         _createVersionThreeTracks(database);
+        _createLegacyPlaylistTables(database);
         database.execute(
           "INSERT INTO tracks (uri, title, date_added, search_text, sort_title) "
           "VALUES ('file:///tema.mp3', 'Tema', 1767225600000, 'tema', 'tema')",
@@ -90,7 +137,7 @@ void main() {
     final track = await database.select(database.tracks).getSingle();
     expect(track.title, 'Tema');
     expect(track.artworkPath, isNull);
-    expect(database.schemaVersion, 6);
+    expect(database.schemaVersion, 7);
   });
 
   test('migra de 4 a 5 y crea el estado y la cola persistidos', () async {
@@ -114,7 +161,7 @@ void main() {
       'playback_state',
       'queue_items',
     ]);
-    expect(database.schemaVersion, 6);
+    expect(database.schemaVersion, 7);
   });
 
   test('migra de 5 a 6 y crea excluded_uris con uri única', () async {
@@ -154,7 +201,7 @@ void main() {
           .insert(ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3')),
       throwsA(anything),
     );
-    expect(database.schemaVersion, 6);
+    expect(database.schemaVersion, 7);
   });
 
   test('migra de 2 a 3, hace backfill y conserva todas las tablas', () async {
@@ -212,6 +259,50 @@ void main() {
   });
 }
 
+void _createVersionSixPlaylistSchema(dynamic database) {
+  database.execute('''
+    CREATE TABLE tracks (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      uri TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      artist TEXT NULL,
+      album TEXT NULL,
+      duration_ms INTEGER NULL,
+      track_number INTEGER NULL,
+      year INTEGER NULL,
+      file_size INTEGER NULL,
+      date_added INTEGER NOT NULL,
+      date_modified INTEGER NULL,
+      search_text TEXT NOT NULL DEFAULT '',
+      sort_title TEXT NOT NULL DEFAULT '',
+      is_available INTEGER NOT NULL DEFAULT 1 CHECK (is_available IN (0, 1)),
+      is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1)),
+      artwork_path TEXT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE TABLE playlists (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE TABLE playlist_tracks (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      playlist_id INTEGER NOT NULL REFERENCES playlists (id) ON DELETE CASCADE,
+      track_id INTEGER NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      added_at INTEGER NOT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE INDEX playlist_tracks_playlist_position_idx
+    ON playlist_tracks (playlist_id, position)
+  ''');
+}
+
 void _createVersionThreeTracks(dynamic database) {
   database.execute('''
     CREATE TABLE tracks (
@@ -235,6 +326,26 @@ void _createVersionThreeTracks(dynamic database) {
   database.execute(
     'CREATE INDEX tracks_sort_title_idx ON tracks (sort_title, id)',
   );
+}
+
+void _createLegacyPlaylistTables(dynamic database) {
+  database.execute('''
+    CREATE TABLE playlists (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE TABLE playlist_tracks (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      playlist_id INTEGER NOT NULL REFERENCES playlists (id) ON DELETE CASCADE,
+      track_id INTEGER NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      added_at INTEGER NOT NULL
+    )
+  ''');
 }
 
 void _createVersionFourSchema(dynamic database) {

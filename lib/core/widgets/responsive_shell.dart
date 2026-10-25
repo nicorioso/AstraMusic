@@ -13,6 +13,9 @@ import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/player_screen.dart';
 import 'package:astramusic/features/player/presentation/seek_bar.dart';
+import 'package:astramusic/features/playlists/domain/playlist.dart';
+import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
+import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,6 +97,7 @@ class _DesktopSidebar extends ConsumerWidget {
     void selectLibrary() => ref
         .read(appDestinationProvider.notifier)
         .select(AppDestination.library);
+    final playlists = ref.watch(playlistsProvider);
 
     if (collapsed) {
       return Material(
@@ -112,14 +116,40 @@ class _DesktopSidebar extends ConsumerWidget {
               icon: Icons.chevron_right,
               onPressed: onToggle,
             ),
+            _CollapsedSidebarButton(
+              key: const Key('collapsed-create-playlist-button'),
+              tooltip: 'Crear playlist',
+              icon: Icons.add,
+              onPressed: () => createPlaylist(context, ref),
+            ),
             Expanded(
-              child: Center(
-                child: _CollapsedSidebarButton(
-                  key: const Key('collapsed-playlists-button'),
-                  tooltip: 'Playlists',
-                  icon: Icons.queue_music_outlined,
-                  onPressed: selectLibrary,
-                ),
+              child: playlists.when(
+                data: (items) => items.isEmpty
+                    ? Center(
+                        child: _CollapsedSidebarButton(
+                          key: const Key('collapsed-playlists-button'),
+                          tooltip: 'Playlists',
+                          icon: Icons.queue_music_outlined,
+                          onPressed: selectLibrary,
+                        ),
+                      )
+                    : ListView(
+                        children: [
+                          for (final playlist in items)
+                            _CollapsedSidebarButton(
+                              key: ValueKey(
+                                'collapsed-playlist-${playlist.id}',
+                              ),
+                              tooltip: playlist.name,
+                              icon: Icons.music_note,
+                              onPressed: () => ref
+                                  .read(appDestinationProvider.notifier)
+                                  .select(AppDestination.playlist(playlist.id)),
+                            ),
+                        ],
+                      ),
+                loading: () => const SizedBox(),
+                error: (_, _) => const SizedBox(),
               ),
             ),
             _CollapsedSidebarButton(
@@ -148,26 +178,51 @@ class _DesktopSidebar extends ConsumerWidget {
             ),
             onTap: selectLibrary,
           ),
-          Tooltip(
-            message: 'Próximamente',
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: OutlinedButton.icon(
-                onPressed: null,
-                icon: const Icon(Icons.add),
-                label: const Text('Crear'),
-              ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: OutlinedButton.icon(
+              key: const Key('desktop-create-playlist-button'),
+              onPressed: () => createPlaylist(context, ref),
+              icon: const Icon(Icons.add),
+              label: const Text('Crear'),
             ),
           ),
-          const Expanded(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  'Aún no tienes playlists',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+          Expanded(
+            child: playlists.when(
+              data: (items) => items.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Text(
+                          'Aún no tienes playlists',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      key: const Key('desktop-playlist-list'),
+                      itemCount: items.length,
+                      itemBuilder: (_, index) {
+                        final playlist = items[index];
+                        return ListTile(
+                          key: ValueKey('sidebar-playlist-${playlist.id}'),
+                          leading: const PlaylistArtwork(size: 44),
+                          title: Text(
+                            playlist.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            playlistTrackCount(playlist.trackCount),
+                          ),
+                          onTap: () => ref
+                              .read(appDestinationProvider.notifier)
+                              .select(AppDestination.playlist(playlist.id)),
+                        );
+                      },
+                    ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(child: Text('$error')),
             ),
           ),
           ListTile(
@@ -214,6 +269,7 @@ class _DesktopCenter extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final destination = ref.watch(appDestinationProvider);
+    final navigation = ref.read(appDestinationProvider.notifier);
     return AstraBackground(
       child: Column(
         children: [
@@ -221,6 +277,13 @@ class _DesktopCenter extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
+                if (destination.type == AppDestinationType.playlist)
+                  IconButton(
+                    key: const Key('desktop-back-button'),
+                    tooltip: 'Atrás',
+                    onPressed: navigation.back,
+                    icon: const Icon(Icons.arrow_back),
+                  ),
                 IconButton(
                   key: const Key('desktop-home-button'),
                   tooltip: 'Inicio',
@@ -280,10 +343,16 @@ class MobileShell extends ConsumerWidget {
           children: [
             if (hasCurrent) const MobileMiniPlayer(),
             NavigationBar(
-              selectedIndex: destination.index,
+              selectedIndex: destination.navigationIndex,
               onDestinationSelected: (index) => ref
                   .read(appDestinationProvider.notifier)
-                  .select(AppDestination.values[index]),
+                  .select(
+                    [
+                      AppDestination.home,
+                      AppDestination.search,
+                      AppDestination.library,
+                    ][index],
+                  ),
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.home_outlined),
@@ -315,9 +384,16 @@ class _DestinationBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => switch (destination) {
-    AppDestination.home => const SongsDestination(showSearch: false),
-    AppDestination.search => const SongsDestination(showSearch: true),
-    AppDestination.library => const PlaylistsDestination(),
+    final value when value.type == AppDestinationType.home =>
+      const SongsDestination(showSearch: false),
+    final value when value.type == AppDestinationType.search =>
+      const SongsDestination(showSearch: true),
+    final value when value.type == AppDestinationType.library =>
+      const PlaylistsDestination(),
+    final value => PlaylistDetailScreen(
+      playlistId: value.playlistId!,
+      embedded: true,
+    ),
   };
 }
 
@@ -472,27 +548,34 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
                   ),
                   trailing: PopupMenuButton<_ShellTrackAction>(
                     tooltip: 'Acciones de ${track.title}',
-                    enabled: track.isAvailable,
                     onSelected: (action) {
                       switch (action) {
                         case _ShellTrackAction.playNext:
                           controller.playNext(track);
                         case _ShellTrackAction.addToQueue:
                           controller.addToQueue(track);
+                        case _ShellTrackAction.addToPlaylist:
+                          showAddTrackToPlaylist(context, ref, track);
                         case _ShellTrackAction.delete:
                           controller.deleteTrack(track);
                       }
                     },
-                    itemBuilder: (_) => const [
+                    itemBuilder: (_) => [
                       PopupMenuItem(
                         value: _ShellTrackAction.playNext,
-                        child: Text('Reproducir a continuación'),
+                        enabled: track.isAvailable,
+                        child: const Text('Reproducir a continuación'),
                       ),
                       PopupMenuItem(
                         value: _ShellTrackAction.addToQueue,
-                        child: Text('Añadir a la cola'),
+                        enabled: track.isAvailable,
+                        child: const Text('Añadir a la cola'),
                       ),
-                      PopupMenuItem(
+                      const PopupMenuItem(
+                        value: _ShellTrackAction.addToPlaylist,
+                        child: Text('Añadir a playlist'),
+                      ),
+                      const PopupMenuItem(
                         value: _ShellTrackAction.delete,
                         child: Text('Eliminar de la biblioteca'),
                       ),
@@ -514,7 +597,7 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
   }
 }
 
-enum _ShellTrackAction { playNext, addToQueue, delete }
+enum _ShellTrackAction { playNext, addToQueue, addToPlaylist, delete }
 
 class PlaylistsDestination extends ConsumerWidget {
   const PlaylistsDestination({super.key});
@@ -524,6 +607,7 @@ class PlaylistsDestination extends ConsumerWidget {
     final controller = ref.read(libraryControllerProvider.notifier);
     final state = ref.watch(libraryControllerProvider);
     final isAndroid = ref.watch(isAndroidPlatformProvider);
+    final playlists = ref.watch(playlistsProvider);
     ref.listen<String?>(
       libraryControllerProvider.select((state) => state.message),
       (previous, next) {
@@ -540,20 +624,32 @@ class PlaylistsDestination extends ConsumerWidget {
         key: const Key('library-destination'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SectionTitle(
+          SectionTitle(
             'Tu biblioteca',
-            trailing: Tooltip(
-              message: 'Próximamente',
-              child: IconButton(
-                key: Key('create-playlist-button'),
-                onPressed: null,
-                icon: Icon(Icons.add),
-              ),
+            trailing: IconButton(
+              key: const Key('create-playlist-button'),
+              tooltip: 'Crear playlist',
+              onPressed: () => createPlaylist(context, ref),
+              icon: const Icon(Icons.add),
             ),
           ),
-          const Expanded(
-            key: Key('destination-content'),
-            child: Center(child: Text('Aún no tienes playlists')),
+          Expanded(
+            key: const Key('destination-content'),
+            child: playlists.when(
+              data: (items) => items.isEmpty
+                  ? const Center(child: Text('Aún no tienes playlists'))
+                  : ListView.builder(
+                      key: const Key('mobile-playlist-list'),
+                      itemCount: items.length,
+                      itemBuilder: (_, index) => _PlaylistTile(
+                        playlist: items[index],
+                        onTap: () =>
+                            _openPlaylist(context, ref, items[index].id),
+                      ),
+                    ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(child: Text('$error')),
+            ),
           ),
           const Divider(height: 1),
           if (!isAndroid) ...[
@@ -651,6 +747,36 @@ class PlaylistsDestination extends ConsumerWidget {
     );
     if (confirmed == true) await controller.clearLibrary();
   }
+}
+
+class _PlaylistTile extends StatelessWidget {
+  const _PlaylistTile({required this.playlist, required this.onTap});
+
+  final Playlist playlist;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    key: ValueKey('library-playlist-${playlist.id}'),
+    leading: const PlaylistArtwork(size: 48),
+    title: Text(playlist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+    subtitle: Text(playlistTrackCount(playlist.trackCount)),
+    onTap: onTap,
+  );
+}
+
+void _openPlaylist(BuildContext context, WidgetRef ref, int playlistId) {
+  if (MediaQuery.sizeOf(context).width >= desktopBreakpoint) {
+    ref
+        .read(appDestinationProvider.notifier)
+        .select(AppDestination.playlist(playlistId));
+    return;
+  }
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => PlaylistDetailScreen(playlistId: playlistId),
+    ),
+  );
 }
 
 class MobileMiniPlayer extends ConsumerWidget {

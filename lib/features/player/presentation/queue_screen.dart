@@ -3,6 +3,7 @@ import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
+import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -90,20 +91,38 @@ class QueueScreen extends ConsumerWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                             onTap: () => controller.skipToIndex(index),
-                            trailing: Semantics(
-                              button: true,
-                              label: 'Reordenar ${track.title}',
-                              child: ReorderableDragStartListener(
-                                index: index,
-                                child: const Tooltip(
-                                  message:
-                                      'Mantener y arrastrar para reordenar',
-                                  child: Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: Icon(Icons.drag_handle),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                PopupMenuButton<void>(
+                                  tooltip: 'Acciones de ${track.title}',
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                      child: Text('Añadir a playlist'),
+                                    ),
+                                  ],
+                                  onSelected: (_) => showAddTrackToPlaylist(
+                                    context,
+                                    ref,
+                                    track,
                                   ),
                                 ),
-                              ),
+                                Semantics(
+                                  button: true,
+                                  label: 'Reordenar ${track.title}',
+                                  child: ReorderableDragStartListener(
+                                    index: index,
+                                    child: const Tooltip(
+                                      message:
+                                          'Mantener y arrastrar para reordenar',
+                                      child: Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: Icon(Icons.drag_handle),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
