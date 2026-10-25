@@ -7,15 +7,86 @@ import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
+import 'package:astramusic/features/player/presentation/queue_screen.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final size in const [Size(360, 800), Size(937, 1029)]) {
+    for (final count in const [0, 1, 30]) {
+      testWidgets(
+        'selector real con $count playlists a ${size.width.toInt()}x${size.height.toInt()}',
+        (tester) async {
+          final fixture = _Fixture(
+            playlistCount: count,
+            useComplexPlaylistNames: true,
+          );
+          await _setSize(tester, size);
+          await tester.pumpWidget(fixture.shellApp());
+          await tester.pumpAndSettle();
+
+          await tester.tap(find.byTooltip('Acciones de Canción 1'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Añadir a playlist'));
+          await tester.pumpAndSettle();
+
+          expect(find.byKey(const Key('playlist-chooser')), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          if (count == 0) {
+            expect(find.text('Aún no tienes playlists'), findsWidgets);
+          } else {
+            expect(find.textContaining('播放列表'), findsWidgets);
+          }
+
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
+          expect(find.byKey(const Key('playlist-chooser')), findsNothing);
+          expect(tester.takeException(), isNull);
+
+          if (size.width < desktopBreakpoint) {
+            await tester.tap(find.text('Buscar'));
+            await tester.pump();
+            expect(find.byKey(const Key('search-destination')), findsOneWidget);
+          } else {
+            await tester.tap(find.byKey(const Key('desktop-home-button')));
+            await tester.pump();
+            expect(find.byKey(const Key('home-destination')), findsOneWidget);
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets('atrás cierra el selector móvil y la app sigue respondiendo', (
+    tester,
+  ) async {
+    final fixture = _Fixture(playlistCount: 30, useComplexPlaylistNames: true);
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.shellApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Acciones de Canción 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Añadir a playlist'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('playlist-chooser')), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('playlist-chooser')), findsNothing);
+    await tester.tap(find.text('Buscar'));
+    await tester.pump();
+    expect(find.byKey(const Key('search-destination')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('el diálogo de crear playlist valida el nombre vacío', (
     tester,
   ) async {
@@ -99,6 +170,71 @@ void main() {
     expect(fixture.playlists.deletedIds, [7]);
   });
 
+  testWidgets('abre overlays desde sus flujos reales sin excepciones', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    await _setSize(tester, const Size(360, 800));
+
+    await tester.pumpWidget(fixture.shellApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('create-playlist-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('playlist-name-field')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Inicio'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Acciones de Canción 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Eliminar de la biblioteca'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(fixture.detailApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('playlist-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Renombrar'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('playlist-name-field')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('playlist-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Eliminar'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('confirm-delete-playlist-button')),
+      findsOneWidget,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Acciones de Canción 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Quitar de esta playlist'));
+    await tester.pumpAndSettle();
+    expect(fixture.playlists.removedTrackIds, [1]);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(fixture.queueApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Acciones de Canción 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Añadir a playlist'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('playlist-chooser')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('playlist-chooser')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final size in const [Size(360, 800), Size(937, 1029), Size(1400, 900)]) {
     testWidgets(
       'detalle sin overflow a ${size.width.toInt()}x${size.height.toInt()}',
@@ -134,7 +270,11 @@ Future<void> _setSize(WidgetTester tester, Size size) async {
 }
 
 final class _Fixture {
-  _Fixture({int trackCount = 3}) {
+  _Fixture({
+    int trackCount = 3,
+    int playlistCount = 1,
+    bool useComplexPlaylistNames = false,
+  }) {
     tracks = List.generate(
       trackCount,
       (index) => Track(
@@ -147,7 +287,12 @@ final class _Fixture {
         isAvailable: index != 1,
       ),
     );
-    playlists = _FakePlaylistRepository(tracks);
+    playlists = _FakePlaylistRepository(
+      tracks,
+      playlistCount: playlistCount,
+      useComplexNames: useComplexPlaylistNames,
+    );
+    player.seedQueue(tracks);
   }
 
   late final List<Track> tracks;
@@ -155,6 +300,7 @@ final class _Fixture {
   final player = _RecordingPlayer();
 
   Widget shellApp() => ProviderScope(
+    key: UniqueKey(),
     overrides: [
       playlistRepositoryProvider.overrideWithValue(playlists),
       trackRepositoryProvider.overrideWithValue(_TrackRepository(tracks)),
@@ -170,6 +316,7 @@ final class _Fixture {
   );
 
   Widget detailApp() => ProviderScope(
+    key: UniqueKey(),
     overrides: [
       playlistRepositoryProvider.overrideWithValue(playlists),
       trackRepositoryProvider.overrideWithValue(_TrackRepository(tracks)),
@@ -183,22 +330,59 @@ final class _Fixture {
       home: const PlaylistDetailScreen(playlistId: 7),
     ),
   );
+
+  Widget queueApp() => ProviderScope(
+    key: UniqueKey(),
+    overrides: [
+      playlistRepositoryProvider.overrideWithValue(playlists),
+      audioPlayerServiceProvider.overrideWithValue(player),
+    ],
+    child: MaterialApp(
+      theme: buildAstraTheme(),
+      darkTheme: buildAstraTheme(),
+      themeMode: ThemeMode.dark,
+      home: const QueueScreen(),
+    ),
+  );
 }
 
 final class _FakePlaylistRepository implements PlaylistRepository {
-  _FakePlaylistRepository(this.tracks);
+  _FakePlaylistRepository(
+    this.tracks, {
+    required int playlistCount,
+    required bool useComplexNames,
+  }) : items = List.generate(
+         playlistCount,
+         (index) => Playlist(
+           id: index + 7,
+           name: useComplexNames && index == 0
+               ? '播放列表 Viaje con un nombre largo para probar el diseño'
+               : useComplexNames
+               ? '播放列表 ${index + 1}'
+               : index == 0
+               ? 'Viaje'
+               : 'Playlist ${index + 1}',
+           trackCount: tracks.length,
+           createdAt: DateTime(2026),
+           updatedAt: DateTime(2026),
+         ),
+       );
 
   final List<Track> tracks;
+  final List<Playlist> items;
   final List<String> createdNames = [];
   final List<int> addedTrackIds = [];
   final List<int> deletedIds = [];
-  late final playlist = Playlist(
-    id: 7,
-    name: 'Viaje',
-    trackCount: tracks.length,
-    createdAt: DateTime(2026),
-    updatedAt: DateTime(2026),
-  );
+  final List<int> removedTrackIds = [];
+  Playlist get playlist => items.isEmpty
+      ? Playlist(
+          id: 7,
+          name: 'Viaje',
+          trackCount: tracks.length,
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+        )
+      : items.first;
 
   @override
   Future<Playlist> create(String name) async {
@@ -222,13 +406,15 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   Future<void> delete(int id) async => deletedIds.add(id);
 
   @override
-  Future<void> removeTrack(int playlistId, int trackId) async {}
+  Future<void> removeTrack(int playlistId, int trackId) async {
+    removedTrackIds.add(trackId);
+  }
 
   @override
   Future<void> rename(int id, String name) async {}
 
   @override
-  Stream<List<Playlist>> watchAll() => Stream.value([playlist]);
+  Stream<List<Playlist>> watchAll() => Stream.value(items);
 
   @override
   Stream<Playlist?> watchById(int id) => Stream.value(playlist);
@@ -272,8 +458,11 @@ final class _TrackRepository implements TrackRepository {
 
 final class _RecordingPlayer implements AudioPlayerService {
   List<Track> loaded = const [];
+  List<Track> queue = const [];
   int startIndex = 0;
   int playCalls = 0;
+
+  void seedQueue(List<Track> tracks) => queue = List.of(tracks);
 
   @override
   Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {
@@ -296,7 +485,7 @@ final class _RecordingPlayer implements AudioPlayerService {
   @override
   Stream<Duration> get positionStream => const Stream.empty();
   @override
-  Stream<List<Track>> get queueStream => const Stream.empty();
+  Stream<List<Track>> get queueStream => Stream.value(queue);
   @override
   Stream<RepeatMode> get repeatModeStream => const Stream.empty();
   @override

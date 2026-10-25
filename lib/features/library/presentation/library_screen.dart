@@ -363,6 +363,7 @@ class _FolderTile extends ConsumerWidget {
       trailing: IconButton(
         tooltip: 'Quitar carpeta',
         onPressed: () async {
+          final controller = ref.read(libraryControllerProvider.notifier);
           final confirmed = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
@@ -384,9 +385,7 @@ class _FolderTile extends ConsumerWidget {
             ),
           );
           if (confirmed == true) {
-            await ref
-                .read(libraryControllerProvider.notifier)
-                .removeFolder(folder);
+            await controller.removeFolder(folder);
           }
         },
         icon: const Icon(Icons.delete_outline),

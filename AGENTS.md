@@ -13,6 +13,7 @@ Detalle histórico por fase: docs/historial-agents.md (leer solo si es necesario
 
 ## Reglas
 - el arranque nunca depende de archivos del usuario; restauraciones y verificaciones corren tras el primer frame y con try/catch.
+- diálogos y paneles: contenido acotado y contexts capturados antes de await; todo flujo de UI tiene test por su camino real, no solo con fakes.
 - Sin sudo. No ejecutes la app. No compiles Windows.
 - Dependencias solo con `flutter pub add`; no inventes APIs: lee el paquete en ~/.pub-cache. permission_handler fijado en 12.0.3.
 - Un commit pequeño por tarea; nunca commitear secretos.

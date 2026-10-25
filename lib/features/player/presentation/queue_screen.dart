@@ -94,10 +94,11 @@ class QueueScreen extends ConsumerWidget {
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                PopupMenuButton<void>(
+                                PopupMenuButton<bool>(
                                   tooltip: 'Acciones de ${track.title}',
                                   itemBuilder: (_) => const [
                                     PopupMenuItem(
+                                      value: true,
                                       child: Text('Añadir a playlist'),
                                     ),
                                   ],

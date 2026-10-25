@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
@@ -8,6 +9,7 @@ import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
+import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,71 +45,78 @@ String playlistTrackCount(int count) =>
 Future<String?> showPlaylistNameDialog(
   BuildContext context, {
   String? initialName,
-}) async {
-  final controller = TextEditingController(text: initialName);
-  String? error;
-  final result = await showDialog<String>(
+}) {
+  return showDialog<String>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: Text(
-          initialName == null ? 'Nueva playlist' : 'Renombrar playlist',
-        ),
-        content: TextField(
-          key: const Key('playlist-name-field'),
-          controller: controller,
-          autofocus: true,
-          maxLength: 60,
-          decoration: InputDecoration(labelText: 'Nombre', errorText: error),
-          onSubmitted: (_) => _submitPlaylistName(
-            dialogContext,
-            controller.text,
-            (value) => setState(() => error = value),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            key: const Key('save-playlist-button'),
-            onPressed: () => _submitPlaylistName(
-              dialogContext,
-              controller.text,
-              (value) => setState(() => error = value),
-            ),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    ),
+    builder: (_) => _PlaylistNameDialog(initialName: initialName),
   );
-  controller.dispose();
-  return result;
 }
 
-void _submitPlaylistName(
-  BuildContext context,
-  String value,
-  ValueChanged<String?> setError,
-) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    setError('Escribe un nombre.');
-    return;
+class _PlaylistNameDialog extends StatefulWidget {
+  const _PlaylistNameDialog({this.initialName});
+
+  final String? initialName;
+
+  @override
+  State<_PlaylistNameDialog> createState() => _PlaylistNameDialogState();
+}
+
+class _PlaylistNameDialogState extends State<_PlaylistNameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName,
+  );
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
-  if (normalized.length > 60) {
-    setError('Máximo 60 caracteres.');
-    return;
+
+  void _submit() {
+    final normalized = _controller.text.trim();
+    if (normalized.isEmpty) {
+      setState(() => _error = 'Escribe un nombre.');
+      return;
+    }
+    if (normalized.length > 60) {
+      setState(() => _error = 'Máximo 60 caracteres.');
+      return;
+    }
+    Navigator.of(context).pop(normalized);
   }
-  Navigator.of(context).pop(normalized);
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(
+      widget.initialName == null ? 'Nueva playlist' : 'Renombrar playlist',
+    ),
+    content: TextField(
+      key: const Key('playlist-name-field'),
+      controller: _controller,
+      autofocus: true,
+      maxLength: 60,
+      decoration: InputDecoration(labelText: 'Nombre', errorText: _error),
+      onSubmitted: (_) => _submit(),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancelar'),
+      ),
+      FilledButton(
+        key: const Key('save-playlist-button'),
+        onPressed: _submit,
+        child: const Text('Guardar'),
+      ),
+    ],
+  );
 }
 
 Future<Playlist?> createPlaylist(BuildContext context, WidgetRef ref) async {
-  final name = await showPlaylistNameDialog(context);
-  if (name == null || !context.mounted) return null;
-  return ref.read(playlistRepositoryProvider).create(name);
+  final navigator = Navigator.of(context);
+  final repository = ref.read(playlistRepositoryProvider);
+  return _createPlaylist(navigator, repository);
 }
 
 Future<void> showAddTrackToPlaylist(
@@ -117,39 +126,49 @@ Future<void> showAddTrackToPlaylist(
 ) async {
   final trackId = track.id;
   if (trackId == null) return;
+  final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.of(context);
+  final repository = ref.read(playlistRepositoryProvider);
   final isDesktop = MediaQuery.sizeOf(context).width >= 840;
+  await Future<void>.delayed(Duration.zero);
+  if (!navigator.mounted) return;
   final selected = isDesktop
       ? await showDialog<int>(
-          context: context,
+          context: navigator.context,
           builder: (_) => const _PlaylistChooser(dialog: true),
         )
       : await showModalBottomSheet<int>(
-          context: context,
+          context: navigator.context,
           showDragHandle: true,
+          isScrollControlled: true,
           builder: (_) => const _PlaylistChooser(dialog: false),
         );
-  if (selected == null || !context.mounted) return;
+  if (selected == null || !navigator.mounted) return;
   Playlist? playlist;
   if (selected == _newPlaylistId) {
-    playlist = await createPlaylist(context, ref);
+    playlist = await _createPlaylist(navigator, repository);
   } else {
-    playlist = await ref
-        .read(playlistRepositoryProvider)
-        .watchById(selected)
-        .first;
+    playlist = await repository.watchById(selected).first;
   }
-  if (playlist == null || !context.mounted) return;
-  final result = await ref.read(playlistRepositoryProvider).addTracks(
-    playlist.id,
-    [trackId],
-  );
-  if (!context.mounted) return;
+  if (playlist == null || !navigator.mounted) return;
+  final result = await repository.addTracks(playlist.id, [trackId]);
+  if (!messenger.mounted) return;
   final message = result.added > 0
       ? 'Añadida a ${playlist.name}'
       : 'Ya estaba en ${playlist.name}';
-  ScaffoldMessenger.of(context)
+  messenger
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(message)));
+}
+
+Future<Playlist?> _createPlaylist(
+  NavigatorState navigator,
+  PlaylistRepository repository,
+) async {
+  if (!navigator.mounted) return null;
+  final name = await showPlaylistNameDialog(navigator.context);
+  if (name == null || !navigator.mounted) return null;
+  return repository.create(name);
 }
 
 const _newPlaylistId = -1;
@@ -162,8 +181,8 @@ class _PlaylistChooser extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlists = ref.watch(playlistsProvider);
+    final maxHeight = math.min(MediaQuery.sizeOf(context).height * 0.72, 480.0);
     final content = Column(
-      mainAxisSize: dialog ? MainAxisSize.min : MainAxisSize.max,
       children: [
         ListTile(
           key: const Key('new-playlist-option'),
@@ -172,7 +191,7 @@ class _PlaylistChooser extends ConsumerWidget {
           onTap: () => Navigator.of(context).pop(_newPlaylistId),
         ),
         const Divider(height: 1),
-        Flexible(
+        Expanded(
           child: playlists.when(
             data: (items) => items.isEmpty
                 ? const Padding(
@@ -199,13 +218,19 @@ class _PlaylistChooser extends ConsumerWidget {
         ),
       ],
     );
-    if (!dialog) return SafeArea(child: content);
+    final bounded = ConstrainedBox(
+      key: const Key('playlist-chooser'),
+      constraints: BoxConstraints(maxWidth: 420, maxHeight: maxHeight),
+      child: SizedBox(width: 420, height: maxHeight, child: content),
+    );
+    if (!dialog) {
+      return SafeArea(
+        child: Align(alignment: Alignment.bottomCenter, child: bounded),
+      );
+    }
     return AlertDialog(
       title: const Text('Añadir a playlist'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 480),
-        child: content,
-      ),
+      content: bounded,
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
@@ -382,10 +407,11 @@ class _PlaylistDetailBody extends ConsumerWidget {
                                   startIndex: index,
                                 )
                               : library.showUnavailableMessage,
-                          trailing: PopupMenuButton<void>(
+                          trailing: PopupMenuButton<bool>(
                             tooltip: 'Acciones de ${track.title}',
                             itemBuilder: (_) => const [
                               PopupMenuItem(
+                                value: true,
                                 child: Text('Quitar de esta playlist'),
                               ),
                             ],
@@ -404,18 +430,29 @@ class _PlaylistDetailBody extends ConsumerWidget {
   }
 
   Future<void> _rename(BuildContext context, WidgetRef ref) async {
+    final navigator = Navigator.of(context);
+    final repository = ref.read(playlistRepositoryProvider);
+    await Future<void>.delayed(Duration.zero);
+    if (!navigator.mounted) return;
     final name = await showPlaylistNameDialog(
-      context,
+      navigator.context,
       initialName: playlist.name,
     );
     if (name != null) {
-      await ref.read(playlistRepositoryProvider).rename(playlist.id, name);
+      await repository.rename(playlist.id, name);
     }
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final navigator = Navigator.of(context);
+    final repository = ref.read(playlistRepositoryProvider);
+    final appNavigation = embedded
+        ? ref.read(appDestinationProvider.notifier)
+        : null;
+    await Future<void>.delayed(Duration.zero);
+    if (!navigator.mounted) return;
     final confirmed = await showDialog<bool>(
-      context: context,
+      context: navigator.context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar playlist'),
         content: Text(
@@ -434,13 +471,13 @@ class _PlaylistDetailBody extends ConsumerWidget {
         ],
       ),
     );
-    if (confirmed != true || !context.mounted) return;
-    await ref.read(playlistRepositoryProvider).delete(playlist.id);
-    if (!context.mounted) return;
+    if (confirmed != true || !navigator.mounted) return;
+    await repository.delete(playlist.id);
+    if (!navigator.mounted) return;
     if (embedded) {
-      ref.read(appDestinationProvider.notifier).back();
+      appNavigation!.back();
     } else {
-      Navigator.of(context).pop();
+      navigator.pop();
     }
   }
 }
