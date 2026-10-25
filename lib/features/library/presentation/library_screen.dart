@@ -7,6 +7,7 @@ import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/section_title.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
+import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
@@ -184,7 +185,6 @@ class LibraryScreen extends ConsumerWidget {
                             Expanded(
                               child: _TrackList(
                                 tracks: items,
-                                currentPath: currentPath,
                                 enabled: !libraryState.actionsDisabled,
                                 onTrackTap: (index) => libraryController
                                     .playVisibleQueue(items, startIndex: index),
@@ -344,6 +344,41 @@ class MusicFoldersDialog extends ConsumerWidget {
   }
 }
 
+class MusicFoldersView extends ConsumerWidget {
+  const MusicFoldersView({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final folders = ref.watch(libraryFoldersProvider);
+    return Column(
+      key: const Key('music-folders-destination'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionTitle('Carpetas de música'),
+        Expanded(
+          child: folders.when(
+            data: (items) => items.isEmpty
+                ? const Center(child: Text('No hay carpetas guardadas.'))
+                : ListView.builder(
+                    key: const Key('music-folders-list'),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) =>
+                        _FolderTile(folder: items[index]),
+                  ),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('No fue posible cargar las carpetas: $error'),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _FolderTile extends ConsumerWidget {
   const _FolderTile({required this.folder});
 
@@ -397,7 +432,6 @@ class _FolderTile extends ConsumerWidget {
 class _TrackList extends StatelessWidget {
   const _TrackList({
     required this.tracks,
-    required this.currentPath,
     required this.enabled,
     required this.onTrackTap,
     required this.onUnavailable,
@@ -408,7 +442,6 @@ class _TrackList extends StatelessWidget {
   });
 
   final List<Track> tracks;
-  final String? currentPath;
   final bool enabled;
   final ValueChanged<int> onTrackTap;
   final VoidCallback onUnavailable;
@@ -425,86 +458,57 @@ class _TrackList extends StatelessWidget {
       itemCount: tracks.length,
       itemBuilder: (context, index) {
         final track = tracks[index];
-        final isCurrent = track.uri == currentPath;
-        return Opacity(
-          key: ValueKey('track-availability-${track.uri}'),
-          opacity: track.isAvailable ? 1 : 0.48,
-          child: SizedBox(
-            height: 56,
-            child: Material(
-              color: isCurrent
-                  ? context.astraColors.surfaceHover
-                  : context.astraColors.voidColor.withValues(alpha: 0),
-              child: ListTile(
-                minVerticalPadding: 0,
+        return TrackTile(
+          track: track,
+          enabled: enabled,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (track.duration case final duration?)
+                Text(_formatDuration(duration)),
+              PopupMenuButton<_TrackAction>(
+                tooltip: 'Acciones de ${track.title}',
                 enabled: enabled,
-                leading: TrackArtwork(track: track, size: 48),
-                title: Text(
-                  track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: isCurrent
-                      ? TextStyle(color: context.astraColors.accent)
-                      : null,
-                ),
-                subtitle: Text(
-                  track.isAvailable
-                      ? track.artist ?? 'Artista desconocido'
-                      : 'No disponible',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (track.duration case final duration?)
-                      Text(_formatDuration(duration)),
-                    PopupMenuButton<_TrackAction>(
-                      tooltip: 'Acciones de ${track.title}',
-                      enabled: enabled,
-                      onSelected: (action) {
-                        switch (action) {
-                          case _TrackAction.playNext:
-                            onPlayNext(track);
-                          case _TrackAction.addToQueue:
-                            onAddToQueue(track);
-                          case _TrackAction.addToPlaylist:
-                            onAddToPlaylist(track);
-                          case _TrackAction.delete:
-                            onDelete(track);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        PopupMenuItem(
-                          value: _TrackAction.playNext,
-                          enabled: track.isAvailable,
-                          child: const Text('Reproducir a continuación'),
-                        ),
-                        PopupMenuItem(
-                          value: _TrackAction.addToQueue,
-                          enabled: track.isAvailable,
-                          child: const Text('Añadir a la cola'),
-                        ),
-                        const PopupMenuItem(
-                          value: _TrackAction.addToPlaylist,
-                          child: Text('Añadir a playlist'),
-                        ),
-                        const PopupMenuItem(
-                          value: _TrackAction.delete,
-                          child: Text('Eliminar de la biblioteca'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                onTap: !enabled
-                    ? null
-                    : track.isAvailable
-                    ? () => onTrackTap(index)
-                    : onUnavailable,
+                onSelected: (action) {
+                  switch (action) {
+                    case _TrackAction.playNext:
+                      onPlayNext(track);
+                    case _TrackAction.addToQueue:
+                      onAddToQueue(track);
+                    case _TrackAction.addToPlaylist:
+                      onAddToPlaylist(track);
+                    case _TrackAction.delete:
+                      onDelete(track);
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: _TrackAction.playNext,
+                    enabled: track.isAvailable,
+                    child: const Text('Reproducir a continuación'),
+                  ),
+                  PopupMenuItem(
+                    value: _TrackAction.addToQueue,
+                    enabled: track.isAvailable,
+                    child: const Text('Añadir a la cola'),
+                  ),
+                  const PopupMenuItem(
+                    value: _TrackAction.addToPlaylist,
+                    child: Text('Añadir a playlist'),
+                  ),
+                  const PopupMenuItem(
+                    value: _TrackAction.delete,
+                    child: Text('Eliminar de la biblioteca'),
+                  ),
+                ],
               ),
-            ),
+            ],
           ),
+          onTap: !enabled
+              ? null
+              : track.isAvailable
+              ? () => onTrackTap(index)
+              : onUnavailable,
         );
       },
     );

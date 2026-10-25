@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
-import 'package:astramusic/core/widgets/track_artwork.dart';
+import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
@@ -385,41 +385,25 @@ class _PlaylistDetailBody extends ConsumerWidget {
                   itemCount: tracks.length,
                   itemBuilder: (context, index) {
                     final track = tracks[index];
-                    return Opacity(
-                      opacity: track.isAvailable ? 1 : 0.48,
-                      child: SizedBox(
-                        height: 56,
-                        child: ListTile(
-                          leading: TrackArtwork(track: track, size: 48),
-                          title: Text(
-                            track.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    return TrackTile(
+                      track: track,
+                      onTap: track.isAvailable
+                          ? () => library.playVisibleQueue(
+                              tracks,
+                              startIndex: index,
+                            )
+                          : library.showUnavailableMessage,
+                      trailing: PopupMenuButton<bool>(
+                        tooltip: 'Acciones de ${track.title}',
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: true,
+                            child: Text('Quitar de esta playlist'),
                           ),
-                          subtitle: Text(
-                            track.isAvailable
-                                ? track.artist ?? 'Artista desconocido'
-                                : 'No disponible',
-                          ),
-                          onTap: track.isAvailable
-                              ? () => library.playVisibleQueue(
-                                  tracks,
-                                  startIndex: index,
-                                )
-                              : library.showUnavailableMessage,
-                          trailing: PopupMenuButton<bool>(
-                            tooltip: 'Acciones de ${track.title}',
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(
-                                value: true,
-                                child: Text('Quitar de esta playlist'),
-                              ),
-                            ],
-                            onSelected: (_) => ref
-                                .read(playlistRepositoryProvider)
-                                .removeTrack(playlist.id, track.id!),
-                          ),
-                        ),
+                        ],
+                        onSelected: (_) => ref
+                            .read(playlistRepositoryProvider)
+                            .removeTrack(playlist.id, track.id!),
                       ),
                     );
                   },

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
@@ -112,7 +113,7 @@ void main() {
     for (final key in const [
       Key('collapsed-library-button'),
       Key('expand-sidebar-button'),
-      Key('collapsed-playlists-button'),
+      ValueKey('collapsed-playlist-7'),
       Key('collapsed-settings-button'),
     ]) {
       final button = find.byKey(key);
@@ -182,6 +183,99 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('mobile-mini-player')), findsNothing);
   });
+
+  testWidgets(
+    'resalta por id en biblioteca, búsqueda, playlist y cola, incluso tras next',
+    (tester) async {
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+      await _setSize(tester, const Size(360, 800));
+      await tester.pumpWidget(fixture.app());
+      await tester.pump();
+      fixture.player.seedTrack(fixture.repository.tracks);
+      fixture.player.emitShuffle(true);
+      await tester.pump();
+      final initialContainer = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('mobile-shell'))),
+      );
+      expect(
+        initialContainer.read(playerControllerProvider).shuffleEnabled,
+        isTrue,
+      );
+
+      expect(
+        find.byKey(const ValueKey('current-track-indicator-0')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Buscar'));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('current-track-indicator-0')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Biblioteca'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Playlist de prueba'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('playlist-detail')), findsOneWidget);
+      expect(find.byKey(const Key('mobile-mini-player')), findsOneWidget);
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('current-track-indicator-0')),
+        findsOneWidget,
+      );
+
+      await tester.runAsync(() => fixture.player.next());
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('current-track-indicator-1')),
+        findsOneWidget,
+      );
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('library-destination')), findsOneWidget);
+      expect(find.byKey(const Key('mobile-shell')), findsOneWidget);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('mobile-shell'))),
+      );
+      container
+          .read(appDestinationProvider.notifier)
+          .select(AppDestination.queue);
+      await tester.pump();
+      expect(find.byKey(const Key('queue-destination')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('current-track-indicator-1')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'reproducir desde playlist mantiene mini reproductor y navegación móvil',
+    (tester) async {
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+      await _setSize(tester, const Size(360, 800));
+      await tester.pumpWidget(fixture.app());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Biblioteca'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Playlist de prueba'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Canción 0'));
+      await tester.pump();
+
+      expect(find.byKey(const Key('playlist-detail')), findsOneWidget);
+      expect(find.byKey(const Key('mobile-mini-player')), findsOneWidget);
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('la barra de escritorio no contiene controles extra', (
     tester,
@@ -282,7 +376,9 @@ final class _Fixture {
       trackRepositoryProvider.overrideWithValue(repository),
       isAndroidPlatformProvider.overrideWithValue(true),
       artworkCacheProvider.overrideWithValue(cache),
-      playlistRepositoryProvider.overrideWithValue(_FakePlaylistRepository()),
+      playlistRepositoryProvider.overrideWithValue(
+        _FakePlaylistRepository(repository.tracks),
+      ),
     ],
     child: MaterialApp(
       theme: buildAstraTheme(),
@@ -297,6 +393,17 @@ final class _Fixture {
 }
 
 final class _FakePlaylistRepository implements PlaylistRepository {
+  _FakePlaylistRepository(this.tracks);
+
+  final List<Track> tracks;
+  Playlist get playlist => Playlist(
+    id: 7,
+    name: 'Playlist de prueba',
+    trackCount: tracks.length,
+    createdAt: DateTime(2026),
+    updatedAt: DateTime(2026),
+  );
+
   @override
   Future<Playlist> create(String name) async => Playlist(
     id: 1,
@@ -320,13 +427,13 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   Future<void> rename(int id, String name) async {}
 
   @override
-  Stream<List<Playlist>> watchAll() => Stream.value(const []);
+  Stream<List<Playlist>> watchAll() => Stream.value([playlist]);
 
   @override
-  Stream<Playlist?> watchById(int id) => Stream.value(null);
+  Stream<Playlist?> watchById(int id) => Stream.value(playlist);
 
   @override
-  Stream<List<Track>> watchTracks(int id) => Stream.value(const []);
+  Stream<List<Track>> watchTracks(int id) => Stream.value(tracks);
 }
 
 final class _FakeTrackRepository implements TrackRepository {
@@ -396,14 +503,23 @@ final class _FakePlayer implements AudioPlayerService {
   final _repeat = StreamController<RepeatMode>.broadcast(sync: true);
   final _volume = StreamController<double>.broadcast(sync: true);
   double volume = 1;
+  List<Track> _tracks = const [];
+  var _trackIndex = 0;
 
-  void seedTrack() {
+  void seedTrack([List<Track>? tracks]) {
+    _tracks = tracks ?? const [];
+    _trackIndex = 0;
+    if (_tracks.isNotEmpty) {
+      _queue.add(List.of(_tracks));
+      _index.add(0);
+    }
     _item.add(
-      const AudioItem(
-        path: 'file:///track-0.mp3',
-        title: 'Canción actual',
-        artist: 'Artista actual',
-        duration: Duration(minutes: 3),
+      AudioItem(
+        path: _tracks.isEmpty ? 'file:///track-0.mp3' : _tracks.first.uri,
+        title: _tracks.isEmpty ? 'Canción actual' : _tracks.first.title,
+        artist: _tracks.isEmpty ? 'Artista actual' : _tracks.first.artist,
+        duration: const Duration(minutes: 3),
+        trackId: _tracks.isEmpty ? 0 : _tracks.first.id,
       ),
     );
     _duration.add(const Duration(minutes: 3));
@@ -414,6 +530,8 @@ final class _FakePlayer implements AudioPlayerService {
     volume = value;
     _volume.add(value);
   }
+
+  void emitShuffle(bool value) => _shuffle.add(value);
 
   @override
   Stream<AudioItem?> get currentItemStream => _item.stream;
@@ -444,7 +562,22 @@ final class _FakePlayer implements AudioPlayerService {
   @override
   Future<void> moveInQueue(int oldIndex, int newIndex) async {}
   @override
-  Future<void> next() async {}
+  Future<void> next() async {
+    if (_tracks.isEmpty) return;
+    _trackIndex = (_trackIndex + 1).clamp(0, _tracks.length - 1);
+    final track = _tracks[_trackIndex];
+    _index.add(_trackIndex);
+    _item.add(
+      AudioItem(
+        path: track.uri,
+        title: track.title,
+        artist: track.artist,
+        duration: track.duration,
+        trackId: track.id,
+      ),
+    );
+  }
+
   @override
   Future<void> pause() async {}
   @override
@@ -452,7 +585,23 @@ final class _FakePlayer implements AudioPlayerService {
   @override
   Future<void> playNext(Track track) async {}
   @override
-  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {}
+  Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {
+    _tracks = List.of(tracks);
+    _trackIndex = startIndex;
+    final track = tracks[startIndex];
+    _queue.add(List.of(tracks));
+    _index.add(startIndex);
+    _item.add(
+      AudioItem(
+        path: track.uri,
+        title: track.title,
+        artist: track.artist,
+        duration: track.duration,
+        trackId: track.id,
+      ),
+    );
+  }
+
   @override
   Future<void> previous() async {}
   @override

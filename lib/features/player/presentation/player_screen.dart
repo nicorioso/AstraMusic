@@ -1,3 +1,4 @@
+import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
@@ -6,7 +7,6 @@ import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
-import 'package:astramusic/features/player/presentation/queue_screen.dart';
 import 'package:astramusic/features/player/presentation/seek_bar.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,9 +28,13 @@ class PlayerScreen extends ConsumerWidget {
           IconButton(
             key: const Key('open-queue-button'),
             tooltip: 'Ver cola',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const QueueScreen()),
-            ),
+            onPressed: () {
+              final navigator = Navigator.of(context);
+              ref
+                  .read(appDestinationProvider.notifier)
+                  .select(AppDestination.queue);
+              if (navigator.canPop()) navigator.pop();
+            },
             icon: const Icon(Icons.queue_music),
           ),
         ],

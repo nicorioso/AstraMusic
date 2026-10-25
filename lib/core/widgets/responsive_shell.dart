@@ -6,12 +6,14 @@ import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/section_title.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
+import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/player_screen.dart';
+import 'package:astramusic/features/player/presentation/queue_screen.dart';
 import 'package:astramusic/features/player/presentation/seek_bar.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
@@ -156,7 +158,9 @@ class _DesktopSidebar extends ConsumerWidget {
               key: const Key('collapsed-settings-button'),
               tooltip: 'Ajustes',
               icon: Icons.settings_outlined,
-              onPressed: selectLibrary,
+              onPressed: () => ref
+                  .read(appDestinationProvider.notifier)
+                  .select(AppDestination.settings),
             ),
           ],
         ),
@@ -229,7 +233,9 @@ class _DesktopSidebar extends ConsumerWidget {
             contentPadding: const EdgeInsets.symmetric(horizontal: 12),
             leading: const Icon(Icons.settings_outlined),
             title: const Text('Ajustes'),
-            onTap: selectLibrary,
+            onTap: () => ref
+                .read(appDestinationProvider.notifier)
+                .select(AppDestination.settings),
           ),
         ],
       ),
@@ -277,7 +283,7 @@ class _DesktopCenter extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
-                if (destination.type == AppDestinationType.playlist)
+                if (navigation.canGoBack)
                   IconButton(
                     key: const Key('desktop-back-button'),
                     tooltip: 'Atrás',
@@ -326,51 +332,58 @@ class MobileShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final destination = ref.watch(appDestinationProvider);
+    final navigation = ref.read(appDestinationProvider.notifier);
     final hasCurrent = ref.watch(
       playerControllerProvider.select((state) => state.currentItem != null),
     );
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: AstraBackground(
-          child: _DestinationBody(destination: destination),
+    return PopScope(
+      canPop: !navigation.canGoBack,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && navigation.canGoBack) navigation.back();
+      },
+      child: Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: AstraBackground(
+            child: _DestinationBody(destination: destination),
+          ),
         ),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (hasCurrent) const MobileMiniPlayer(),
-            NavigationBar(
-              selectedIndex: destination.navigationIndex,
-              onDestinationSelected: (index) => ref
-                  .read(appDestinationProvider.notifier)
-                  .select(
-                    [
-                      AppDestination.home,
-                      AppDestination.search,
-                      AppDestination.library,
-                    ][index],
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasCurrent) const MobileMiniPlayer(),
+              NavigationBar(
+                selectedIndex: destination.navigationIndex,
+                onDestinationSelected: (index) => ref
+                    .read(appDestinationProvider.notifier)
+                    .select(
+                      [
+                        AppDestination.home,
+                        AppDestination.search,
+                        AppDestination.library,
+                      ][index],
+                    ),
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home),
+                    label: 'Inicio',
                   ),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home),
-                  label: 'Inicio',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.search),
-                  label: 'Buscar',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.library_music_outlined),
-                  selectedIcon: Icon(Icons.library_music),
-                  label: 'Biblioteca',
-                ),
-              ],
-            ),
-          ],
+                  NavigationDestination(
+                    icon: Icon(Icons.search),
+                    label: 'Buscar',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.library_music_outlined),
+                    selectedIcon: Icon(Icons.library_music),
+                    label: 'Biblioteca',
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -383,17 +396,17 @@ class _DestinationBody extends StatelessWidget {
   final AppDestination destination;
 
   @override
-  Widget build(BuildContext context) => switch (destination) {
-    final value when value.type == AppDestinationType.home =>
-      const SongsDestination(showSearch: false),
-    final value when value.type == AppDestinationType.search =>
-      const SongsDestination(showSearch: true),
-    final value when value.type == AppDestinationType.library =>
-      const PlaylistsDestination(),
-    final value => PlaylistDetailScreen(
-      playlistId: value.playlistId!,
+  Widget build(BuildContext context) => switch (destination.type) {
+    AppDestinationType.home => const SongsDestination(showSearch: false),
+    AppDestinationType.search => const SongsDestination(showSearch: true),
+    AppDestinationType.library => const PlaylistsDestination(),
+    AppDestinationType.playlist => PlaylistDetailScreen(
+      playlistId: destination.playlistId!,
       embedded: true,
     ),
+    AppDestinationType.queue => const QueueScreen(embedded: true),
+    AppDestinationType.folders => const MusicFoldersView(),
+    AppDestinationType.settings => const PlaylistsDestination(),
   };
 }
 
@@ -506,9 +519,6 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
 
   @override
   Widget build(BuildContext context) {
-    final currentPath = ref.watch(
-      playerControllerProvider.select((state) => state.currentItem?.path),
-    );
     final controller = ref.read(libraryControllerProvider.notifier);
     return Scrollbar(
       controller: _scrollController,
@@ -519,77 +529,49 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
         itemCount: widget.tracks.length,
         itemBuilder: (context, index) {
           final track = widget.tracks[index];
-          final current = track.uri == currentPath;
-          return Opacity(
-            key: ValueKey('track-availability-${track.uri}'),
-            opacity: track.isAvailable ? 1 : 0.48,
-            child: SizedBox(
-              height: 56,
-              child: Material(
-                color: context.astraColors.surface.withValues(alpha: 0),
-                child: ListTile(
-                  minVerticalPadding: 0,
-                  hoverColor: context.astraColors.surfaceHover,
-                  leading: TrackArtwork(track: track, size: 48),
-                  title: Text(
-                    track.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: current
-                        ? TextStyle(color: context.astraColors.accent)
-                        : null,
-                  ),
-                  subtitle: Text(
-                    track.isAvailable
-                        ? track.artist ?? 'Artista desconocido'
-                        : 'No disponible',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: PopupMenuButton<_ShellTrackAction>(
-                    tooltip: 'Acciones de ${track.title}',
-                    onSelected: (action) {
-                      switch (action) {
-                        case _ShellTrackAction.playNext:
-                          controller.playNext(track);
-                        case _ShellTrackAction.addToQueue:
-                          controller.addToQueue(track);
-                        case _ShellTrackAction.addToPlaylist:
-                          showAddTrackToPlaylist(context, ref, track);
-                        case _ShellTrackAction.delete:
-                          controller.deleteTrack(track);
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: _ShellTrackAction.playNext,
-                        enabled: track.isAvailable,
-                        child: const Text('Reproducir a continuación'),
-                      ),
-                      PopupMenuItem(
-                        value: _ShellTrackAction.addToQueue,
-                        enabled: track.isAvailable,
-                        child: const Text('Añadir a la cola'),
-                      ),
-                      const PopupMenuItem(
-                        value: _ShellTrackAction.addToPlaylist,
-                        child: Text('Añadir a playlist'),
-                      ),
-                      const PopupMenuItem(
-                        value: _ShellTrackAction.delete,
-                        child: Text('Eliminar de la biblioteca'),
-                      ),
-                    ],
-                  ),
-                  onTap: track.isAvailable
-                      ? () => controller.playVisibleQueue(
-                          widget.tracks,
-                          startIndex: index,
-                        )
-                      : controller.showUnavailableMessage,
+          return TrackTile(
+            track: track,
+            trailing: PopupMenuButton<_ShellTrackAction>(
+              tooltip: 'Acciones de ${track.title}',
+              onSelected: (action) {
+                switch (action) {
+                  case _ShellTrackAction.playNext:
+                    controller.playNext(track);
+                  case _ShellTrackAction.addToQueue:
+                    controller.addToQueue(track);
+                  case _ShellTrackAction.addToPlaylist:
+                    showAddTrackToPlaylist(context, ref, track);
+                  case _ShellTrackAction.delete:
+                    controller.deleteTrack(track);
+                }
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: _ShellTrackAction.playNext,
+                  enabled: track.isAvailable,
+                  child: const Text('Reproducir a continuación'),
                 ),
-              ),
+                PopupMenuItem(
+                  value: _ShellTrackAction.addToQueue,
+                  enabled: track.isAvailable,
+                  child: const Text('Añadir a la cola'),
+                ),
+                const PopupMenuItem(
+                  value: _ShellTrackAction.addToPlaylist,
+                  child: Text('Añadir a playlist'),
+                ),
+                const PopupMenuItem(
+                  value: _ShellTrackAction.delete,
+                  child: Text('Eliminar de la biblioteca'),
+                ),
+              ],
             ),
+            onTap: track.isAvailable
+                ? () => controller.playVisibleQueue(
+                    widget.tracks,
+                    startIndex: index,
+                  )
+                : controller.showUnavailableMessage,
           );
         },
       ),
@@ -656,10 +638,9 @@ class PlaylistsDestination extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.folder_copy_outlined),
               title: const Text('Carpetas de música'),
-              onTap: () => showDialog<void>(
-                context: context,
-                builder: (_) => const MusicFoldersDialog(),
-              ),
+              onTap: () => ref
+                  .read(appDestinationProvider.notifier)
+                  .select(AppDestination.folders),
             ),
             ListTile(
               leading: const Icon(Icons.library_add_outlined),
@@ -766,17 +747,9 @@ class _PlaylistTile extends StatelessWidget {
 }
 
 void _openPlaylist(BuildContext context, WidgetRef ref, int playlistId) {
-  if (MediaQuery.sizeOf(context).width >= desktopBreakpoint) {
-    ref
-        .read(appDestinationProvider.notifier)
-        .select(AppDestination.playlist(playlistId));
-    return;
-  }
-  Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => PlaylistDetailScreen(playlistId: playlistId),
-    ),
-  );
+  ref
+      .read(appDestinationProvider.notifier)
+      .select(AppDestination.playlist(playlistId));
 }
 
 class MobileMiniPlayer extends ConsumerWidget {

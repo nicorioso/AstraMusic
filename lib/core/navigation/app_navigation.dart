@@ -1,7 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum AppDestinationType { home, search, library, playlist }
+enum AppDestinationType {
+  home,
+  search,
+  library,
+  playlist,
+  queue,
+  folders,
+  settings,
+}
 
 @immutable
 class AppDestination {
@@ -10,6 +18,9 @@ class AppDestination {
   static const home = AppDestination._(AppDestinationType.home);
   static const search = AppDestination._(AppDestinationType.search);
   static const library = AppDestination._(AppDestinationType.library);
+  static const queue = AppDestination._(AppDestinationType.queue);
+  static const folders = AppDestination._(AppDestinationType.folders);
+  static const settings = AppDestination._(AppDestinationType.settings);
 
   factory AppDestination.playlist(int id) =>
       AppDestination._(AppDestinationType.playlist, id);
@@ -20,7 +31,11 @@ class AppDestination {
   int get navigationIndex => switch (type) {
     AppDestinationType.home => 0,
     AppDestinationType.search => 1,
-    AppDestinationType.library || AppDestinationType.playlist => 2,
+    AppDestinationType.library ||
+    AppDestinationType.playlist ||
+    AppDestinationType.queue ||
+    AppDestinationType.folders ||
+    AppDestinationType.settings => 2,
   };
 
   @override
@@ -47,7 +62,10 @@ class AppNavigation extends Notifier<AppDestination> {
 
   void select(AppDestination destination) {
     if (destination == state) return;
-    if (destination.type == AppDestinationType.playlist) {
+    if (destination.type == AppDestinationType.playlist ||
+        destination.type == AppDestinationType.queue ||
+        destination.type == AppDestinationType.folders ||
+        destination.type == AppDestinationType.settings) {
       _history.add(state);
     } else {
       _history.clear();

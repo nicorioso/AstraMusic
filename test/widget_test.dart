@@ -104,10 +104,12 @@ void main() {
     expect(find.text('Repetir: una canción'), findsOneWidget);
     expect(find.byIcon(Icons.repeat_one), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('open-queue-button')));
-    await tester.pumpAndSettle();
+    await tester.pumpWidget(_queueTestApp(service));
+    await tester.pump();
+    service.seedQueue(1);
+    await tester.pump();
     expect(find.byKey(const Key('current-queue-item')), findsOneWidget);
-    expect(find.text('cancion'), findsOneWidget);
+    expect(find.text('Canción 0'), findsOneWidget);
   });
 
   testWidgets('un fallo de aleatorio no deshabilita los controles', (
@@ -209,8 +211,10 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull);
 
-      await tester.tap(find.byKey(const Key('open-queue-button')));
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(_queueTestApp(service));
+      await tester.pump();
+      service.seedQueue(1);
+      await tester.pump();
       expect(find.byType(QueueScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -301,6 +305,12 @@ Widget _testApp({
   );
 }
 
+Widget _queueTestApp(AudioPlayerService service) => _testApp(
+  service: service,
+  picker: const FakeAudioFilePicker(null),
+  home: const QueueScreen(),
+);
+
 final class FakeAudioFilePicker implements AudioFilePicker {
   const FakeAudioFilePicker(this.file);
 
@@ -336,6 +346,7 @@ final class FakeAudioPlayerService implements AudioPlayerService {
     final tracks = List.generate(
       count,
       (index) => Track(
+        id: index + 1,
         uri: 'file:///cancion-$index.mp3',
         title: 'Canción $index',
         artist: 'Artista $index',
@@ -351,6 +362,7 @@ final class FakeAudioPlayerService implements AudioPlayerService {
         title: tracks.first.title,
         artist: tracks.first.artist,
         duration: tracks.first.duration,
+        trackId: tracks.first.id,
       ),
     );
     _durationController.add(tracks.first.duration);
@@ -404,10 +416,11 @@ final class FakeAudioPlayerService implements AudioPlayerService {
 
     const duration = Duration(minutes: 3);
     _currentItemController.add(
-      AudioItem(path: path, title: title, duration: duration),
+      AudioItem(path: path, title: title, duration: duration, trackId: 1),
     );
     _queueController.add([
       Track(
+        id: 1,
         uri: path,
         title: title,
         duration: duration,
