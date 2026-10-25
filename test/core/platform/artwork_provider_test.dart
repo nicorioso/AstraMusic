@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/features/library/domain/track.dart';
@@ -72,5 +74,75 @@ void main() {
     );
 
     await expectLater(provider.artworkFor(track, size: 48), completion(isNull));
+  });
+
+  test('elige la fuente por uri y artworkPath, no por plataforma', () {
+    Track track(String uri, {String? artworkPath}) => Track(
+      uri: uri,
+      title: 'Canción',
+      dateAdded: DateTime(2026),
+      artworkPath: artworkPath,
+    );
+
+    expect(
+      artworkSourceFor(track('/cache/song.mp3', artworkPath: '/cover.jpg')),
+      ArtworkSource.file,
+    );
+    expect(
+      artworkSourceFor(track('content://media/external/audio/media/1')),
+      ArtworkSource.mediaStore,
+    );
+    expect(artworkSourceFor(track('/cache/song.mp3')), ArtworkSource.none);
+  });
+
+  test('limita a tres cargas y deduplica peticiones iguales', () async {
+    final directory = await Directory.systemTemp.createTemp('artwork_load_');
+    addTearDown(() => directory.delete(recursive: true));
+    var active = 0;
+    var maximum = 0;
+    var calls = 0;
+    final gates = <Completer<void>>[];
+    final provider = CachedArtworkProvider(
+      cacheDirectory: () async => directory,
+      thumbnailLoader: (uri, size) async {
+        calls++;
+        active++;
+        maximum = maximum < active ? active : maximum;
+        final gate = Completer<void>();
+        gates.add(gate);
+        await gate.future;
+        active--;
+        return Uint8List.fromList([1, 2, 3]);
+      },
+    );
+    Track track(int id) => Track(
+      uri: 'content://media/audio/$id',
+      title: '$id',
+      dateAdded: DateTime(2026),
+    );
+
+    final duplicateA = provider.artworkFor(track(1), size: 256);
+    final duplicateB = provider.artworkFor(track(1), size: 256);
+    final futures = [
+      duplicateA,
+      duplicateB,
+      for (var id = 2; id <= 5; id++) provider.artworkFor(track(id), size: 256),
+    ];
+    for (var attempt = 0; calls < 3 && attempt < 20; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(calls, 3);
+    expect(maximum, 3);
+    while (gates.length < 5 || gates.any((gate) => !gate.isCompleted)) {
+      for (final gate in List.of(gates)) {
+        if (!gate.isCompleted) gate.complete();
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+    await Future.wait(futures);
+
+    expect(calls, 5);
+    expect(maximum, 3);
+    expect(await duplicateA, await duplicateB);
   });
 }

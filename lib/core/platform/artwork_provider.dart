@@ -13,6 +13,16 @@ abstract interface class ArtworkProvider {
 
 enum ArtworkUsage { list, miniPlayer, player }
 
+enum ArtworkSource { file, mediaStore, none }
+
+ArtworkSource artworkSourceFor(Track track) {
+  final artworkPath = track.artworkPath?.trim();
+  if (artworkPath != null && artworkPath.isNotEmpty) return ArtworkSource.file;
+  return Uri.tryParse(track.uri)?.scheme.toLowerCase() == 'content'
+      ? ArtworkSource.mediaStore
+      : ArtworkSource.none;
+}
+
 int artworkThumbnailBucket(ArtworkUsage usage) => switch (usage) {
   ArtworkUsage.list || ArtworkUsage.miniPlayer => 256,
   ArtworkUsage.player => 640,
@@ -68,69 +78,130 @@ File? selectFolderArtwork(Directory directory) {
 }
 
 final class CachedArtworkProvider implements ArtworkProvider {
-  CachedArtworkProvider({MethodChannel? channel, this.memoryCapacity = 64})
-    : _channel = channel ?? const MethodChannel(_channelName);
+  CachedArtworkProvider({
+    MethodChannel? channel,
+    this.cacheDirectory,
+    this.thumbnailLoader,
+    this.memoryCapacityBytes = 8 * 1024 * 1024,
+    this.maxConcurrentLoads = 3,
+  }) : _channel = channel ?? const MethodChannel(_channelName),
+       assert(maxConcurrentLoads > 0);
 
   static const _channelName = 'com.nicorioso.astramusic/artwork';
   final MethodChannel _channel;
-  final int memoryCapacity;
-  final LinkedHashMap<String, String?> _memory = LinkedHashMap();
+  final Future<Directory> Function()? cacheDirectory;
+  final Future<Uint8List?> Function(String uri, int size)? thumbnailLoader;
+  final int memoryCapacityBytes;
+  final int maxConcurrentLoads;
+  final LinkedHashMap<String, _MemoryArtwork> _memory = LinkedHashMap();
   final Map<String, Future<String?>> _pending = {};
+  final Queue<Completer<void>> _loadWaiters = Queue();
+  var _memoryBytes = 0;
+  var _activeLoads = 0;
 
   @override
   Future<String?> artworkFor(Track track, {required int size}) {
-    final existing = track.artworkPath;
-    if (existing != null) {
-      try {
-        if (File(existing).existsSync()) return Future.value(existing);
-      } on Object {
-        // Una ruta de caché inválida o eliminada se trata como caché ausente.
-      }
-    }
-    if (!Platform.isAndroid) return Future.value(null);
     final bucket = normalizeArtworkThumbnailBucket(size);
-    final key = '${track.uri}@$bucket';
-    if (_memory.containsKey(key)) {
-      final value = _memory.remove(key);
-      _memory[key] = value;
-      return Future.value(value);
+    final source = artworkSourceFor(track);
+    final sourceValue = switch (source) {
+      ArtworkSource.file => track.artworkPath!.trim(),
+      ArtworkSource.mediaStore => track.uri,
+      ArtworkSource.none => '',
+    };
+    if (source == ArtworkSource.none) return Future.value(null);
+    final key = '${source.name}:$sourceValue@$bucket';
+    final cached = _memory.remove(key);
+    if (cached != null) {
+      _memory[key] = cached;
+      return Future.value(cached.path);
     }
-    return _pending.putIfAbsent(key, () => _loadAndroid(track, bucket, key));
+    return _pending.putIfAbsent(
+      key,
+      () => _load(track, bucket, key, source, sourceValue),
+    );
   }
 
-  Future<String?> _loadAndroid(Track track, int size, String memoryKey) async {
+  Future<String?> _load(
+    Track track,
+    int size,
+    String memoryKey,
+    ArtworkSource source,
+    String sourceValue,
+  ) async {
+    await _acquireLoadSlot();
     String? result;
+    Uint8List? bytes;
     try {
-      final cache = await getApplicationCacheDirectory();
-      final directory = Directory(path.join(cache.path, 'artwork'));
-      await directory.create(recursive: true);
-      final file = File(
-        path.join(
-          directory.path,
-          '${artworkBucketCacheKey(artist: track.artist, album: track.album, uri: track.uri, bucket: size)}.jpg',
-        ),
-      );
-      if (await file.exists()) {
-        result = file.path;
-      } else {
-        final bytes = await _channel.invokeMethod<Uint8List>('loadThumbnail', {
-          'uri': track.uri,
-          'size': size,
-        });
-        if (bytes != null && bytes.isNotEmpty) {
-          await file.writeAsBytes(bytes, flush: true);
+      if (source == ArtworkSource.file) {
+        final file = File(sourceValue);
+        if (await file.exists()) {
+          bytes = await file.readAsBytes();
           result = file.path;
+        }
+      } else {
+        final cache =
+            await (cacheDirectory?.call() ?? getApplicationCacheDirectory());
+        final directory = Directory(path.join(cache.path, 'artwork'));
+        await directory.create(recursive: true);
+        final file = File(
+          path.join(
+            directory.path,
+            '${artworkBucketCacheKey(artist: track.artist, album: track.album, uri: track.uri, bucket: size)}.jpg',
+          ),
+        );
+        if (await file.exists()) {
+          bytes = await file.readAsBytes();
+          result = file.path;
+        } else {
+          bytes =
+              await (thumbnailLoader?.call(track.uri, size) ??
+                  _channel.invokeMethod<Uint8List>('loadThumbnail', {
+                    'uri': track.uri,
+                    'size': size,
+                  }));
+          if (bytes != null && bytes.isNotEmpty) {
+            await file.writeAsBytes(bytes, flush: true);
+            result = file.path;
+          }
         }
       }
     } on Object {
       result = null;
     } finally {
-      unawaited(_pending.remove(memoryKey)!);
+      _pending.remove(memoryKey)?.ignore();
+      _releaseLoadSlot();
     }
-    _memory[memoryKey] = result;
-    while (_memory.length > memoryCapacity) {
-      _memory.remove(_memory.keys.first);
+    if (result != null && bytes != null && bytes.isNotEmpty) {
+      _memory[memoryKey] = _MemoryArtwork(result, bytes);
+      _memoryBytes += bytes.lengthInBytes;
+      while (_memoryBytes > memoryCapacityBytes && _memory.length > 1) {
+        final removed = _memory.remove(_memory.keys.first)!;
+        _memoryBytes -= removed.bytes.lengthInBytes;
+      }
     }
     return result;
   }
+
+  Future<void> _acquireLoadSlot() async {
+    if (_activeLoads < maxConcurrentLoads) {
+      _activeLoads++;
+      return;
+    }
+    final waiter = Completer<void>();
+    _loadWaiters.add(waiter);
+    await waiter.future;
+    _activeLoads++;
+  }
+
+  void _releaseLoadSlot() {
+    _activeLoads--;
+    if (_loadWaiters.isNotEmpty) _loadWaiters.removeFirst().complete();
+  }
+}
+
+final class _MemoryArtwork {
+  const _MemoryArtwork(this.path, this.bytes);
+
+  final String path;
+  final Uint8List bytes;
 }

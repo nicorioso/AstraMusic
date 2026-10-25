@@ -13,6 +13,7 @@ import 'package:astramusic/features/library/presentation/scan_state_machine.dart
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 final libraryControllerProvider =
     NotifierProvider<LibraryController, LibraryViewState>(
@@ -217,6 +218,12 @@ final class LibraryController extends Notifier<LibraryViewState> {
       if (files.isEmpty || !ref.mounted) return;
 
       final addedAt = DateTime.now();
+      final hasLocalFiles = files.any(
+        (file) => localFilePathFromLocation(file.path) != null,
+      );
+      final cacheDirectory = hasLocalFiles
+          ? await getApplicationCacheDirectory()
+          : null;
       final tracks = <Track>[];
       var tagErrors = 0;
       for (final file in files) {
@@ -225,7 +232,10 @@ final class LibraryController extends Notifier<LibraryViewState> {
         if (localPath != null) {
           try {
             final readInfo = await Isolate.run(
-              () => readLocalAudioFile(localPath),
+              () => readLocalAudioFileWithArtwork(
+                localPath,
+                cacheDirectory!.path,
+              ),
             );
             info = readInfo;
             if (readInfo.hadTagError) tagErrors++;
@@ -248,6 +258,7 @@ final class LibraryController extends Notifier<LibraryViewState> {
             fileSize: info?.fileSize,
             dateAdded: addedAt,
             dateModified: info?.dateModified,
+            artworkPath: info?.artworkPath,
           ),
         );
       }
