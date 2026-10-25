@@ -43,7 +43,19 @@ class _PlayCircleButtonState extends State<PlayCircleButton> {
             foregroundColor: colors.onAccent,
             disabledForegroundColor: colors.surface,
           ),
-          icon: Icon(widget.isPlaying ? Icons.pause : Icons.play_arrow),
+          icon: AnimatedSwitcher(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 180),
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            layoutBuilder: (currentChild, previousChildren) =>
+                currentChild ?? const SizedBox.shrink(),
+            child: Icon(
+              widget.isPlaying ? Icons.pause : Icons.play_arrow,
+              key: ValueKey(widget.isPlaying),
+            ),
+          ),
         ),
       ),
     );

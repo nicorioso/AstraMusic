@@ -213,12 +213,16 @@ void main() {
     expect(find.byKey(const Key('play-pause-button')), findsOneWidget);
   });
 
-  for (final size in const [Size(360, 800), Size(1200, 800)]) {
+  for (final size in const [Size(360, 800), Size(937, 1029), Size(1400, 900)]) {
     testWidgets('reproductor y cola no desbordan a ${size.width.toInt()} px', (
       tester,
     ) async {
       await tester.binding.setSurfaceSize(size);
       addTearDown(() => tester.binding.setSurfaceSize(null));
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
       final service = FakeAudioPlayerService();
       addTearDown(service.dispose);
 
@@ -272,12 +276,16 @@ void main() {
     expect(find.text('Canción 7'), findsOneWidget);
   });
 
-  for (final size in const [Size(360, 800), Size(937, 1029)]) {
+  for (final size in const [Size(360, 800), Size(937, 1029), Size(1400, 900)]) {
     testWidgets('controles visibles y alcanzables a ${size.width.toInt()} px', (
       tester,
     ) async {
       await tester.binding.setSurfaceSize(size);
       addTearDown(() => tester.binding.setSurfaceSize(null));
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
       final service = FakeAudioPlayerService();
       addTearDown(service.dispose);
 
@@ -287,17 +295,18 @@ void main() {
       service.seedQueue(1);
       await tester.pump();
 
-      for (final key in const [
-        Key('current-audio-title'),
-        Key('current-audio-artist'),
-        Key('play-pause-button'),
-        Key('next-button'),
-        Key('previous-button'),
-        Key('shuffle-button'),
-        Key('repeat-button'),
-        Key('seek-slider'),
-        Key('open-queue-button'),
-      ]) {
+      final controlKeys = <Key>[
+        const Key('current-audio-title'),
+        const Key('current-audio-artist'),
+        const Key('play-pause-button'),
+        const Key('next-button'),
+        const Key('previous-button'),
+        const Key('shuffle-button'),
+        const Key('repeat-button'),
+        const Key('seek-slider'),
+        if (size.width < 840) const Key('open-queue-button'),
+      ];
+      for (final key in controlKeys) {
         final finder = find.byKey(key);
         expect(finder, findsOneWidget);
         expect(
@@ -309,8 +318,113 @@ void main() {
         expect(rect.top, greaterThanOrEqualTo(0));
         expect(rect.bottom, lessThanOrEqualTo(size.height));
       }
+      if (size.width >= 840) {
+        expect(find.byKey(const Key('desktop-queue-title')), findsOneWidget);
+        expect(find.byKey(const Key('current-queue-item')), findsOneWidget);
+      }
     });
   }
+
+  testWidgets('la cola integrada resalta la actual y permite saltar', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1400, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final service = FakeAudioPlayerService();
+    addTearDown(service.dispose);
+    await tester.pumpWidget(
+      _testApp(service: service, picker: const FakeAudioFilePicker(null)),
+    );
+    service.seedQueue(2);
+    await tester.pump();
+
+    expect(find.byKey(const Key('current-queue-item')), findsOneWidget);
+    await tester.tap(find.text('Canción 1'));
+    await tester.pump();
+    expect(service.skippedIndex, 1);
+  });
+
+  testWidgets('deslizar hacia abajo cierra el reproductor móvil', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final service = FakeAudioPlayerService();
+    addTearDown(service.dispose);
+    await tester.pumpWidget(
+      _testApp(
+        service: service,
+        picker: const FakeAudioFilePicker(null),
+        home: Builder(
+          builder: (context) => TextButton(
+            key: const Key('launch-player'),
+            onPressed: () =>
+                Navigator.of(context).push(playerScreenRoute(context)),
+            child: const Text('Abrir'),
+          ),
+        ),
+      ),
+    );
+    service.seedQueue(1);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('launch-player')));
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const Key('swipe-to-close')),
+      const Offset(0, 140),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(PlayerScreen), findsNothing);
+  });
+
+  testWidgets('disableAnimations elimina transiciones y errores', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1400, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final service = FakeAudioPlayerService();
+    addTearDown(service.dispose);
+    await tester.pumpWidget(
+      _testApp(
+        service: service,
+        picker: const FakeAudioFilePicker(null),
+        disableAnimations: true,
+      ),
+    );
+    service.seedQueue(1);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('play-pause-button')));
+    await tester.pump();
+
+    for (final switcher in tester.widgetList<AnimatedSwitcher>(
+      find.byType(AnimatedSwitcher),
+    )) {
+      expect(switcher.duration, Duration.zero);
+    }
+    expect(find.byKey(const Key('playing-indicator')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('el indicador queda detenido sin reproducción', (tester) async {
+    final service = FakeAudioPlayerService();
+    addTearDown(service.dispose);
+    await tester.pumpWidget(_queueTestApp(service));
+    service.seedQueue(1);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byKey(const Key('playing-indicator')), findsOneWidget);
+    expect(tester.binding.transientCallbackCount, 0);
+  });
 }
 
 Widget _testApp({
@@ -318,6 +432,7 @@ Widget _testApp({
   required AudioFilePicker picker,
   Widget home = const PlayerScreen(),
   TrackRepository? trackRepository,
+  bool disableAnimations = false,
 }) {
   final repository = trackRepository ?? _FavoriteTrackRepository();
   return ProviderScope(
@@ -331,6 +446,11 @@ Widget _testApp({
       darkTheme: buildAstraTheme(),
       themeMode: ThemeMode.dark,
       themeAnimationDuration: Duration.zero,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(disableAnimations: disableAnimations),
+        child: child!,
+      ),
       home: home,
     ),
   );
@@ -430,6 +550,7 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   final _repeatController = StreamController<RepeatMode>.broadcast(sync: true);
   final _volumeController = StreamController<double>.broadcast(sync: true);
   double volume = 1;
+  int? skippedIndex;
 
   void seedQueue(int count) {
     final tracks = List.generate(
@@ -586,7 +707,9 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   }
 
   @override
-  Future<void> skipToIndex(int index) async {}
+  Future<void> skipToIndex(int index) async {
+    skippedIndex = index;
+  }
 
   @override
   Future<void> play() async {

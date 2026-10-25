@@ -12,6 +12,38 @@ import 'package:astramusic/features/player/presentation/seek_bar.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+Route<void> playerScreenRoute(BuildContext context) {
+  final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+  final duration = animationsDisabled
+      ? Duration.zero
+      : const Duration(milliseconds: 220);
+  return PageRouteBuilder<void>(
+    transitionDuration: duration,
+    reverseTransitionDuration: duration,
+    pageBuilder: (_, _, _) => const PlayerScreen(),
+    transitionsBuilder: (_, animation, _, child) {
+      if (animationsDisabled) return child;
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.025),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+String playerArtworkHeroTag(String uri) => 'player-artwork-$uri';
+
 class PlayerScreen extends ConsumerWidget {
   const PlayerScreen({super.key});
 
@@ -53,13 +85,13 @@ class _SwipeToCloseState extends State<_SwipeToClose> {
   double _distance = 0;
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) => Listener(
     behavior: HitTestBehavior.translucent,
-    onVerticalDragStart: (_) => _distance = 0,
-    onVerticalDragUpdate: (details) {
-      if (details.delta.dy > 0) _distance += details.delta.dy;
+    onPointerDown: (_) => _distance = 0,
+    onPointerMove: (event) {
+      if (event.delta.dy > 0) _distance += event.delta.dy;
     },
-    onVerticalDragEnd: (_) {
+    onPointerUp: (_) {
       if (_distance >= 80) Navigator.of(context).maybePop();
     },
     child: widget.child,
@@ -255,13 +287,25 @@ class _CurrentTrack extends ConsumerWidget {
     final isFavorite =
         item?.trackId != null &&
         (favoriteIds?.contains(item!.trackId) ?? false);
+    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+    final switchDuration = animationsDisabled
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
     return Column(
       children: [
         if (item != null) ...[
-          TrackArtwork(
-            track: _trackFor(item),
-            size: artworkSize,
-            usage: ArtworkUsage.player,
+          Hero(
+            tag: playerArtworkHeroTag(item.path),
+            transitionOnUserGestures: true,
+            child: AnimatedSwitcher(
+              duration: switchDuration,
+              child: TrackArtwork(
+                key: ValueKey(item.path),
+                track: _trackFor(item),
+                size: artworkSize,
+                usage: ArtworkUsage.player,
+              ),
+            ),
           ),
           const SizedBox(height: 24),
         ],
@@ -269,13 +313,19 @@ class _CurrentTrack extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Flexible(
-              child: Text(
-                item?.title ?? 'Ningún archivo seleccionado',
-                key: const Key('current-audio-title'),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge,
+              child: AnimatedSwitcher(
+                duration: switchDuration,
+                child: KeyedSubtree(
+                  key: ValueKey(item?.path),
+                  child: Text(
+                    item?.title ?? 'Ningún archivo seleccionado',
+                    key: const Key('current-audio-title'),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
               ),
             ),
             if (item?.trackId case final trackId?)

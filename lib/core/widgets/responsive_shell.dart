@@ -1286,8 +1286,12 @@ class MobileMiniPlayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(playerControllerProvider);
-    final item = state.currentItem!;
+    final playback = ref.watch(
+      playerControllerProvider.select(
+        (state) => (state.currentItem!, state.status, state.isPlaying),
+      ),
+    );
+    final item = playback.$1;
     final track = Track(
       uri: item.path,
       title: item.title,
@@ -1306,57 +1310,90 @@ class MobileMiniPlayer extends ConsumerWidget {
           borderRadius: BorderRadius.circular(8),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
-            ),
+            onTap: () => Navigator.of(context).push(playerScreenRoute(context)),
             child: SizedBox(
               height: 64,
-              child: Row(
+              child: Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: TrackArtwork(
-                      track: track,
-                      size: 48,
-                      usage: ArtworkUsage.miniPlayer,
-                    ),
-                  ),
                   Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Hero(
+                            tag: playerArtworkHeroTag(item.path),
+                            transitionOnUserGestures: true,
+                            child: TrackArtwork(
+                              track: track,
+                              size: 46,
+                              usage: ArtworkUsage.miniPlayer,
+                            ),
+                          ),
                         ),
-                        Text(
-                          item.artist ?? 'Artista desconocido',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                item.artist ?? 'Artista desconocido',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
                         ),
+                        PlayCircleButton(
+                          key: const Key('mobile-mini-play-button'),
+                          onPressed: playback.$2 == AudioPlaybackStatus.error
+                              ? null
+                              : ref
+                                    .read(playerControllerProvider.notifier)
+                                    .togglePlayback,
+                          isPlaying: playback.$3,
+                          size: 48,
+                        ),
+                        const SizedBox(width: 8),
                       ],
                     ),
                   ),
-                  PlayCircleButton(
-                    key: const Key('mobile-mini-play-button'),
-                    onPressed: state.status == AudioPlaybackStatus.error
-                        ? null
-                        : ref
-                              .read(playerControllerProvider.notifier)
-                              .togglePlayback,
-                    isPlaying: state.isPlaying,
-                    size: 48,
-                  ),
-                  const SizedBox(width: 8),
+                  const _MobileMiniProgress(),
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _MobileMiniProgress extends ConsumerWidget {
+  const _MobileMiniProgress();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref.watch(
+      playerControllerProvider.select(
+        (state) => (state.position, state.duration),
+      ),
+    );
+    final duration = progress.$2?.inMilliseconds ?? 0;
+    final value = duration <= 0
+        ? 0.0
+        : (progress.$1.inMilliseconds / duration).clamp(0.0, 1.0);
+    return LinearProgressIndicator(
+      key: const Key('mobile-mini-progress'),
+      value: value,
+      minHeight: 2,
+      backgroundColor: context.astraColors.divider,
+      color: context.astraColors.photon,
     );
   }
 }
@@ -1517,8 +1554,7 @@ class _DesktopNowPlaying extends StatelessWidget {
     );
     return InkWell(
       key: const Key('desktop-now-playing'),
-      onTap: () => Navigator.of(context)
-          .push(MaterialPageRoute<void>(builder: (_) => const PlayerScreen())),
+      onTap: () => Navigator.of(context).push(playerScreenRoute(context)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(

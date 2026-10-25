@@ -567,24 +567,26 @@ class _MiniPlayer extends ConsumerWidget {
         color: context.astraColors.surfaceRaised,
         child: InkWell(
           key: const Key('mini-player'),
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: (_) => const PlayerScreen())),
+          onTap: () => Navigator.of(context).push(playerScreenRoute(context)),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                TrackArtwork(
-                  track: Track(
-                    uri: currentItem!.path,
-                    title: currentItem.title,
-                    artist: currentItem.artist,
-                    duration: currentItem.duration,
-                    dateAdded: DateTime.fromMillisecondsSinceEpoch(0),
-                    artworkPath: currentItem.artworkPath,
+                Hero(
+                  tag: playerArtworkHeroTag(currentItem!.path),
+                  transitionOnUserGestures: true,
+                  child: TrackArtwork(
+                    track: Track(
+                      uri: currentItem.path,
+                      title: currentItem.title,
+                      artist: currentItem.artist,
+                      duration: currentItem.duration,
+                      dateAdded: DateTime.fromMillisecondsSinceEpoch(0),
+                      artworkPath: currentItem.artworkPath,
+                    ),
+                    size: 48,
+                    usage: ArtworkUsage.miniPlayer,
                   ),
-                  size: 48,
-                  usage: ArtworkUsage.miniPlayer,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
