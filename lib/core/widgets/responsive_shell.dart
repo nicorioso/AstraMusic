@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
+import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/section_title.dart';
@@ -323,7 +326,9 @@ class _DesktopCenter extends ConsumerWidget {
               ],
             ),
           ),
-          Expanded(child: _DestinationBody(destination: destination)),
+          Expanded(
+            child: _DestinationBody(destination: destination, desktop: true),
+          ),
         ],
       ),
     );
@@ -349,7 +354,7 @@ class MobileShell extends ConsumerWidget {
         body: SafeArea(
           bottom: false,
           child: AstraBackground(
-            child: _DestinationBody(destination: destination),
+            child: _DestinationBody(destination: destination, desktop: false),
           ),
         ),
         bottomNavigationBar: SafeArea(
@@ -395,14 +400,15 @@ class MobileShell extends ConsumerWidget {
 }
 
 class _DestinationBody extends StatelessWidget {
-  const _DestinationBody({required this.destination});
+  const _DestinationBody({required this.destination, required this.desktop});
 
   final AppDestination destination;
+  final bool desktop;
 
   @override
   Widget build(BuildContext context) => switch (destination.type) {
-    AppDestinationType.home => const SongsDestination(showSearch: false),
-    AppDestinationType.search => const SongsDestination(showSearch: true),
+    AppDestinationType.home => HomeDestination(desktop: desktop),
+    AppDestinationType.search => SearchDestination(desktop: desktop),
     AppDestinationType.library => const PlaylistsDestination(),
     AppDestinationType.playlist => PlaylistDetailScreen(
       playlistId: destination.playlistId!,
@@ -410,18 +416,19 @@ class _DestinationBody extends StatelessWidget {
     ),
     AppDestinationType.queue => const QueueScreen(embedded: true),
     AppDestinationType.folders => const MusicFoldersView(),
-    AppDestinationType.settings => const PlaylistsDestination(),
+    AppDestinationType.settings => const SettingsDestination(),
   };
 }
 
-class SongsDestination extends ConsumerWidget {
-  const SongsDestination({required this.showSearch, super.key});
+class HomeDestination extends ConsumerWidget {
+  const HomeDestination({required this.desktop, super.key});
 
-  final bool showSearch;
+  final bool desktop;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tracks = ref.watch(libraryTracksProvider);
+    final tracks = ref.watch(allLibraryTracksProvider);
+    final shortcuts = ref.watch(homePlaylistShortcutsProvider);
     final state = ref.watch(libraryControllerProvider);
     final controller = ref.read(libraryControllerProvider.notifier);
     ref.listen<String?>(
@@ -435,11 +442,226 @@ class SongsDestination extends ConsumerWidget {
       },
     );
     return Column(
-      key: Key(showSearch ? 'search-destination' : 'home-destination'),
+      key: const Key('home-destination'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionTitle(showSearch ? 'Buscar' : 'Inicio'),
-        if (showSearch)
+        const SectionTitle('Inicio'),
+        Expanded(
+          key: const Key('destination-content'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (shortcuts.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: _HomeShortcutGrid(
+                    shortcuts: shortcuts,
+                    desktop: desktop,
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Canciones recientes',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    PlayCircleButton(
+                      key: const Key('home-play-all-button'),
+                      size: 48,
+                      onPressed: state.actionsDisabled
+                          ? null
+                          : () => tracks.whenData((items) {
+                              final recent = _byNewest(items);
+                              controller.playAll(recent);
+                            }),
+                      isPlaying: ref.watch(playerControllerProvider).isPlaying,
+                    ),
+                    IconButton(
+                      key: const Key('home-shuffle-button'),
+                      tooltip: 'Aleatorio',
+                      onPressed: state.actionsDisabled
+                          ? null
+                          : () => tracks.whenData((items) {
+                              final recent = _byNewest(items);
+                              controller.playAll(recent, shuffle: true);
+                            }),
+                      icon: const Icon(Icons.shuffle),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: tracks.when(
+                  data: (items) {
+                    final recent = _byNewest(items);
+                    return recent.isEmpty
+                        ? _EmptyTracksState(desktop: desktop)
+                        : _ResponsiveTrackList(
+                            tracks: recent,
+                            desktop: desktop,
+                          );
+                  },
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (error, stackTrace) => Center(
+                    child: Text('No fue posible cargar la biblioteca: $error'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+List<Track> _byNewest(List<Track> tracks) => [...tracks]
+  ..sort((a, b) {
+    final byDate = b.dateAdded.compareTo(a.dateAdded);
+    return byDate != 0 ? byDate : (b.id ?? -1).compareTo(a.id ?? -1);
+  });
+
+class _HomeShortcutGrid extends StatelessWidget {
+  const _HomeShortcutGrid({required this.shortcuts, required this.desktop});
+
+  final List<HomePlaylistShortcut> shortcuts;
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      key: const Key('home-shortcut-grid'),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: desktop ? 4 : 2,
+        mainAxisExtent: 64,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: shortcuts.length,
+      itemBuilder: (_, index) => _HomeShortcutTile(
+        shortcut: shortcuts[index],
+        showPlayOnHover: desktop,
+      ),
+    );
+  }
+}
+
+class _HomeShortcutTile extends ConsumerStatefulWidget {
+  const _HomeShortcutTile({
+    required this.shortcut,
+    required this.showPlayOnHover,
+  });
+
+  final HomePlaylistShortcut shortcut;
+  final bool showPlayOnHover;
+
+  @override
+  ConsumerState<_HomeShortcutTile> createState() => _HomeShortcutTileState();
+}
+
+class _HomeShortcutTileState extends ConsumerState<_HomeShortcutTile> {
+  var _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final shortcut = widget.shortcut;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        key: ValueKey(
+          shortcut.isFavorites
+              ? 'home-shortcut-favorites'
+              : 'home-shortcut-${shortcut.playlist!.id}',
+        ),
+        color: context.astraColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(6),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _openPlaylist(
+            context,
+            ref,
+            shortcut.isFavorites ? favoritesPlaylistId : shortcut.playlist!.id,
+          ),
+          child: Row(
+            children: [
+              if (shortcut.isFavorites)
+                const FavoritesArtwork(size: 64)
+              else
+                PlaylistCover(playlist: shortcut.playlist!, size: 64),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  shortcut.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ),
+              if (!widget.showPlayOnHover || _hovered)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: PlayCircleButton(
+                    key: ValueKey(
+                      shortcut.isFavorites
+                          ? 'home-shortcut-play-favorites'
+                          : 'home-shortcut-play-${shortcut.playlist!.id}',
+                    ),
+                    size: 44,
+                    isPlaying: false,
+                    onPressed: () => unawaited(_play(shortcut)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _play(HomePlaylistShortcut shortcut) async {
+    final library = ref.read(libraryControllerProvider.notifier);
+    if (shortcut.isFavorites) {
+      final tracks = await ref
+          .read(trackRepositoryProvider)
+          .watchFavorites()
+          .first;
+      await library.playAll(tracks);
+      return;
+    }
+    final playlist = shortcut.playlist!;
+    final tracks = await ref
+        .read(playlistRepositoryProvider)
+        .watchTracks(playlist.id)
+        .first;
+    await library.playPlaylist(playlist.id, tracks);
+  }
+}
+
+class SearchDestination extends ConsumerWidget {
+  const SearchDestination({required this.desktop, super.key});
+
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final query = ref.watch(librarySearchQueryProvider).trim();
+    final tracks = ref.watch(libraryTracksProvider);
+    final playlists = ref.watch(playlistsProvider);
+    final normalized = normalizeForSearch(query);
+    return Column(
+      key: const Key('search-destination'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionTitle('Buscar'),
+        if (!desktop)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: TextField(
@@ -451,68 +673,124 @@ class SongsDestination extends ConsumerWidget {
               ),
             ),
           ),
-        if (!showSearch)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: state.actionsDisabled
-                        ? null
-                        : () => tracks.whenData(controller.playAll),
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Reproducir todo'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: state.actionsDisabled
-                        ? null
-                        : () => tracks.whenData(
-                            (items) => controller.playAll(items, shuffle: true),
-                          ),
-                    icon: const Icon(Icons.shuffle),
-                    label: const Text('Aleatorio'),
-                  ),
-                ),
-              ],
-            ),
-          ),
         Expanded(
           key: const Key('destination-content'),
-          child: tracks.when(
-            data: (items) => items.isEmpty
-                ? Center(
-                    child: Text(
-                      showSearch
-                          ? 'No hay resultados.'
-                          : 'La biblioteca está vacía.',
-                    ),
-                  )
-                : _ShellTrackList(tracks: items),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stackTrace) => Center(
-              child: Text('No fue posible cargar la biblioteca: $error'),
-            ),
-          ),
+          child: normalized.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Busca canciones, artistas, álbumes o playlists.',
+                  ),
+                )
+              : tracks.when(
+                  data: (trackItems) => playlists.when(
+                    data: (playlistItems) {
+                      final matches = playlistItems
+                          .where(
+                            (playlist) =>
+                                normalizeForSearch(playlist.name)
+                                    .contains(normalized),
+                          )
+                          .toList();
+                      if (trackItems.isEmpty && matches.isEmpty) {
+                        return const Center(child: Text('No hay resultados.'));
+                      }
+                      return ListView(
+                        key: const Key('search-results'),
+                        children: [
+                          if (trackItems.isNotEmpty) ...[
+                            const SectionTitle('Canciones'),
+                            for (
+                              var index = 0;
+                              index < trackItems.length;
+                              index++
+                            )
+                              _TrackListTile(
+                                track: trackItems[index],
+                                tracks: trackItems,
+                                index: index,
+                              ),
+                          ],
+                          if (matches.isNotEmpty) ...[
+                            const SectionTitle('Playlists'),
+                            for (final playlist in matches)
+                              _PlaylistTile(
+                                playlist: playlist,
+                                onTap: () =>
+                                    _openPlaylist(context, ref, playlist.id),
+                              ),
+                          ],
+                        ],
+                      );
+                    },
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (error, _) => Center(child: Text('$error')),
+                  ),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (error, _) => Center(child: Text('$error')),
+                ),
         ),
       ],
     );
   }
 }
 
-class _ShellTrackList extends ConsumerStatefulWidget {
-  const _ShellTrackList({required this.tracks});
+class _EmptyTracksState extends ConsumerWidget {
+  const _EmptyTracksState({required this.desktop});
+
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(libraryControllerProvider.notifier);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('La biblioteca está vacía.'),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            key: const Key('empty-library-action'),
+            onPressed: desktop ? controller.startScan : controller.addFiles,
+            icon: Icon(
+              desktop ? Icons.create_new_folder_outlined : Icons.audio_file,
+            ),
+            label: Text(desktop ? 'Añadir carpeta' : 'Añadir archivos'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResponsiveTrackList extends StatelessWidget {
+  const _ResponsiveTrackList({required this.tracks, required this.desktop});
+
+  final List<Track> tracks;
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => desktop
+        ? _DesktopTrackTable(
+            tracks: tracks,
+            showAlbum: constraints.maxWidth >= 1100,
+          )
+        : _MobileTrackList(tracks: tracks),
+  );
+}
+
+class _MobileTrackList extends ConsumerStatefulWidget {
+  const _MobileTrackList({required this.tracks});
 
   final List<Track> tracks;
 
   @override
-  ConsumerState<_ShellTrackList> createState() => _ShellTrackListState();
+  ConsumerState<_MobileTrackList> createState() => _MobileTrackListState();
 }
 
-class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
+class _MobileTrackListState extends ConsumerState<_MobileTrackList> {
   final _scrollController = ScrollController();
 
   @override
@@ -523,7 +801,6 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = ref.read(libraryControllerProvider.notifier);
     return Scrollbar(
       controller: _scrollController,
       thumbVisibility: MediaQuery.sizeOf(context).width >= desktopBreakpoint,
@@ -532,65 +809,246 @@ class _ShellTrackListState extends ConsumerState<_ShellTrackList> {
         controller: _scrollController,
         itemCount: widget.tracks.length,
         itemBuilder: (context, index) {
-          final track = widget.tracks[index];
-          return TrackTile(
-            track: track,
-            trailing: PopupMenuButton<_ShellTrackAction>(
-              tooltip: 'Acciones de ${track.title}',
-              onSelected: (action) {
-                switch (action) {
-                  case _ShellTrackAction.playNext:
-                    controller.playNext(track);
-                  case _ShellTrackAction.addToQueue:
-                    controller.addToQueue(track);
-                  case _ShellTrackAction.addToPlaylist:
-                    showAddTrackToPlaylist(context, ref, track);
-                  case _ShellTrackAction.favorite:
-                    ref
-                        .read(trackRepositoryProvider)
-                        .setFavorite(track.id!, !track.isFavorite);
-                  case _ShellTrackAction.delete:
-                    controller.deleteTrack(track);
-                }
-              },
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: _ShellTrackAction.playNext,
-                  enabled: track.isAvailable,
-                  child: const Text('Reproducir a continuación'),
-                ),
-                PopupMenuItem(
-                  value: _ShellTrackAction.addToQueue,
-                  enabled: track.isAvailable,
-                  child: const Text('Añadir a la cola'),
-                ),
-                const PopupMenuItem(
-                  value: _ShellTrackAction.addToPlaylist,
-                  child: Text('Añadir a playlist'),
-                ),
-                PopupMenuItem(
-                  value: _ShellTrackAction.favorite,
-                  child: Text(
-                    track.isFavorite
-                        ? 'Quitar de Me gusta'
-                        : 'Añadir a Me gusta',
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: _ShellTrackAction.delete,
-                  child: Text('Eliminar de la biblioteca'),
-                ),
-              ],
-            ),
-            onTap: track.isAvailable
-                ? () => controller.playVisibleQueue(
-                    widget.tracks,
-                    startIndex: index,
-                  )
-                : controller.showUnavailableMessage,
+          return _TrackListTile(
+            track: widget.tracks[index],
+            tracks: widget.tracks,
+            index: index,
           );
         },
       ),
+    );
+  }
+}
+
+class _TrackListTile extends ConsumerWidget {
+  const _TrackListTile({
+    required this.track,
+    required this.tracks,
+    required this.index,
+  });
+
+  final Track track;
+  final List<Track> tracks;
+  final int index;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(libraryControllerProvider.notifier);
+    return TrackTile(
+      track: track,
+      trailing: _TrackActionsMenu(track: track),
+      onTap: track.isAvailable
+          ? () => controller.playVisibleQueue(tracks, startIndex: index)
+          : controller.showUnavailableMessage,
+    );
+  }
+}
+
+class _DesktopTrackTable extends StatelessWidget {
+  const _DesktopTrackTable({required this.tracks, required this.showAlbum});
+
+  final List<Track> tracks;
+  final bool showAlbum;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      _DesktopTrackHeader(showAlbum: showAlbum),
+      const Divider(height: 1),
+      Expanded(
+        child: ListView.builder(
+          key: const Key('desktop-track-table'),
+          itemCount: tracks.length,
+          itemBuilder: (_, index) => _DesktopTrackRow(
+            track: tracks[index],
+            tracks: tracks,
+            index: index,
+            showAlbum: showAlbum,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class _DesktopTrackHeader extends StatelessWidget {
+  const _DesktopTrackHeader({required this.showAlbum});
+  final bool showAlbum;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 40,
+    child: Row(
+      children: [
+        const SizedBox(width: 56, child: Center(child: Text('#'))),
+        const Expanded(flex: 5, child: Text('Título')),
+        if (showAlbum)
+          const Expanded(
+            key: Key('desktop-album-header'),
+            flex: 3,
+            child: Text('Álbum'),
+          ),
+        const SizedBox(width: 96, child: Text('Duración')),
+        const SizedBox(width: 48),
+      ],
+    ),
+  );
+}
+
+class _DesktopTrackRow extends ConsumerWidget {
+  const _DesktopTrackRow({
+    required this.track,
+    required this.tracks,
+    required this.index,
+    required this.showAlbum,
+  });
+
+  final Track track;
+  final List<Track> tracks;
+  final int index;
+  final bool showAlbum;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentId = ref.watch(
+      playerControllerProvider.select((state) => state.currentItem?.trackId),
+    );
+    final current = track.id != null && track.id == currentId;
+    final color = current ? context.astraColors.accent : null;
+    final controller = ref.read(libraryControllerProvider.notifier);
+    return SizedBox(
+      height: 56,
+      child: Material(
+        color: current
+            ? context.astraColors.surfaceHover
+            : context.astraColors.surface.withValues(alpha: 0),
+        child: InkWell(
+          hoverColor: context.astraColors.surfaceHover,
+          onTap: track.isAvailable
+              ? () => controller.playVisibleQueue(tracks, startIndex: index)
+              : controller.showUnavailableMessage,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 56,
+                child: Center(
+                  child: current
+                      ? Icon(
+                          Icons.graphic_eq,
+                          key: ValueKey('current-track-indicator-${track.id}'),
+                          color: color,
+                          size: 20,
+                        )
+                      : Text('${index + 1}'),
+                ),
+              ),
+              Expanded(
+                flex: 5,
+                child: Row(
+                  children: [
+                    TrackArtwork(track: track, size: 44),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            track.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: color),
+                          ),
+                          Text(
+                            track.artist ?? 'Artista desconocido',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (showAlbum)
+                Expanded(
+                  key: ValueKey('desktop-album-${track.id}'),
+                  flex: 3,
+                  child: Text(
+                    track.album ?? '—',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              SizedBox(width: 96, child: Text(_trackDuration(track.duration))),
+              SizedBox(width: 48, child: _TrackActionsMenu(track: track)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _trackDuration(Duration? duration) {
+  if (duration == null) return '—';
+  final minutes = duration.inMinutes;
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
+}
+
+class _TrackActionsMenu extends ConsumerWidget {
+  const _TrackActionsMenu({required this.track});
+  final Track track;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(libraryControllerProvider.notifier);
+    return PopupMenuButton<_ShellTrackAction>(
+      tooltip: 'Acciones de ${track.title}',
+      onSelected: (action) {
+        switch (action) {
+          case _ShellTrackAction.playNext:
+            controller.playNext(track);
+          case _ShellTrackAction.addToQueue:
+            controller.addToQueue(track);
+          case _ShellTrackAction.addToPlaylist:
+            showAddTrackToPlaylist(context, ref, track);
+          case _ShellTrackAction.favorite:
+            ref
+                .read(trackRepositoryProvider)
+                .setFavorite(track.id!, !track.isFavorite);
+          case _ShellTrackAction.delete:
+            controller.deleteTrack(track);
+        }
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: _ShellTrackAction.playNext,
+          enabled: track.isAvailable,
+          child: const Text('Reproducir a continuación'),
+        ),
+        PopupMenuItem(
+          value: _ShellTrackAction.addToQueue,
+          enabled: track.isAvailable,
+          child: const Text('Añadir a la cola'),
+        ),
+        const PopupMenuItem(
+          value: _ShellTrackAction.addToPlaylist,
+          child: Text('Añadir a playlist'),
+        ),
+        PopupMenuItem(
+          value: _ShellTrackAction.favorite,
+          child: Text(
+            track.isFavorite ? 'Quitar de Me gusta' : 'Añadir a Me gusta',
+          ),
+        ),
+        const PopupMenuItem(
+          value: _ShellTrackAction.delete,
+          child: Text('Eliminar de la biblioteca'),
+        ),
+      ],
     );
   }
 }
@@ -602,21 +1060,8 @@ class PlaylistsDestination extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.read(libraryControllerProvider.notifier);
-    final state = ref.watch(libraryControllerProvider);
-    final isAndroid = ref.watch(isAndroidPlatformProvider);
     final playlists = ref.watch(playlistsProvider);
     final favoriteCount = ref.watch(favoriteTracksProvider).value?.length ?? 0;
-    ref.listen<String?>(
-      libraryControllerProvider.select((state) => state.message),
-      (previous, next) {
-        if (next == null || next == previous) return;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text(next)));
-        controller.clearMessage();
-      },
-    );
     return Material(
       color: context.astraColors.surface.withValues(alpha: 0),
       child: Column(
@@ -651,100 +1096,148 @@ class PlaylistsDestination extends ConsumerWidget {
             ),
           ),
           const Divider(height: 1),
-          if (!isAndroid) ...[
-            ListTile(
-              leading: const Icon(Icons.folder_copy_outlined),
-              title: const Text('Carpetas de música'),
-              onTap: () => ref
-                  .read(appDestinationProvider.notifier)
-                  .select(AppDestination.folders),
-            ),
-            ListTile(
-              leading: const Icon(Icons.library_add_outlined),
-              title: const Text('Añadir carpeta'),
-              enabled: !state.actionsDisabled,
-              onTap: controller.startScan,
-            ),
-            ListTile(
-              leading: const Icon(Icons.refresh),
-              title: const Text('Actualizar biblioteca'),
-              enabled: !state.actionsDisabled,
-              onTap: controller.updateLibrary,
-            ),
-          ],
           ListTile(
-            key: const Key('settings-add-files-button'),
-            leading: const Icon(Icons.audio_file_outlined),
-            title: const Text('Añadir archivos'),
-            enabled: !state.actionsDisabled,
-            onTap: controller.addFiles,
-          ),
-          if (kDebugMode)
-            ListTile(
-              leading: const Icon(Icons.bug_report_outlined),
-              title: const Text('Cargar datos de prueba'),
-              enabled: !state.actionsDisabled,
-              onTap: controller.loadDebugTracks,
-            ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Text(
-              'Zona de peligro',
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-          ListTile(
-            key: const Key('clear-library-button'),
-            leading: Icon(
-              Icons.delete_forever_outlined,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            title: Text(
-              'Eliminar toda la biblioteca',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            enabled: !state.actionsDisabled,
-            onTap: () => _confirmClearLibrary(context, controller),
+            key: const Key('library-settings-button'),
+            leading: const Icon(Icons.settings_outlined),
+            title: const Text('Ajustes'),
+            onTap: () => ref
+                .read(appDestinationProvider.notifier)
+                .select(AppDestination.settings),
           ),
         ],
       ),
     );
   }
+}
 
-  Future<void> _confirmClearLibrary(
-    BuildContext context,
-    LibraryController controller,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar toda la biblioteca'),
-        content: const Text(
-          'Se eliminarán de AstraMusic todas las canciones, las playlists '
-          'creadas, la cola y las carpetas guardadas. Tus archivos del '
-          'dispositivo NO se borran. Esta acción no se puede deshacer.',
-        ),
-        actions: [
-          TextButton(
-            autofocus: true,
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
+class SettingsDestination extends ConsumerWidget {
+  const SettingsDestination({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(libraryControllerProvider.notifier);
+    final state = ref.watch(libraryControllerProvider);
+    final isAndroid = ref.watch(isAndroidPlatformProvider);
+    ref.listen<String?>(
+      libraryControllerProvider.select((value) => value.message),
+      (previous, next) {
+        if (next == null || next == previous) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(next)));
+        controller.clearMessage();
+      },
+    );
+    return Material(
+      color: context.astraColors.surface.withValues(alpha: 0),
+      child: Column(
+        key: const Key('settings-destination'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SectionTitle('Ajustes'),
+          Expanded(
+            key: const Key('destination-content'),
+            child: ListView(
+              children: [
+                if (!isAndroid) ...[
+                  ListTile(
+                    leading: const Icon(Icons.folder_copy_outlined),
+                    title: const Text('Carpetas de música'),
+                    onTap: () => ref
+                        .read(appDestinationProvider.notifier)
+                        .select(AppDestination.folders),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.library_add_outlined),
+                    title: const Text('Añadir carpeta'),
+                    enabled: !state.actionsDisabled,
+                    onTap: controller.startScan,
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.refresh),
+                    title: const Text('Actualizar biblioteca'),
+                    enabled: !state.actionsDisabled,
+                    onTap: controller.updateLibrary,
+                  ),
+                ],
+                ListTile(
+                  key: const Key('settings-add-files-button'),
+                  leading: const Icon(Icons.audio_file_outlined),
+                  title: const Text('Añadir archivos'),
+                  enabled: !state.actionsDisabled,
+                  onTap: controller.addFiles,
+                ),
+                if (kDebugMode)
+                  ListTile(
+                    leading: const Icon(Icons.bug_report_outlined),
+                    title: const Text('Cargar datos de prueba'),
+                    enabled: !state.actionsDisabled,
+                    onTap: controller.loadDebugTracks,
+                  ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Text(
+                    'Zona de peligro',
+                    style: Theme.of(context).textTheme.titleSmall
+                        ?.copyWith(color: Theme.of(context).colorScheme.error),
+                  ),
+                ),
+                ListTile(
+                  key: const Key('clear-library-button'),
+                  leading: Icon(
+                    Icons.delete_forever_outlined,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  title: Text(
+                    'Eliminar toda la biblioteca',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  enabled: !state.actionsDisabled,
+                  onTap: () => _confirmClearLibrary(context, controller),
+                ),
+              ],
             ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Eliminar todo'),
           ),
         ],
       ),
     );
-    if (confirmed == true) await controller.clearLibrary();
   }
+}
+
+Future<void> _confirmClearLibrary(
+  BuildContext context,
+  LibraryController controller,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Eliminar toda la biblioteca'),
+      content: const Text(
+        'Se eliminarán de AstraMusic todas las canciones, las playlists '
+        'creadas, la cola y las carpetas guardadas. Tus archivos del '
+        'dispositivo NO se borran. Esta acción no se puede deshacer.',
+      ),
+      actions: [
+        TextButton(
+          autofocus: true,
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Theme.of(context).colorScheme.onError,
+          ),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Eliminar todo'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) await controller.clearLibrary();
 }
 
 class _PlaylistTile extends StatelessWidget {
@@ -754,12 +1247,15 @@ class _PlaylistTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    key: ValueKey('library-playlist-${playlist.id}'),
-    leading: PlaylistCover(playlist: playlist, size: 48),
-    title: Text(playlist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-    subtitle: Text(playlistTrackCount(playlist.trackCount)),
-    onTap: onTap,
+  Widget build(BuildContext context) => Material(
+    color: context.astraColors.surface.withValues(alpha: 0),
+    child: ListTile(
+      key: ValueKey('library-playlist-${playlist.id}'),
+      leading: PlaylistCover(playlist: playlist, size: 48),
+      title: Text(playlist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(playlistTrackCount(playlist.trackCount)),
+      onTap: onTap,
+    ),
   );
 }
 

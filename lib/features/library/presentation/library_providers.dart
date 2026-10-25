@@ -76,6 +76,10 @@ final libraryTracksProvider = StreamProvider<List<Track>>((ref) {
   return query.isEmpty ? repository.watchAll() : repository.watchSearch(query);
 });
 
+final allLibraryTracksProvider = StreamProvider<List<Track>>((ref) {
+  return ref.watch(trackRepositoryProvider).watchAll();
+});
+
 final favoriteTracksProvider = StreamProvider<List<Track>>((ref) {
   return ref.watch(trackRepositoryProvider).watchFavorites();
 });
