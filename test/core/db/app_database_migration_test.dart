@@ -1,8 +1,34 @@
 import 'package:astramusic/core/db/app_database.dart';
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('migra de 7 a 8 y rellena favorited_at solo para favoritos', () async {
+    final executor = NativeDatabase.memory(
+      setup: (database) {
+        _createVersionSevenSchema(database);
+        database.execute('''
+          INSERT INTO tracks (id, uri, title, date_added, is_favorite)
+          VALUES
+            (1, 'file:///favorita.mp3', 'Favorita', 1767225600000, 1),
+            (2, 'file:///normal.mp3', 'Normal', 1767312000000, 0)
+        ''');
+        database.userVersion = 7;
+      },
+    );
+    final database = AppDatabase(executor);
+    addTearDown(database.close);
+
+    final tracks = await (database.select(database.tracks)
+          ..orderBy([(row) => OrderingTerm.asc(row.id)]))
+        .get();
+
+    expect(database.schemaVersion, 8);
+    expect(tracks.first.favoritedAt, tracks.first.dateAdded);
+    expect(tracks.last.favoritedAt, isNull);
+  });
+
   test('migra de 6 a 7, deduplica y crea el índice único', () async {
     final executor = NativeDatabase.memory(
       setup: (database) {
@@ -31,7 +57,7 @@ void main() {
     final playlist = await database.select(database.playlists).getSingle();
     final relations = await database.select(database.playlistTracks).get();
 
-    expect(database.schemaVersion, 7);
+    expect(database.schemaVersion, 8);
     expect(playlist.lastPlayedAt, isNull);
     expect(relations.map((row) => row.id), [1]);
     await expectLater(
@@ -112,7 +138,7 @@ void main() {
         )
         .getSingleOrNull();
 
-    expect(database.schemaVersion, 7);
+    expect(database.schemaVersion, 8);
     expect(tracks.single.title, 'Existente');
     expect(tracks.single.searchText, 'existente');
     expect(tracks.single.sortTitle, 'existente');
@@ -137,7 +163,7 @@ void main() {
     final track = await database.select(database.tracks).getSingle();
     expect(track.title, 'Tema');
     expect(track.artworkPath, isNull);
-    expect(database.schemaVersion, 7);
+    expect(database.schemaVersion, 8);
   });
 
   test('migra de 4 a 5 y crea el estado y la cola persistidos', () async {
@@ -161,7 +187,7 @@ void main() {
       'playback_state',
       'queue_items',
     ]);
-    expect(database.schemaVersion, 7);
+    expect(database.schemaVersion, 8);
   });
 
   test('migra de 5 a 6 y crea excluded_uris con uri única', () async {
@@ -201,7 +227,7 @@ void main() {
           .insert(ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3')),
       throwsA(anything),
     );
-    expect(database.schemaVersion, 7);
+    expect(database.schemaVersion, 8);
   });
 
   test('migra de 2 a 3, hace backfill y conserva todas las tablas', () async {
@@ -257,6 +283,41 @@ void main() {
       'tracks_sort_title_idx',
     ]);
   });
+}
+
+void _createVersionSevenSchema(dynamic database) {
+  _createVersionSixPlaylistSchema(database);
+  database.execute('ALTER TABLE playlists ADD COLUMN last_played_at INTEGER NULL');
+  database.execute('''
+    CREATE UNIQUE INDEX playlist_tracks_playlist_track_idx
+    ON playlist_tracks (playlist_id, track_id)
+  ''');
+  database.execute('''
+    CREATE TABLE library_folders (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      path TEXT NOT NULL UNIQUE,
+      added_at INTEGER NOT NULL,
+      last_scanned_at INTEGER NULL
+    )
+  ''');
+  database.execute('''
+    CREATE TABLE playback_state (
+      id INTEGER NOT NULL PRIMARY KEY DEFAULT 1,
+      current_index INTEGER NULL,
+      position_ms INTEGER NOT NULL DEFAULT 0,
+      shuffle INTEGER NOT NULL DEFAULT 0 CHECK (shuffle IN (0, 1)),
+      repeat_mode TEXT NOT NULL DEFAULT 'off',
+      updated_at INTEGER NOT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE TABLE queue_items (
+      position INTEGER NOT NULL PRIMARY KEY,
+      track_id INTEGER NOT NULL REFERENCES tracks (id) ON DELETE CASCADE,
+      original_position INTEGER NULL
+    )
+  ''');
+  database.execute('CREATE TABLE excluded_uris (uri TEXT NOT NULL PRIMARY KEY)');
 }
 
 void _createVersionSixPlaylistSchema(dynamic database) {

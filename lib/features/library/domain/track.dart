@@ -12,9 +12,10 @@ class Track {
     required this.dateAdded,
     this.dateModified,
     this.isAvailable = true,
-    this.isFavorite = false,
+    bool isFavorite = false,
+    DateTime? favoritedAt,
     this.artworkPath,
-  });
+  }) : favoritedAt = favoritedAt ?? (isFavorite ? dateAdded : null);
 
   final int? id;
   final String uri;
@@ -28,7 +29,8 @@ class Track {
   final DateTime dateAdded;
   final DateTime? dateModified;
   final bool isAvailable;
-  final bool isFavorite;
+  final DateTime? favoritedAt;
+  bool get isFavorite => favoritedAt != null;
   final String? artworkPath;
 
   Track withAvailability(bool value) => Track(
@@ -44,7 +46,7 @@ class Track {
     dateAdded: dateAdded,
     dateModified: dateModified,
     isAvailable: value,
-    isFavorite: isFavorite,
+    favoritedAt: favoritedAt,
     artworkPath: artworkPath,
   );
 }

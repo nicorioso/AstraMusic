@@ -176,6 +176,17 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _favoritedAtMeta = const VerificationMeta(
+    'favoritedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> favoritedAt = GeneratedColumn<DateTime>(
+    'favorited_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _artworkPathMeta = const VerificationMeta(
     'artworkPath',
   );
@@ -204,6 +215,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     sortTitle,
     isAvailable,
     isFavorite,
+    favoritedAt,
     artworkPath,
   ];
   @override
@@ -320,6 +332,15 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
       );
     }
+    if (data.containsKey('favorited_at')) {
+      context.handle(
+        _favoritedAtMeta,
+        favoritedAt.isAcceptableOrUnknown(
+          data['favorited_at']!,
+          _favoritedAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('artwork_path')) {
       context.handle(
         _artworkPathMeta,
@@ -398,6 +419,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.bool,
         data['${effectivePrefix}is_favorite'],
       )!,
+      favoritedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}favorited_at'],
+      ),
       artworkPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}artwork_path'],
@@ -427,6 +452,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final String sortTitle;
   final bool isAvailable;
   final bool isFavorite;
+  final DateTime? favoritedAt;
   final String? artworkPath;
   const TrackRow({
     required this.id,
@@ -444,6 +470,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     required this.sortTitle,
     required this.isAvailable,
     required this.isFavorite,
+    this.favoritedAt,
     this.artworkPath,
   });
   @override
@@ -478,6 +505,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     map['sort_title'] = Variable<String>(sortTitle);
     map['is_available'] = Variable<bool>(isAvailable);
     map['is_favorite'] = Variable<bool>(isFavorite);
+    if (!nullToAbsent || favoritedAt != null) {
+      map['favorited_at'] = Variable<DateTime>(favoritedAt);
+    }
     if (!nullToAbsent || artworkPath != null) {
       map['artwork_path'] = Variable<String>(artworkPath);
     }
@@ -513,6 +543,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       sortTitle: Value(sortTitle),
       isAvailable: Value(isAvailable),
       isFavorite: Value(isFavorite),
+      favoritedAt: favoritedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(favoritedAt),
       artworkPath: artworkPath == null && nullToAbsent
           ? const Value.absent()
           : Value(artworkPath),
@@ -540,6 +573,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       sortTitle: serializer.fromJson<String>(json['sortTitle']),
       isAvailable: serializer.fromJson<bool>(json['isAvailable']),
       isFavorite: serializer.fromJson<bool>(json['isFavorite']),
+      favoritedAt: serializer.fromJson<DateTime?>(json['favoritedAt']),
       artworkPath: serializer.fromJson<String?>(json['artworkPath']),
     );
   }
@@ -562,6 +596,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'sortTitle': serializer.toJson<String>(sortTitle),
       'isAvailable': serializer.toJson<bool>(isAvailable),
       'isFavorite': serializer.toJson<bool>(isFavorite),
+      'favoritedAt': serializer.toJson<DateTime?>(favoritedAt),
       'artworkPath': serializer.toJson<String?>(artworkPath),
     };
   }
@@ -582,6 +617,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     String? sortTitle,
     bool? isAvailable,
     bool? isFavorite,
+    Value<DateTime?> favoritedAt = const Value.absent(),
     Value<String?> artworkPath = const Value.absent(),
   }) => TrackRow(
     id: id ?? this.id,
@@ -599,6 +635,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     sortTitle: sortTitle ?? this.sortTitle,
     isAvailable: isAvailable ?? this.isAvailable,
     isFavorite: isFavorite ?? this.isFavorite,
+    favoritedAt: favoritedAt.present ? favoritedAt.value : this.favoritedAt,
     artworkPath: artworkPath.present ? artworkPath.value : this.artworkPath,
   );
   TrackRow copyWithCompanion(TracksCompanion data) {
@@ -630,6 +667,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       isFavorite: data.isFavorite.present
           ? data.isFavorite.value
           : this.isFavorite,
+      favoritedAt: data.favoritedAt.present
+          ? data.favoritedAt.value
+          : this.favoritedAt,
       artworkPath: data.artworkPath.present
           ? data.artworkPath.value
           : this.artworkPath,
@@ -654,6 +694,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('sortTitle: $sortTitle, ')
           ..write('isAvailable: $isAvailable, ')
           ..write('isFavorite: $isFavorite, ')
+          ..write('favoritedAt: $favoritedAt, ')
           ..write('artworkPath: $artworkPath')
           ..write(')'))
         .toString();
@@ -676,6 +717,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     sortTitle,
     isAvailable,
     isFavorite,
+    favoritedAt,
     artworkPath,
   );
   @override
@@ -697,6 +739,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.sortTitle == this.sortTitle &&
           other.isAvailable == this.isAvailable &&
           other.isFavorite == this.isFavorite &&
+          other.favoritedAt == this.favoritedAt &&
           other.artworkPath == this.artworkPath);
 }
 
@@ -716,6 +759,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<String> sortTitle;
   final Value<bool> isAvailable;
   final Value<bool> isFavorite;
+  final Value<DateTime?> favoritedAt;
   final Value<String?> artworkPath;
   const TracksCompanion({
     this.id = const Value.absent(),
@@ -733,6 +777,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.sortTitle = const Value.absent(),
     this.isAvailable = const Value.absent(),
     this.isFavorite = const Value.absent(),
+    this.favoritedAt = const Value.absent(),
     this.artworkPath = const Value.absent(),
   });
   TracksCompanion.insert({
@@ -751,6 +796,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.sortTitle = const Value.absent(),
     this.isAvailable = const Value.absent(),
     this.isFavorite = const Value.absent(),
+    this.favoritedAt = const Value.absent(),
     this.artworkPath = const Value.absent(),
   }) : uri = Value(uri),
        title = Value(title),
@@ -771,6 +817,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<String>? sortTitle,
     Expression<bool>? isAvailable,
     Expression<bool>? isFavorite,
+    Expression<DateTime>? favoritedAt,
     Expression<String>? artworkPath,
   }) {
     return RawValuesInsertable({
@@ -789,6 +836,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (sortTitle != null) 'sort_title': sortTitle,
       if (isAvailable != null) 'is_available': isAvailable,
       if (isFavorite != null) 'is_favorite': isFavorite,
+      if (favoritedAt != null) 'favorited_at': favoritedAt,
       if (artworkPath != null) 'artwork_path': artworkPath,
     });
   }
@@ -809,6 +857,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<String>? sortTitle,
     Value<bool>? isAvailable,
     Value<bool>? isFavorite,
+    Value<DateTime?>? favoritedAt,
     Value<String?>? artworkPath,
   }) {
     return TracksCompanion(
@@ -827,6 +876,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       sortTitle: sortTitle ?? this.sortTitle,
       isAvailable: isAvailable ?? this.isAvailable,
       isFavorite: isFavorite ?? this.isFavorite,
+      favoritedAt: favoritedAt ?? this.favoritedAt,
       artworkPath: artworkPath ?? this.artworkPath,
     );
   }
@@ -879,6 +929,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (isFavorite.present) {
       map['is_favorite'] = Variable<bool>(isFavorite.value);
     }
+    if (favoritedAt.present) {
+      map['favorited_at'] = Variable<DateTime>(favoritedAt.value);
+    }
     if (artworkPath.present) {
       map['artwork_path'] = Variable<String>(artworkPath.value);
     }
@@ -903,6 +956,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('sortTitle: $sortTitle, ')
           ..write('isAvailable: $isAvailable, ')
           ..write('isFavorite: $isFavorite, ')
+          ..write('favoritedAt: $favoritedAt, ')
           ..write('artworkPath: $artworkPath')
           ..write(')'))
         .toString();
@@ -2844,6 +2898,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   Value<String> sortTitle,
   Value<bool> isAvailable,
   Value<bool> isFavorite,
+  Value<DateTime?> favoritedAt,
   Value<String?> artworkPath,
 });
 typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
@@ -2862,6 +2917,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<String> sortTitle,
   Value<bool> isAvailable,
   Value<bool> isFavorite,
+  Value<DateTime?> favoritedAt,
   Value<String?> artworkPath,
 });
 
@@ -2987,6 +3043,11 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<bool> get isFavorite => $composableBuilder(
     column: $table.isFavorite,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get favoritedAt => $composableBuilder(
+    column: $table.favoritedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3130,6 +3191,11 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get favoritedAt => $composableBuilder(
+    column: $table.favoritedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get artworkPath => $composableBuilder(
     column: $table.artworkPath,
     builder: (column) => ColumnOrderings(column),
@@ -3199,6 +3265,11 @@ class $$TracksTableAnnotationComposer
 
   GeneratedColumn<bool> get isFavorite => $composableBuilder(
     column: $table.isFavorite,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get favoritedAt => $composableBuilder(
+    column: $table.favoritedAt,
     builder: (column) => column,
   );
 
@@ -3301,6 +3372,7 @@ class $$TracksTableTableManager
                 Value<String> sortTitle = const Value.absent(),
                 Value<bool> isAvailable = const Value.absent(),
                 Value<bool> isFavorite = const Value.absent(),
+                Value<DateTime?> favoritedAt = const Value.absent(),
                 Value<String?> artworkPath = const Value.absent(),
               }) => TracksCompanion(
                 id: id,
@@ -3318,6 +3390,7 @@ class $$TracksTableTableManager
                 sortTitle: sortTitle,
                 isAvailable: isAvailable,
                 isFavorite: isFavorite,
+                favoritedAt: favoritedAt,
                 artworkPath: artworkPath,
               ),
           createCompanionCallback:
@@ -3337,6 +3410,7 @@ class $$TracksTableTableManager
                 Value<String> sortTitle = const Value.absent(),
                 Value<bool> isAvailable = const Value.absent(),
                 Value<bool> isFavorite = const Value.absent(),
+                Value<DateTime?> favoritedAt = const Value.absent(),
                 Value<String?> artworkPath = const Value.absent(),
               }) => TracksCompanion.insert(
                 id: id,
@@ -3354,6 +3428,7 @@ class $$TracksTableTableManager
                 sortTitle: sortTitle,
                 isAvailable: isAvailable,
                 isFavorite: isFavorite,
+                favoritedAt: favoritedAt,
                 artworkPath: artworkPath,
               ),
           withReferenceMapper: (p0) => p0

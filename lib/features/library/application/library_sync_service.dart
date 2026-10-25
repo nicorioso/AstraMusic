@@ -90,7 +90,7 @@ final class LibrarySyncService {
         dateAdded: old?.dateAdded ?? scanned.dateAdded ?? now,
         dateModified: scanned.dateModified ?? old?.dateModified,
         isAvailable: true,
-        isFavorite: old?.isFavorite ?? false,
+        favoritedAt: old?.favoritedAt,
         artworkPath: preserveMetadata ? old.artworkPath : scanned.artworkPath,
       );
       upserts.add(track);

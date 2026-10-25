@@ -22,6 +22,7 @@ class Tracks extends Table {
   TextColumn get sortTitle => text().withDefault(const Constant(''))();
   BoolColumn get isAvailable => boolean().withDefault(const Constant(true))();
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get favoritedAt => dateTime().nullable()();
   TextColumn get artworkPath => text().nullable()();
 }
 
@@ -110,7 +111,7 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -178,6 +179,14 @@ final class AppDatabase extends _$AppDatabase {
           )
         ''');
         await migrator.createIndex(playlistTracksPlaylistTrackIdx);
+      }
+      if (from < 8) {
+        await migrator.addColumn(tracks, tracks.favoritedAt);
+        await customStatement('''
+          UPDATE tracks
+          SET favorited_at = date_added
+          WHERE is_favorite = 1
+        ''');
       }
     },
     beforeOpen: (details) async {
