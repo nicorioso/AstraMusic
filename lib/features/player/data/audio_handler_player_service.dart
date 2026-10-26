@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/core/utils/throttle_latest.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/player/data/astra_audio_handler.dart';
 import 'package:astramusic/features/player/data/serial_command_queue.dart';
@@ -38,7 +39,10 @@ final class AudioHandlerPlayerService
       _handler.playbackState.map(_toPlaybackState).distinct(_sameState);
 
   @override
-  Stream<Duration> get positionStream => _handler.positionStream;
+  Stream<Duration> get positionStream => throttleLatest(
+    _handler.positionStream,
+    const Duration(milliseconds: 250),
+  );
 
   @override
   Stream<Duration?> get durationStream => _handler.durationStream;
