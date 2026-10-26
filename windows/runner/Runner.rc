@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.nicorioso" "\0"
-            VALUE "FileDescription", "astramusic" "\0"
+            VALUE "FileDescription", "AstraMusic" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "astramusic" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.nicorioso. All rights reserved." "\0"
             VALUE "OriginalFilename", "astramusic.exe" "\0"
-            VALUE "ProductName", "astramusic" "\0"
+            VALUE "ProductName", "AstraMusic" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
