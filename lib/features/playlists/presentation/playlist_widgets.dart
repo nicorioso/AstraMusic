@@ -16,6 +16,7 @@ import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class PlaylistArtwork extends StatelessWidget {
@@ -277,7 +278,7 @@ class _PlaylistChooser extends ConsumerWidget {
                     child: Text('Aún no tienes playlists'),
                   )
                 : ListView.builder(
-                    cacheExtent: 280,
+                    scrollCacheExtent: const ScrollCacheExtent.pixels(280),
                     addAutomaticKeepAlives: false,
                     itemCount: items.length,
                     itemBuilder: (_, index) {
@@ -523,7 +524,7 @@ class _PlaylistDetailBody extends ConsumerWidget {
               : ReorderableListView.builder(
                   key: const Key('playlist-track-list'),
                   itemExtent: 56,
-                  scrollCacheExtent: 280,
+                  scrollCacheExtent: const ScrollCacheExtent.pixels(280),
                   buildDefaultDragHandles:
                       !favorites && MediaQuery.sizeOf(context).width < 840,
                   onReorderItem: (oldIndex, newIndex) {

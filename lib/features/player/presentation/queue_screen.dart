@@ -7,6 +7,7 @@ import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class QueueScreen extends ConsumerWidget {
@@ -102,7 +103,7 @@ class PlayerQueueView extends ConsumerWidget {
     return ReorderableListView.builder(
       key: const Key('queue-list'),
       itemExtent: 56,
-      scrollCacheExtent: 280,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(280),
       buildDefaultDragHandles: false,
       itemCount: queue.length,
       onReorderItem: controller.moveInQueue,

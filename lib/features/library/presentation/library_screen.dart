@@ -18,6 +18,7 @@ import 'package:astramusic/features/player/presentation/player_screen.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class LibraryScreen extends ConsumerWidget {
@@ -463,7 +464,7 @@ class _TrackList extends StatelessWidget {
       key: const Key('library-track-list'),
       padding: const EdgeInsets.only(bottom: 88),
       itemExtent: 56,
-      cacheExtent: 280,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(280),
       addAutomaticKeepAlives: false,
       itemCount: tracks.length,
       itemBuilder: (context, index) {

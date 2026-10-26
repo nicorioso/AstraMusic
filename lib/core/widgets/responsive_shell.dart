@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
-import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
@@ -26,6 +25,7 @@ import 'package:astramusic/features/playlists/presentation/playlist_providers.da
 import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
@@ -726,7 +726,7 @@ class SearchDestination extends ConsumerWidget {
                       }
                       return CustomScrollView(
                         key: const Key('search-results'),
-                        cacheExtent: 280,
+                        scrollCacheExtent: const ScrollCacheExtent.pixels(280),
                         slivers: [
                           if (trackItems.isNotEmpty) ...[
                             const SliverToBoxAdapter(
@@ -854,7 +854,7 @@ class _MobileTrackListState extends ConsumerState<_MobileTrackList> {
         key: const Key('shell-track-list'),
         controller: _scrollController,
         itemExtent: 56,
-        cacheExtent: 280,
+        scrollCacheExtent: const ScrollCacheExtent.pixels(280),
         addAutomaticKeepAlives: false,
         itemCount: widget.tracks.length,
         itemBuilder: (context, index) {
@@ -910,7 +910,7 @@ class _DesktopTrackTable extends StatelessWidget {
           child: ListView.builder(
             key: const Key('desktop-track-table'),
             itemExtent: 56,
-            cacheExtent: 280,
+            scrollCacheExtent: const ScrollCacheExtent.pixels(280),
             addAutomaticKeepAlives: false,
             itemCount: tracks.length,
             itemBuilder: (_, index) => _DesktopTrackRow(
