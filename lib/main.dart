@@ -59,9 +59,12 @@ Future<StartupResources> initializeAstraMusic() async {
         androidNotificationChannelId: 'com.nicorioso.astramusic.channel.audio',
         androidNotificationChannelName: 'AstraMusic',
         androidNotificationChannelDescription: 'Reproducción de audio local',
-        androidStopForegroundOnPause: false,
+        androidNotificationIcon: 'drawable/ic_stat_astramusic',
+        androidNotificationOngoing: false,
+        androidStopForegroundOnPause: true,
       ),
     );
+    await handler.configureAudioSession();
     final artworkProvider = CachedArtworkProvider();
     final playerService = AudioHandlerPlayerService(
       handler,

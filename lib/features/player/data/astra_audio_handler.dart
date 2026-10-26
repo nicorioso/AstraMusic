@@ -4,9 +4,11 @@ import 'dart:math';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/features/player/data/latest_seek_coordinator.dart';
 import 'package:astramusic/features/player/data/queue_load_strategy.dart';
+import 'package:astramusic/features/player/domain/interruption_policy.dart';
 import 'package:astramusic/features/player/domain/manual_queue_order.dart';
 import 'package:astramusic/features/player/domain/queue_rules.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as path_utils;
@@ -23,7 +25,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
     AudioPlayer? player,
     this._queueLoadStrategy = const SetAudioSourcesQueueLoadStrategy(),
     Random? shuffleRandom,
-  }) : _player = player ?? AudioPlayer(),
+  }) : _player = player ?? AudioPlayer(handleInterruptions: false),
        _queueOrder = ManualQueueOrder([], random: shuffleRandom) {
     _lastObservedSpeed = _player.speed;
     _seekCoordinator = LatestSeekCoordinator(
@@ -77,6 +79,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
       )
       ..add(
         _player.processingStateStream.listen((state) {
+          _watchLoadingState(state);
           if (state == ProcessingState.completed) {
             unawaited(_resetAtQueueEnd());
           }
@@ -87,6 +90,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player;
   final QueueLoadStrategy _queueLoadStrategy;
   final ManualQueueOrder<MediaItem> _queueOrder;
+  final InterruptionPolicy _interruptionPolicy = InterruptionPolicy();
   late final LatestSeekCoordinator _seekCoordinator;
   final Set<int> _failedIndices = {};
   final List<StreamSubscription<dynamic>> _playerSubscriptions = [];
@@ -96,6 +100,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   bool _mutatingQueue = false;
   bool _playRequested = false;
   bool _resettingAtEnd = false;
+  Timer? _loadingTimer;
   late double _lastObservedSpeed;
   double? _lastUnexpectedPublishedSpeed;
 
@@ -104,6 +109,25 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   Stream<double> get volumeStream => _player.volumeStream;
   Stream<HandlerPlaybackFailure> get failureStream => _failureController.stream;
   List<MediaItem> get originalQueue => List.unmodifiable(_queueOrder.original);
+
+  Future<void> configureAudioSession() async {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.music());
+    _playerSubscriptions
+      ..add(
+        session.interruptionEventStream.listen(
+          _handleInterruption,
+          onError: _handleStreamError,
+        ),
+      )
+      ..add(
+        session.becomingNoisyEventStream.listen((_) {
+          if (shouldPauseForBecomingNoisy(isPlaying: _player.playing)) {
+            unawaited(_pauseForInterruption());
+          }
+        }, onError: _handleStreamError),
+      );
+  }
 
   Future<void> setVolume(double volume) =>
       _player.setVolume(volume.clamp(0.0, 1.0));
@@ -175,6 +199,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> pause() async {
     _playRequested = false;
+    _interruptionPolicy.userPaused();
     await _player.pause();
   }
 
@@ -182,6 +207,11 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> stop() async {
     _playRequested = false;
     await _player.stop();
+  }
+
+  @override
+  Future<void> onTaskRemoved() async {
+    if (!_player.playing) await stop();
   }
 
   @override
@@ -500,8 +530,79 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   void _startPlayer() {
     unawaited(
       _player.play().catchError((Object error, StackTrace stackTrace) {
-        _scheduleFailure(_messageFor(error));
+        final message = _messageFor(error);
+        if (message.contains('ForegroundServiceStartNotAllowedException')) {
+          _broadcastNonFatalError(
+            'Android impidió iniciar la reproducción en segundo plano. '
+            'Abre AstraMusic e inténtalo de nuevo.',
+          );
+          return;
+        }
+        _scheduleFailure(message);
       }),
+    );
+  }
+
+  Future<void> _pauseForInterruption() async {
+    _playRequested = false;
+    await _player.pause();
+  }
+
+  void _handleInterruption(AudioInterruptionEvent event) {
+    final kind = switch (event.type) {
+      AudioInterruptionType.duck => InterruptionKind.duck,
+      AudioInterruptionType.pause => InterruptionKind.transient,
+      AudioInterruptionType.unknown => InterruptionKind.permanent,
+    };
+    final decision = event.begin
+        ? _interruptionPolicy.begin(
+            kind,
+            isPlaying: _player.playing,
+            volume: _player.volume,
+          )
+        : _interruptionPolicy.end(kind);
+    if (decision.pause) unawaited(_pauseForInterruption());
+    if (decision.volume case final volume?) {
+      unawaited(_player.setVolume(volume.clamp(0.0, 1.0)));
+    }
+    if (decision.resume) {
+      _playRequested = true;
+      _startPlayer();
+    }
+  }
+
+  void _watchLoadingState(ProcessingState state) {
+    _loadingTimer?.cancel();
+    _loadingTimer = null;
+    if (state != ProcessingState.loading &&
+        state != ProcessingState.buffering) {
+      return;
+    }
+    _loadingTimer = Timer(const Duration(seconds: 10), () {
+      if (_player.processingState == ProcessingState.loading ||
+          _player.processingState == ProcessingState.buffering) {
+        _broadcastNonFatalError(
+          'La reproducción está tardando demasiado. Puedes reintentar o '
+          'cambiar de canción.',
+        );
+      }
+    });
+  }
+
+  void _broadcastNonFatalError(String message) {
+    _failureController.add(
+      HandlerPlaybackFailure(
+        item:
+            mediaItem.value ??
+            const MediaItem(id: '', title: 'Reproducción actual'),
+        message: message,
+      ),
+    );
+    playbackState.add(
+      playbackState.value.copyWith(
+        errorMessage: message,
+        controls: _queueOrder.isEmpty ? const [] : _controls(_player.playing),
+      ),
     );
   }
 

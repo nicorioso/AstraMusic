@@ -37,6 +37,8 @@ lib/core (platform, db, utils) y lib/features (library, player, playlists, setti
 - Cambio de esquema: migración con backfill + test + build_runner + commitear lo generado.
 
 ## Audio (no romper)
+- InterruptionPolicy es pura y concentra pausas, reanudación y ducking; los plugins solo traducen eventos.
+- Nunca solicitar REQUEST_IGNORE_BATTERY_OPTIMIZATIONS; solo abrir los ajustes del sistema.
 - Aleatorio = permutación manual de la cola; NUNCA setShuffleModeEnabled/shuffle() (media_kit lo ignora). No ConcatenatingAudioSource.
 - Slider: seek SOLO en onChangeEnd; seeks pendientes se coalescen (gana el último).
 - Errores: fatales (canción actual) saltan a la siguiente; no fatales muestran mensaje y NO deshabilitan controles.
