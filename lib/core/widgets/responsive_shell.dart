@@ -1198,7 +1198,7 @@ class SettingsDestination extends ConsumerWidget {
         key: const Key('settings-destination'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SectionTitle('Ajustes'),
+          const _SettingsHeader(),
           Expanded(
             key: const Key('destination-content'),
             child: ListView(
@@ -1312,6 +1312,37 @@ class SettingsDestination extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _SettingsHeader extends StatelessWidget {
+  const _SettingsHeader();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    key: const Key('settings-brand-header'),
+    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+    child: Row(
+      children: [
+        Image.asset(
+          'assets/branding/logo.png',
+          key: const Key('settings-brand-logo'),
+          width: 64,
+          height: 64,
+          fit: BoxFit.cover,
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            'AstraMusic',
+            key: const Key('settings-brand-name'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class DiagnosticsDestination extends ConsumerStatefulWidget {

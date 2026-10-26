@@ -22,6 +22,42 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('el logo declarado se puede cargar desde rootBundle', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    final data = await rootBundle.load('assets/branding/logo.png');
+    expect(data.lengthInBytes, greaterThan(0));
+  });
+
+  for (final size in [const Size(360, 800), const Size(937, 1029)]) {
+    testWidgets('cabecera de Ajustes no desborda en ${size.width.toInt()} dp', (
+      tester,
+    ) async {
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+      await _setSize(tester, size);
+      await tester.pumpWidget(fixture.app());
+      await tester.pumpAndSettle();
+      if (size.width < desktopBreakpoint) {
+        await tester.tap(find.text('Biblioteca'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('library-settings-button')));
+      } else {
+        await tester.tap(find.text('Ajustes'));
+      }
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('settings-brand-logo')), findsOneWidget);
+      expect(find.byKey(const Key('settings-brand-name')), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const Key('settings-brand-logo'))),
+        const Size(64, 64),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('inicia el relleno de carátulas desde el shell real', (
     tester,
   ) async {
