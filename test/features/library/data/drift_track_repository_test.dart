@@ -126,6 +126,27 @@ void main() {
     },
   );
 
+  test('watchPage aplica ventana, desplazamiento y búsqueda', () async {
+    await repository.upsertAll([
+      _track(uri: 'file:///delta.mp3', title: 'Delta', artist: 'Grupo'),
+      _track(uri: 'file:///alfa.mp3', title: 'Alfa', artist: 'Grupo'),
+      _track(uri: 'file:///charlie.mp3', title: 'Charlie'),
+      _track(uri: 'file:///bravo.mp3', title: 'Bravo', artist: 'Grupo'),
+    ]);
+
+    expect(
+      (await repository.watchPage(limit: 2, offset: 1).first).map(
+        (track) => track.title,
+      ),
+      ['Bravo', 'Charlie'],
+    );
+    expect(
+      (await repository.watchPage(limit: 2, offset: 1, query: 'grupo').first)
+          .map((track) => track.title),
+      ['Bravo', 'Delta'],
+    );
+  });
+
   test('markUnavailable cambia la disponibilidad', () async {
     await repository.upsertAll([
       _track(uri: 'file:///ausente.mp3', title: 'Ausente'),

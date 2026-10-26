@@ -143,7 +143,7 @@ class LibraryScreen extends ConsumerWidget {
                 ),
               Expanded(
                 child: tracks.when(
-                  data: (items) => items.isEmpty
+                  data: (window) => window.items.isEmpty
                       ? const _EmptyLibrary()
                       : Column(
                           children: [
@@ -160,7 +160,7 @@ class LibraryScreen extends ConsumerWidget {
                                       onPressed: libraryState.actionsDisabled
                                           ? null
                                           : () => libraryController.playAll(
-                                              items,
+                                              window.items,
                                             ),
                                       icon: const Icon(Icons.play_arrow),
                                       label: const Text('Reproducir todo'),
@@ -173,7 +173,7 @@ class LibraryScreen extends ConsumerWidget {
                                       onPressed: libraryState.actionsDisabled
                                           ? null
                                           : () => libraryController.playAll(
-                                              items,
+                                              window.items,
                                               shuffle: true,
                                             ),
                                       icon: const Icon(Icons.shuffle),
@@ -186,10 +186,17 @@ class LibraryScreen extends ConsumerWidget {
                             const SectionTitle('Canciones'),
                             Expanded(
                               child: _TrackList(
-                                tracks: items,
+                                tracks: window.items,
+                                hasMore: window.hasMore,
+                                onLoadMore: ref
+                                    .read(libraryTrackLimitProvider.notifier)
+                                    .loadMore,
                                 enabled: !libraryState.actionsDisabled,
-                                onTrackTap: (index) => libraryController
-                                    .playVisibleQueue(items, startIndex: index),
+                                onTrackTap: (index) =>
+                                    libraryController.playVisibleQueue(
+                                      window.items,
+                                      startIndex: index,
+                                    ),
                                 onUnavailable:
                                     libraryController.showUnavailableMessage,
                                 onPlayNext: libraryController.playNext,
@@ -437,6 +444,8 @@ class _FolderTile extends ConsumerWidget {
 class _TrackList extends StatelessWidget {
   const _TrackList({
     required this.tracks,
+    required this.hasMore,
+    required this.onLoadMore,
     required this.enabled,
     required this.onTrackTap,
     required this.onUnavailable,
@@ -448,6 +457,8 @@ class _TrackList extends StatelessWidget {
   });
 
   final List<Track> tracks;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
   final bool enabled;
   final ValueChanged<int> onTrackTap;
   final VoidCallback onUnavailable;
@@ -466,8 +477,20 @@ class _TrackList extends StatelessWidget {
       itemExtent: 56,
       scrollCacheExtent: const ScrollCacheExtent.pixels(280),
       addAutomaticKeepAlives: false,
-      itemCount: tracks.length,
+      itemCount: tracks.length + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == tracks.length) {
+          scheduleMicrotask(onLoadMore);
+          return const Center(
+            child: SizedBox.square(
+              dimension: 24,
+              child: CircularProgressIndicator(
+                key: Key('library-page-loading-indicator'),
+                strokeWidth: 2,
+              ),
+            ),
+          );
+        }
         final track = tracks[index];
         return TrackTile(
           track: track,

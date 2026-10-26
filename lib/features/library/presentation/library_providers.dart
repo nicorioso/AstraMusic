@@ -80,15 +80,27 @@ final librarySearchQueryProvider = NotifierProvider<LibrarySearchQuery, String>(
   LibrarySearchQuery.new,
 );
 
-final libraryTracksProvider = StreamProvider<List<Track>>((ref) {
+const libraryTrackWindowSize = 100;
+
+final libraryTrackLimitProvider = NotifierProvider<LibraryTrackLimit, int>(
+  LibraryTrackLimit.new,
+);
+
+final libraryTracksProvider = StreamProvider<LibraryTrackWindow>((ref) {
   final repository = ref.watch(trackRepositoryProvider);
   final query = ref.watch(librarySearchQueryProvider).trim();
-  final tracks = query.isEmpty
+  final limit = ref.watch(libraryTrackLimitProvider);
+  final tracks = repository is PaginatedTrackRepository
+      ? repository.watchPage(limit: limit + 1, query: query)
+      : query.isEmpty
       ? repository.watchAll()
       : repository.watchSearch(query);
   return tracks.map((items) {
-    PerformanceDiagnostics.instance.recordLibraryLoaded(items.length);
-    return items;
+    final hasMore =
+        repository is PaginatedTrackRepository && items.length > limit;
+    final visible = hasMore ? items.take(limit).toList(growable: false) : items;
+    PerformanceDiagnostics.instance.recordLibraryLoaded(visible.length);
+    return LibraryTrackWindow(items: visible, hasMore: hasMore);
   });
 });
 
@@ -116,10 +128,28 @@ final class LibrarySearchQuery extends Notifier<String> {
     _debounce?.cancel();
     if (query.trim().isEmpty) {
       state = '';
+      ref.read(libraryTrackLimitProvider.notifier).reset();
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 300), () {
       state = query;
+      ref.read(libraryTrackLimitProvider.notifier).reset();
     });
   }
+}
+
+final class LibraryTrackLimit extends Notifier<int> {
+  @override
+  int build() => libraryTrackWindowSize;
+
+  void loadMore() => state += libraryTrackWindowSize;
+
+  void reset() => state = libraryTrackWindowSize;
+}
+
+final class LibraryTrackWindow {
+  const LibraryTrackWindow({required this.items, required this.hasMore});
+
+  final List<Track> items;
+  final bool hasMore;
 }

@@ -719,8 +719,9 @@ class SearchDestination extends ConsumerWidget {
                   ),
                 )
               : tracks.when(
-                  data: (trackItems) => playlists.when(
+                  data: (trackWindow) => playlists.when(
                     data: (playlistItems) {
+                      final trackItems = trackWindow.items;
                       final matches = playlistItems
                           .where(
                             (playlist) =>
@@ -742,11 +743,23 @@ class SearchDestination extends ConsumerWidget {
                             SliverFixedExtentList(
                               itemExtent: 56,
                               delegate: SliverChildBuilderDelegate(
-                                (context, index) => _TrackListTile(
-                                  track: trackItems[index],
-                                  tracks: trackItems,
-                                  index: index,
-                                ),
+                                (context, index) {
+                                  if (trackWindow.hasMore &&
+                                      index == trackItems.length - 1) {
+                                    scheduleMicrotask(
+                                      ref
+                                          .read(
+                                            libraryTrackLimitProvider.notifier,
+                                          )
+                                          .loadMore,
+                                    );
+                                  }
+                                  return _TrackListTile(
+                                    track: trackItems[index],
+                                    tracks: trackItems,
+                                    index: index,
+                                  );
+                                },
                                 childCount: trackItems.length,
                                 addAutomaticKeepAlives: false,
                               ),

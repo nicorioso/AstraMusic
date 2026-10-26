@@ -17,3 +17,11 @@ abstract interface class TrackRepository {
   Future<void> setFavorite(int id, bool favorite);
   Stream<List<Track>> watchFavorites();
 }
+
+abstract interface class PaginatedTrackRepository implements TrackRepository {
+  Stream<List<Track>> watchPage({
+    required int limit,
+    int offset = 0,
+    String query = '',
+  });
+}

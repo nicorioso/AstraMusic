@@ -6,7 +6,7 @@ import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 
-final class DriftTrackRepository implements TrackRepository {
+final class DriftTrackRepository implements PaginatedTrackRepository {
   DriftTrackRepository(this._database, {DateTime Function()? now})
     : _now = now ?? DateTime.now;
 
@@ -21,6 +21,36 @@ final class DriftTrackRepository implements TrackRepository {
         (track) => OrderingTerm.asc(track.id),
       ]);
     return query.watch().map(_toDomainList);
+  }
+
+  @override
+  Stream<List<Track>> watchPage({
+    required int limit,
+    int offset = 0,
+    String query = '',
+  }) {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Debe ser mayor que cero.');
+    }
+    if (offset < 0) {
+      throw ArgumentError.value(offset, 'offset', 'No puede ser negativo.');
+    }
+
+    final normalizedQuery = normalizeForSearch(query);
+    final statement = _database.select(_database.tracks);
+    if (normalizedQuery.isNotEmpty) {
+      final escapedQuery = _escapeLike(normalizedQuery);
+      statement.where(
+        (track) => track.searchText.like('%$escapedQuery%', escapeChar: r'\'),
+      );
+    }
+    statement
+      ..orderBy([
+        (track) => OrderingTerm.asc(track.sortTitle),
+        (track) => OrderingTerm.asc(track.id),
+      ])
+      ..limit(limit, offset: offset);
+    return statement.watch().map(_toDomainList);
   }
 
   @override
