@@ -19,6 +19,7 @@ import 'package:astramusic/features/library/domain/library_group.dart';
 import 'package:astramusic/features/library/domain/library_grouping_repository.dart';
 import 'package:astramusic/features/library/domain/library_folders_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/domain/track_list_query.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -91,8 +92,14 @@ final libraryTrackLimitProvider = NotifierProvider<LibraryTrackLimit, int>(
 final libraryTracksProvider = StreamProvider<LibraryTrackWindow>((ref) {
   final repository = ref.watch(trackRepositoryProvider);
   final query = ref.watch(librarySearchQueryProvider).trim();
+  final filters = ref.watch(libraryTrackFiltersProvider);
   final limit = ref.watch(libraryTrackLimitProvider);
-  final tracks = repository is PaginatedTrackRepository
+  final tracks = repository is FilteredTrackRepository
+      ? repository.watchFilteredPage(
+          limit: limit + 1,
+          query: filters.toQuery(search: query),
+        )
+      : repository is PaginatedTrackRepository
       ? repository.watchPage(limit: limit + 1, query: query)
       : query.isEmpty
       ? repository.watchAll()
@@ -105,6 +112,38 @@ final libraryTracksProvider = StreamProvider<LibraryTrackWindow>((ref) {
     return LibraryTrackWindow(items: visible, hasMore: hasMore);
   });
 });
+
+final libraryTrackFiltersProvider =
+    NotifierProvider<LibraryTrackFilters, LibraryTrackFilterState>(
+      LibraryTrackFilters.new,
+    );
+
+class LibraryTrackFilterState {
+  const LibraryTrackFilterState({
+    this.favoritesOnly = false,
+    this.availableOnly = false,
+    this.sort = TrackSort.title,
+  });
+  final bool favoritesOnly;
+  final bool availableOnly;
+  final TrackSort sort;
+  TrackListQuery toQuery({required String search}) => TrackListQuery(
+    search: search, favoritesOnly: favoritesOnly,
+    availableOnly: availableOnly, sort: sort,
+  );
+  LibraryTrackFilterState copyWith({bool? favoritesOnly, bool? availableOnly, TrackSort? sort}) => LibraryTrackFilterState(
+    favoritesOnly: favoritesOnly ?? this.favoritesOnly,
+    availableOnly: availableOnly ?? this.availableOnly, sort: sort ?? this.sort,
+  );
+}
+
+class LibraryTrackFilters extends Notifier<LibraryTrackFilterState> {
+  @override
+  LibraryTrackFilterState build() => const LibraryTrackFilterState();
+  void toggleFavorites() { state = state.copyWith(favoritesOnly: !state.favoritesOnly); ref.read(libraryTrackLimitProvider.notifier).reset(); }
+  void toggleAvailable() { state = state.copyWith(availableOnly: !state.availableOnly); ref.read(libraryTrackLimitProvider.notifier).reset(); }
+  void setSort(TrackSort sort) { state = state.copyWith(sort: sort); ref.read(libraryTrackLimitProvider.notifier).reset(); }
+}
 
 final allLibraryTracksProvider = StreamProvider<List<Track>>((ref) {
   return ref.watch(trackRepositoryProvider).watchAll().map((items) {

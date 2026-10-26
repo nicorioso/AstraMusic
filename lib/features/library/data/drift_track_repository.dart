@@ -2,6 +2,7 @@ import 'package:astramusic/core/db/app_database.dart';
 import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/features/library/data/track_mapper.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/domain/track_list_query.dart';
 import 'package:astramusic/features/library/domain/library_group.dart';
 import 'package:astramusic/features/library/domain/library_grouping_repository.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
@@ -9,7 +10,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 
 final class DriftTrackRepository
-    implements PaginatedTrackRepository, LibraryGroupingRepository {
+    implements PaginatedTrackRepository, FilteredTrackRepository, LibraryGroupingRepository {
   DriftTrackRepository(this._database, {DateTime Function()? now})
     : _now = now ?? DateTime.now;
 
@@ -32,6 +33,15 @@ final class DriftTrackRepository
     int offset = 0,
     String query = '',
   }) {
+    return watchFilteredPage(limit: limit, offset: offset, query: TrackListQuery(search: query));
+  }
+
+  @override
+  Stream<List<Track>> watchFilteredPage({
+    required int limit,
+    int offset = 0,
+    TrackListQuery query = const TrackListQuery(),
+  }) {
     if (limit <= 0) {
       throw ArgumentError.value(limit, 'limit', 'Debe ser mayor que cero.');
     }
@@ -39,7 +49,7 @@ final class DriftTrackRepository
       throw ArgumentError.value(offset, 'offset', 'No puede ser negativo.');
     }
 
-    final normalizedQuery = normalizeForSearch(query);
+    final normalizedQuery = normalizeForSearch(query.search);
     final statement = _database.select(_database.tracks);
     if (normalizedQuery.isNotEmpty) {
       final escapedQuery = _escapeLike(normalizedQuery);
@@ -47,14 +57,21 @@ final class DriftTrackRepository
         (track) => track.searchText.like('%$escapedQuery%', escapeChar: r'\'),
       );
     }
+    if (query.favoritesOnly) statement.where((track) => track.favoritedAt.isNotNull());
+    if (query.availableOnly) statement.where((track) => track.isAvailable.equals(true));
     statement
-      ..orderBy([
-        (track) => OrderingTerm.asc(track.sortTitle),
-        (track) => OrderingTerm.asc(track.id),
-      ])
+      ..orderBy(_ordering(query.sort))
       ..limit(limit, offset: offset);
     return statement.watch().map(_toDomainList);
   }
+
+  List<OrderingTerm Function(Tracks)> _ordering(TrackSort sort) => switch (sort) {
+    TrackSort.title => [(track) => OrderingTerm.asc(track.sortTitle), (track) => OrderingTerm.asc(track.id)],
+    TrackSort.dateAdded => [(track) => OrderingTerm.desc(track.dateAdded), (track) => OrderingTerm.desc(track.id)],
+    TrackSort.artist => [(track) => OrderingTerm.asc(track.artist), (track) => OrderingTerm.asc(track.sortTitle)],
+    TrackSort.year => [(track) => OrderingTerm.desc(track.year), (track) => OrderingTerm.asc(track.sortTitle)],
+    TrackSort.duration => [(track) => OrderingTerm.desc(track.durationMs), (track) => OrderingTerm.asc(track.sortTitle)],
+  };
 
   @override
   Stream<List<Track>> watchSearch(String query) {

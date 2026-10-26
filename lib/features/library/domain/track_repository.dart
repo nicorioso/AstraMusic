@@ -1,4 +1,5 @@
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/domain/track_list_query.dart';
 
 abstract interface class TrackRepository {
   Stream<List<Track>> watchAll();
@@ -23,5 +24,13 @@ abstract interface class PaginatedTrackRepository implements TrackRepository {
     required int limit,
     int offset = 0,
     String query = '',
+  });
+}
+
+abstract interface class FilteredTrackRepository implements TrackRepository {
+  Stream<List<Track>> watchFilteredPage({
+    required int limit,
+    int offset = 0,
+    TrackListQuery query = const TrackListQuery(),
   });
 }

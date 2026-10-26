@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:astramusic/core/db/app_database.dart';
 import 'package:astramusic/features/library/data/drift_track_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/domain/track_list_query.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -144,6 +145,22 @@ void main() {
       (await repository.watchPage(limit: 2, offset: 1, query: 'grupo').first)
           .map((track) => track.title),
       ['Bravo', 'Delta'],
+    );
+  });
+
+  test('watchFilteredPage combina favoritos, disponibilidad y orden', () async {
+    await repository.upsertAll([
+      _track(uri: 'file:///uno.mp3', title: 'Uno', artist: 'Zulu', duration: const Duration(minutes: 1)),
+      _track(uri: 'file:///dos.mp3', title: 'Dos', artist: 'Alfa', duration: const Duration(minutes: 3), isAvailable: false),
+      _track(uri: 'file:///tres.mp3', title: 'Tres', artist: 'Beta', duration: const Duration(minutes: 2)),
+    ]);
+    final items = await repository.watchAll().first;
+    for (final item in items) {
+      await repository.setFavorite(item.id!, true);
+    }
+    expect(
+      (await repository.watchFilteredPage(limit: 10, query: const TrackListQuery(favoritesOnly: true, availableOnly: true, sort: TrackSort.duration)).first).map((track) => track.title),
+      ['Tres', 'Uno'],
     );
   });
 
@@ -309,12 +326,16 @@ Track _track({
   required String title,
   String? artist,
   String? album,
+  Duration? duration,
+  bool isAvailable = true,
 }) {
   return Track(
     uri: uri,
     title: title,
     artist: artist,
     album: album,
+    duration: duration,
+    isAvailable: isAvailable,
     dateAdded: DateTime(2026),
   );
 }

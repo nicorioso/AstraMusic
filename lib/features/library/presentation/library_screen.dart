@@ -11,6 +11,7 @@ import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/domain/track_list_query.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
@@ -27,6 +28,7 @@ class LibraryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tracks = ref.watch(libraryTracksProvider);
+    final filters = ref.watch(libraryTrackFiltersProvider);
     final libraryState = ref.watch(libraryControllerProvider);
     final currentPath = ref.watch(
       playerControllerProvider.select((state) => state.currentItem?.path),
@@ -133,6 +135,7 @@ class LibraryScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              _LibraryFilterBar(filters: filters),
               if (libraryState.scanActive)
                 _ScanProgressCard(
                   foundCount: libraryState.foundCount,
@@ -251,6 +254,35 @@ class LibraryScreen extends ConsumerWidget {
     );
   }
 }
+
+class _LibraryFilterBar extends ConsumerWidget {
+  const _LibraryFilterBar({required this.filters});
+  final LibraryTrackFilterState filters;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(libraryTrackFiltersProvider.notifier);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        FilterChip(key: const Key('library-favorites-filter'), label: const Text('Favoritas'), selected: filters.favoritesOnly, onSelected: (_) => controller.toggleFavorites()),
+        FilterChip(key: const Key('library-available-filter'), label: const Text('Disponibles'), selected: filters.availableOnly, onSelected: (_) => controller.toggleAvailable()),
+        PopupMenuButton<TrackSort>(
+          key: const Key('library-sort-menu'),
+          tooltip: 'Ordenar',
+          onSelected: controller.setSort,
+          itemBuilder: (_) => TrackSort.values.map((sort) => PopupMenuItem(value: sort, child: Text(_sortLabel(sort)))).toList(),
+          child: Chip(avatar: const Icon(Icons.sort, size: 18), label: Text(_sortLabel(filters.sort))),
+        ),
+      ]),
+    );
+  }
+}
+
+String _sortLabel(TrackSort sort) => switch (sort) {
+  TrackSort.title => 'Nombre', TrackSort.dateAdded => 'Fecha de adición',
+  TrackSort.artist => 'Artista', TrackSort.year => 'Año', TrackSort.duration => 'Duración',
+};
 
 class _ScanProgressCard extends StatelessWidget {
   const _ScanProgressCard({
