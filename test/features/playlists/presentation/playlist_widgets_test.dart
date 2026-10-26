@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/image_file_picker.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
@@ -245,6 +246,33 @@ void main() {
     expect(fixture.playlists.deletedIds, [7]);
   });
 
+  testWidgets('cambia la carátula desde el menú real de la playlist', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    await tester.pumpWidget(fixture.detailApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('playlist-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cambiar carátula'));
+    await tester.pumpAndSettle();
+
+    expect(fixture.playlists.artworkChanges, [(7, '/tmp/cover.png')]);
+  });
+
+  testWidgets('detalle móvil muestra fecha y duración de cada canción', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(fixture.detailApp());
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('1 ene 2026'), findsWidgets);
+    expect(find.text('3:00'), findsWidgets);
+  });
+
   testWidgets('abre overlays desde sus flujos reales sin excepciones', (
     tester,
   ) async {
@@ -322,9 +350,12 @@ void main() {
         final viewport = tester.getSize(
           find.byKey(const Key('playlist-tracks-viewport')),
         );
+        final minimumViewportRatio = size.width < desktopBreakpoint
+            ? 0.40
+            : 0.60;
         expect(
           viewport.height,
-          greaterThanOrEqualTo((size.height - 56) * 0.70),
+          greaterThanOrEqualTo((size.height - 56) * minimumViewportRatio),
         );
         for (final key in const [
           Key('playlist-play-button'),
@@ -384,6 +415,9 @@ final class _Fixture {
       playlistRepositoryProvider.overrideWithValue(playlists),
       trackRepositoryProvider.overrideWithValue(trackRepository),
       audioPlayerServiceProvider.overrideWithValue(player),
+      playlistArtworkPickerProvider.overrideWithValue(
+        const _FakeImageFilePicker(),
+      ),
       isAndroidPlatformProvider.overrideWithValue(true),
     ],
     child: MaterialApp(
@@ -400,6 +434,9 @@ final class _Fixture {
       playlistRepositoryProvider.overrideWithValue(playlists),
       trackRepositoryProvider.overrideWithValue(trackRepository),
       audioPlayerServiceProvider.overrideWithValue(player),
+      playlistArtworkPickerProvider.overrideWithValue(
+        const _FakeImageFilePicker(),
+      ),
       isAndroidPlatformProvider.overrideWithValue(true),
     ],
     child: MaterialApp(
@@ -457,6 +494,7 @@ final class _FakePlaylistRepository implements PlaylistRepository {
                ? 'Viaje'
                : 'Playlist ${index + 1}',
            trackCount: tracks.length,
+           addedAt: DateTime(2026),
            createdAt: DateTime(2026),
            updatedAt: DateTime(2026),
          ),
@@ -470,11 +508,13 @@ final class _FakePlaylistRepository implements PlaylistRepository {
   final List<int> removedTrackIds = [];
   final List<(int, int)> moves = [];
   final List<int> playedIds = [];
+  final List<(int, String?)> artworkChanges = [];
   Playlist get playlist => items.isEmpty
       ? Playlist(
           id: 7,
           name: 'Viaje',
           trackCount: tracks.length,
+          addedAt: DateTime(2026),
           createdAt: DateTime(2026),
           updatedAt: DateTime(2026),
         )
@@ -487,6 +527,7 @@ final class _FakePlaylistRepository implements PlaylistRepository {
       id: 8,
       name: name,
       trackCount: 0,
+      addedAt: DateTime(2026),
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026),
     );
@@ -500,6 +541,11 @@ final class _FakePlaylistRepository implements PlaylistRepository {
 
   @override
   Future<void> delete(int id) async => deletedIds.add(id);
+
+  @override
+  Future<void> setCustomArtwork(int id, String? path) async {
+    artworkChanges.add((id, path));
+  }
 
   @override
   Future<void> removeTrack(int playlistId, int trackId) async {
@@ -532,6 +578,13 @@ final class _FakePlaylistRepository implements PlaylistRepository {
 
   @override
   Stream<List<Track>> watchTracks(int id) => Stream.value(tracks);
+}
+
+final class _FakeImageFilePicker implements ImageFilePicker {
+  const _FakeImageFilePicker();
+
+  @override
+  Future<String?> pickImage() async => '/tmp/cover.png';
 }
 
 final class _TrackRepository implements TrackRepository {

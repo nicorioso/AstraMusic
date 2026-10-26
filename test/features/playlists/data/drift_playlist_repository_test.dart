@@ -40,10 +40,27 @@ void main() {
     final created = await repository.create('  Viaje  ');
     expect(created.name, 'Viaje');
     expect(created.trackCount, 0);
+    expect(created.addedAt, DateTime.utc(2026, 1, 2));
 
     await repository.rename(created.id, '  Ruta  ');
     expect((await repository.watchById(created.id).first)!.name, 'Ruta');
     await expectLater(repository.create('   '), throwsArgumentError);
+  });
+
+  test('guarda y limpia la carátula personalizada', () async {
+    final created = await repository.create('Portada');
+
+    await repository.setCustomArtwork(created.id, ' /tmp/cover.png ');
+    expect(
+      (await repository.watchById(created.id).first)!.customArtworkPath,
+      '/tmp/cover.png',
+    );
+
+    await repository.setCustomArtwork(created.id, ' ');
+    expect(
+      (await repository.watchById(created.id).first)!.customArtworkPath,
+      null,
+    );
   });
 
   test('añade al final, omite duplicados y actualiza el conteo', () async {

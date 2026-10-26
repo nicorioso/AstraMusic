@@ -26,6 +26,7 @@ final class DriftPlaylistRepository implements PlaylistRepository {
         .insert(
           PlaylistsCompanion.insert(
             name: normalized,
+            addedAt: Value(now),
             createdAt: now,
             updatedAt: now,
           ),
@@ -34,8 +35,24 @@ final class DriftPlaylistRepository implements PlaylistRepository {
       id: id,
       name: normalized,
       trackCount: 0,
+      addedAt: now,
       createdAt: now,
       updatedAt: now,
+    );
+  }
+
+  @override
+  Future<void> setCustomArtwork(int id, String? path) async {
+    final normalized = path?.trim();
+    await (_database.update(
+      _database.playlists,
+    )..where((row) => row.id.equals(id))).write(
+      PlaylistsCompanion(
+        customArtworkPath: Value(
+          normalized == null || normalized.isEmpty ? null : normalized,
+        ),
+        updatedAt: Value(_now()),
+      ),
     );
   }
 
@@ -269,9 +286,11 @@ final class DriftPlaylistRepository implements PlaylistRepository {
       id: data.id,
       name: data.name,
       trackCount: row.read(_trackCount) ?? 0,
+      addedAt: data.addedAt,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       lastPlayedAt: data.lastPlayedAt,
+      customArtworkPath: data.customArtworkPath,
     );
   }
 }

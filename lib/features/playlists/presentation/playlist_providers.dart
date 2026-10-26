@@ -1,4 +1,5 @@
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/core/platform/image_file_picker.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/playlists/data/drift_playlist_repository.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
@@ -10,6 +11,10 @@ final playlistRepositoryProvider = Provider<PlaylistRepository>((ref) {
     ref.watch(appDatabaseProvider),
     useAlbumArtworkIdentity: ref.watch(isAndroidPlatformProvider),
   );
+});
+
+final playlistArtworkPickerProvider = Provider<ImageFilePicker>((ref) {
+  return const SystemImageFilePicker();
 });
 
 final playlistsProvider = StreamProvider<List<Playlist>>((ref) {

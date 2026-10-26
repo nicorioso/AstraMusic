@@ -16,6 +16,7 @@ import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
+import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -258,9 +259,11 @@ void main() {
       Key('collapsed-settings-button'),
     ]) {
       final button = find.byKey(key);
-      final icon = find.descendant(of: button, matching: find.byType(Icon));
+      final content = key == const ValueKey('collapsed-playlist-7')
+          ? find.descendant(of: button, matching: find.byType(PlaylistCover))
+          : find.descendant(of: button, matching: find.byType(Icon));
       expect(
-        (tester.getCenter(icon).dx - sidebarCenter).abs(),
+        (tester.getCenter(content).dx - sidebarCenter).abs(),
         lessThanOrEqualTo(1),
         reason: '$key no comparte el eje central',
       );
@@ -459,7 +462,7 @@ void main() {
     );
   });
 
-  testWidgets('la rejilla abre y reproduce una playlist marcándola', (
+  testWidgets('la rejilla móvil abre playlist sin botón fijo de reproducción', (
     tester,
   ) async {
     final fixture = _Fixture();
@@ -468,16 +471,12 @@ void main() {
     await tester.pumpWidget(fixture.app());
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('home-shortcut-play-7')), findsNothing);
+    expect(find.textContaining('30 ene 2026'), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('home-shortcut-7')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('playlist-detail')), findsOneWidget);
-
-    await tester.tap(find.text('Inicio'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('home-shortcut-play-7')));
-    await tester.pumpAndSettle();
-    expect(fixture.playlists.markedPlayedIds, [7]);
-    expect(fixture.player.playQueueCalls, 1);
   });
 
   testWidgets('buscar separa canciones y playlists ignorando acentos', (
@@ -712,6 +711,7 @@ final class _FakePlaylistRepository implements PlaylistRepository {
     id: 7,
     name: 'Playlist de prueba',
     trackCount: tracks.length,
+    addedAt: DateTime(2026),
     createdAt: DateTime(2026),
     updatedAt: DateTime(2026),
   );
@@ -719,6 +719,7 @@ final class _FakePlaylistRepository implements PlaylistRepository {
     id: 8,
     name: 'Éxitos acústicos',
     trackCount: 0,
+    addedAt: DateTime(2026, 2),
     createdAt: DateTime(2026, 2),
     updatedAt: DateTime(2026, 2),
   );
@@ -728,12 +729,16 @@ final class _FakePlaylistRepository implements PlaylistRepository {
     id: 1,
     name: name.trim(),
     trackCount: 0,
+    addedAt: DateTime(2026),
     createdAt: DateTime(2026),
     updatedAt: DateTime(2026),
   );
 
   @override
   Future<void> delete(int id) async {}
+
+  @override
+  Future<void> setCustomArtwork(int id, String? path) async {}
 
   @override
   Future<AddTracksResult> addTracks(int playlistId, List<int> trackIds) async =>

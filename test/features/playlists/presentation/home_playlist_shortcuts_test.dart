@@ -50,6 +50,7 @@ Playlist _playlist(int id, {required int day}) => Playlist(
   id: id,
   name: 'Playlist $id',
   trackCount: id,
+  addedAt: DateTime(2026, 1, day + 1),
   createdAt: DateTime(2026, 1, day + 1),
   updatedAt: DateTime(2026, 1, day + 1),
 );

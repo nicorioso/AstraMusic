@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:astramusic/core/navigation/app_navigation.dart';
@@ -54,6 +55,20 @@ class PlaylistCover extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (playlist.id == favoritesPlaylistId) {
       return FavoritesArtwork(size: size);
+    }
+    final customArtworkPath = playlist.customArtworkPath;
+    if (customArtworkPath != null && customArtworkPath.isNotEmpty) {
+      return ClipRRect(
+        key: ValueKey('playlist-custom-cover-${playlist.id}'),
+        borderRadius: BorderRadius.circular(6),
+        child: Image.file(
+          File(customArtworkPath),
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => PlaylistArtwork(size: size),
+        ),
+      );
     }
     final tracks = ref.watch(playlistCoverTracksProvider(playlist.id));
     return tracks.when(
@@ -341,6 +356,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
             id: favoritesPlaylistId,
             name: 'Canciones que te gustan',
             trackCount: items.length,
+            addedAt: DateTime.fromMillisecondsSinceEpoch(0),
             createdAt: DateTime.fromMillisecondsSinceEpoch(0),
             updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
           ),
@@ -404,6 +420,49 @@ class _PlaylistDetailBody extends ConsumerWidget {
       Duration.zero,
       (total, track) => total + (track.duration ?? Duration.zero),
     );
+    final artwork = favorites
+        ? const FavoritesArtwork(size: 200)
+        : PlaylistCover(playlist: playlist, size: 200);
+    final details = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          playlist.name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.displaySmall,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${playlistTrackCount(playlist.trackCount)} · ${_durationLabel(duration)}',
+        ),
+      ],
+    );
+    final menu = favorites
+        ? null
+        : PopupMenuButton<_PlaylistAction>(
+            key: const Key('playlist-menu-button'),
+            onSelected: (action) => switch (action) {
+              _PlaylistAction.changeArtwork => _changeArtwork(context, ref),
+              _PlaylistAction.rename => _rename(context, ref),
+              _PlaylistAction.delete => _delete(context, ref),
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: _PlaylistAction.changeArtwork,
+                child: Text('Cambiar carátula'),
+              ),
+              PopupMenuItem(
+                value: _PlaylistAction.rename,
+                child: Text('Renombrar'),
+              ),
+              PopupMenuItem(
+                value: _PlaylistAction.delete,
+                child: Text('Eliminar'),
+              ),
+            ],
+          );
     return Column(
       key: const Key('playlist-detail'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -432,51 +491,35 @@ class _PlaylistDetailBody extends ConsumerWidget {
                     ),
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (favorites)
-                    const FavoritesArtwork(size: 104)
-                  else
-                    PlaylistCover(playlist: playlist, size: 104),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 600) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          playlist.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${playlistTrackCount(playlist.trackCount)} · ${_durationLabel(duration)}',
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (!favorites)
-                    PopupMenuButton<_PlaylistAction>(
-                      key: const Key('playlist-menu-button'),
-                      onSelected: (action) => switch (action) {
-                        _PlaylistAction.rename => _rename(context, ref),
-                        _PlaylistAction.delete => _delete(context, ref),
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: _PlaylistAction.rename,
-                          child: Text('Renombrar'),
-                        ),
-                        PopupMenuItem(
-                          value: _PlaylistAction.delete,
-                          child: Text('Eliminar'),
+                        Align(alignment: Alignment.center, child: artwork),
+                        const SizedBox(height: 20),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(child: details),
+                            ?menu,
+                          ],
                         ),
                       ],
-                    ),
-                ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      artwork,
+                      const SizedBox(width: 24),
+                      Expanded(child: details),
+                      ?menu,
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -512,6 +555,8 @@ class _PlaylistDetailBody extends ConsumerWidget {
             ],
           ),
         ),
+        if (MediaQuery.sizeOf(context).width >= 840 && tracks.isNotEmpty)
+          const _PlaylistTrackHeader(),
         Expanded(
           key: const Key('playlist-tracks-viewport'),
           child: tracks.isEmpty
@@ -537,39 +582,69 @@ class _PlaylistDetailBody extends ConsumerWidget {
                   itemCount: tracks.length,
                   itemBuilder: (context, index) {
                     final track = tracks[index];
+                    void playTrack() => favorites
+                        ? library.playVisibleQueue(tracks, startIndex: index)
+                        : library.playPlaylist(
+                            playlist.id,
+                            tracks,
+                            startIndex: index,
+                          );
+                    void removeTrack() => favorites
+                        ? ref
+                              .read(trackRepositoryProvider)
+                              .setFavorite(track.id!, false)
+                        : ref
+                              .read(playlistRepositoryProvider)
+                              .removeTrack(playlist.id, track.id!);
+                    if (MediaQuery.sizeOf(context).width >= 840) {
+                      final row = _PlaylistDesktopTrackRow(
+                        track: track,
+                        index: index,
+                        onTap: track.isAvailable
+                            ? playTrack
+                            : library.showUnavailableMessage,
+                        removeLabel: favorites
+                            ? 'Quitar de Me gusta'
+                            : 'Quitar de esta playlist',
+                        onRemove: removeTrack,
+                      );
+                      return favorites
+                          ? KeyedSubtree(
+                              key: ValueKey('favorite-track-${track.id}'),
+                              child: row,
+                            )
+                          : _ReorderableTrackRow(
+                              key: ValueKey('playlist-track-${track.id}'),
+                              index: index,
+                              child: row,
+                            );
+                    }
                     final tile = TrackTile(
                       track: track,
+                      showDateAdded: true,
                       onTap: track.isAvailable
-                          ? () => favorites
-                                ? library.playVisibleQueue(
-                                    tracks,
-                                    startIndex: index,
-                                  )
-                                : library.playPlaylist(
-                                    playlist.id,
-                                    tracks,
-                                    startIndex: index,
-                                  )
+                          ? playTrack
                           : library.showUnavailableMessage,
-                      trailing: PopupMenuButton<bool>(
-                        tooltip: 'Acciones de ${track.title}',
-                        itemBuilder: (_) => [
-                          PopupMenuItem(
-                            value: true,
-                            child: Text(
-                              favorites
-                                  ? 'Quitar de Me gusta'
-                                  : 'Quitar de esta playlist',
-                            ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (track.duration case final duration?)
+                            Text(_trackDuration(duration)),
+                          PopupMenuButton<bool>(
+                            tooltip: 'Acciones de ${track.title}',
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: true,
+                                child: Text(
+                                  favorites
+                                      ? 'Quitar de Me gusta'
+                                      : 'Quitar de esta playlist',
+                                ),
+                              ),
+                            ],
+                            onSelected: (_) => removeTrack(),
                           ),
                         ],
-                        onSelected: (_) => favorites
-                            ? ref
-                                  .read(trackRepositoryProvider)
-                                  .setFavorite(track.id!, false)
-                            : ref
-                                  .read(playlistRepositoryProvider)
-                                  .removeTrack(playlist.id, track.id!),
                       ),
                     );
                     if (favorites) {
@@ -588,6 +663,24 @@ class _PlaylistDetailBody extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _changeArtwork(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final picker = ref.read(playlistArtworkPickerProvider);
+    final repository = ref.read(playlistRepositoryProvider);
+    try {
+      final path = await picker.pickImage();
+      if (path == null) return;
+      await repository.setCustomArtwork(playlist.id, path);
+    } catch (_) {
+      if (!messenger.mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('No fue posible cambiar la carátula.')),
+        );
+    }
   }
 
   Future<void> _rename(BuildContext context, WidgetRef ref) async {
@@ -643,6 +736,130 @@ class _PlaylistDetailBody extends ConsumerWidget {
   }
 }
 
+class _PlaylistTrackHeader extends StatelessWidget {
+  const _PlaylistTrackHeader();
+
+  @override
+  Widget build(BuildContext context) => const Column(
+    children: [
+      SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            SizedBox(width: 56, child: Center(child: Text('#'))),
+            Expanded(flex: 5, child: Text('Título')),
+            Expanded(flex: 3, child: Text('Álbum')),
+            SizedBox(width: 128, child: Text('Fecha de adición')),
+            SizedBox(width: 80, child: Text('Duración')),
+            SizedBox(width: 96),
+          ],
+        ),
+      ),
+      Divider(height: 1),
+    ],
+  );
+}
+
+class _PlaylistDesktopTrackRow extends ConsumerWidget {
+  const _PlaylistDesktopTrackRow({
+    required this.track,
+    required this.index,
+    required this.onTap,
+    required this.removeLabel,
+    required this.onRemove,
+  });
+
+  final Track track;
+  final int index;
+  final VoidCallback onTap;
+  final String removeLabel;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentId = ref.watch(
+      playerControllerProvider.select((state) => state.currentItem?.trackId),
+    );
+    final current = track.id != null && track.id == currentId;
+    final currentColor = current ? context.astraColors.accent : null;
+    return Material(
+      color: current
+          ? context.astraColors.surfaceHover
+          : context.astraColors.surface.withValues(alpha: 0),
+      child: InkWell(
+        hoverColor: context.astraColors.surfaceHover,
+        onTap: onTap,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 56,
+              child: Center(
+                child: current
+                    ? Icon(Icons.graphic_eq, color: currentColor, size: 20)
+                    : Text('${index + 1}'),
+              ),
+            ),
+            Expanded(
+              flex: 5,
+              child: Row(
+                children: [
+                  TrackArtwork(track: track, size: 44),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: currentColor),
+                        ),
+                        Text(
+                          track.artist ?? 'Artista desconocido',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: Text(
+                track.album ?? '—',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            SizedBox(width: 128, child: Text(formatTrackDate(track.dateAdded))),
+            SizedBox(
+              width: 80,
+              child: Text(
+                track.duration == null ? '—' : _trackDuration(track.duration!),
+              ),
+            ),
+            SizedBox(
+              width: 48,
+              child: PopupMenuButton<bool>(
+                tooltip: 'Acciones de ${track.title}',
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: true, child: Text(removeLabel)),
+                ],
+                onSelected: (_) => onRemove(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ReorderableTrackRow extends StatefulWidget {
   const _ReorderableTrackRow({
     required this.index,
@@ -686,11 +903,16 @@ class _ReorderableTrackRowState extends State<_ReorderableTrackRow> {
   }
 }
 
-enum _PlaylistAction { rename, delete }
+enum _PlaylistAction { changeArtwork, rename, delete }
 
 String _durationLabel(Duration duration) {
   if (duration == Duration.zero) return '0 min';
   final hours = duration.inHours;
   final minutes = duration.inMinutes.remainder(60);
   return hours > 0 ? '$hours h $minutes min' : '${duration.inMinutes} min';
+}
+
+String _trackDuration(Duration duration) {
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '${duration.inMinutes}:$seconds';
 }

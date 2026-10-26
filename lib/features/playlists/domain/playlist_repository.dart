@@ -11,6 +11,7 @@ class AddTracksResult {
 abstract interface class PlaylistRepository {
   Future<Playlist> create(String name);
   Future<void> rename(int id, String name);
+  Future<void> setCustomArtwork(int id, String? path);
   Future<void> delete(int id);
   Stream<List<Playlist>> watchAll();
   Stream<Playlist?> watchById(int id);

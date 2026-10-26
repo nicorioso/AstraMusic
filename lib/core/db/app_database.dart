@@ -30,6 +30,9 @@ class Tracks extends Table {
 class Playlists extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
+  TextColumn get customArtworkPath => text().nullable()();
+  DateTimeColumn get addedAt =>
+      dateTime().withDefault(const CustomExpression<DateTime>('0'))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get lastPlayedAt => dateTime().nullable()();
@@ -111,7 +114,7 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -186,6 +189,15 @@ final class AppDatabase extends _$AppDatabase {
           UPDATE tracks
           SET favorited_at = date_added
           WHERE is_favorite = 1
+        ''');
+      }
+      if (from < 9) {
+        await migrator.addColumn(playlists, playlists.customArtworkPath);
+        await migrator.addColumn(playlists, playlists.addedAt);
+        await customStatement('''
+          UPDATE playlists
+          SET added_at = created_at
+          WHERE added_at = 0
         ''');
       }
     },

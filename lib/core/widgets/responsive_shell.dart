@@ -166,7 +166,7 @@ class _DesktopSidebar extends ConsumerWidget {
                       _CollapsedSidebarButton(
                         key: ValueKey('collapsed-playlist-${playlist.id}'),
                         tooltip: playlist.name,
-                        icon: Icons.music_note,
+                        child: PlaylistCover(playlist: playlist, size: 40),
                         onPressed: () => ref
                             .read(appDestinationProvider.notifier)
                             .select(AppDestination.playlist(playlist.id)),
@@ -275,13 +275,15 @@ class _DesktopSidebar extends ConsumerWidget {
 class _CollapsedSidebarButton extends StatelessWidget {
   const _CollapsedSidebarButton({
     required this.tooltip,
-    required this.icon,
     required this.onPressed,
+    this.icon,
+    this.child,
     super.key,
   });
 
   final String tooltip;
-  final IconData icon;
+  final IconData? icon;
+  final Widget? child;
   final VoidCallback onPressed;
 
   @override
@@ -292,7 +294,7 @@ class _CollapsedSidebarButton extends StatelessWidget {
         tooltip: tooltip,
         padding: const EdgeInsets.all(16),
         onPressed: onPressed,
-        icon: Icon(icon),
+        icon: child ?? Icon(icon),
       ),
     );
   }
@@ -640,7 +642,7 @@ class _HomeShortcutTileState extends ConsumerState<_HomeShortcutTile> {
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
               ),
-              if (!widget.showPlayOnHover || _hovered)
+              if (widget.showPlayOnHover && _hovered)
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: PlayCircleButton(
@@ -890,7 +892,14 @@ class _TrackListTile extends ConsumerWidget {
     final controller = ref.read(libraryControllerProvider.notifier);
     return TrackTile(
       track: track,
-      trailing: _TrackActionsMenu(track: track),
+      showDateAdded: true,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_trackDuration(track.duration)),
+          _TrackActionsMenu(track: track),
+        ],
+      ),
       onTap: track.isAvailable
           ? () => controller.playVisibleQueue(tracks, startIndex: index)
           : controller.showUnavailableMessage,
@@ -948,6 +957,7 @@ class _DesktopTrackHeader extends StatelessWidget {
             flex: 3,
             child: Text('Álbum'),
           ),
+        const SizedBox(width: 128, child: Text('Fecha de adición')),
         const SizedBox(width: 96, child: Text('Duración')),
         const SizedBox(width: 48),
       ],
@@ -1041,6 +1051,11 @@ class _DesktopTrackRow extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+              SizedBox(
+                key: ValueKey('desktop-date-added-${track.id}'),
+                width: 128,
+                child: Text(formatTrackDate(track.dateAdded)),
+              ),
               SizedBox(width: 96, child: Text(_trackDuration(track.duration))),
               SizedBox(width: 48, child: _TrackActionsMenu(track: track)),
             ],

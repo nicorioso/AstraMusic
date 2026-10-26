@@ -16,6 +16,7 @@ class TrackTile extends ConsumerStatefulWidget {
     this.currentKey,
     this.currentColor,
     this.hoverColor,
+    this.showDateAdded = false,
     super.key,
   });
 
@@ -26,6 +27,7 @@ class TrackTile extends ConsumerStatefulWidget {
   final Key? currentKey;
   final Color? currentColor;
   final Color? hoverColor;
+  final bool showDateAdded;
 
   @override
   ConsumerState<TrackTile> createState() => _TrackTileState();
@@ -83,7 +85,11 @@ class _TrackTileState extends ConsumerState<TrackTile> {
                 ),
                 subtitle: Text(
                   widget.track.isAvailable
-                      ? widget.track.artist ?? 'Artista desconocido'
+                      ? [
+                          widget.track.artist ?? 'Artista desconocido',
+                          if (widget.showDateAdded)
+                            formatTrackDate(widget.track.dateAdded),
+                        ].join(' · ')
                       : 'No disponible',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -109,4 +115,22 @@ class _TrackTileState extends ConsumerState<TrackTile> {
       ),
     );
   }
+}
+
+String formatTrackDate(DateTime date) {
+  const months = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sept',
+    'oct',
+    'nov',
+    'dic',
+  ];
+  return '${date.day} ${months[date.month - 1]} ${date.year}';
 }

@@ -991,6 +991,30 @@ class $PlaylistsTable extends Playlists
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _customArtworkPathMeta = const VerificationMeta(
+    'customArtworkPath',
+  );
+  @override
+  late final GeneratedColumn<String> customArtworkPath =
+      GeneratedColumn<String>(
+        'custom_artwork_path',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _addedAtMeta = const VerificationMeta(
+    'addedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
+    'added_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: const CustomExpression<DateTime>('0'),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1028,6 +1052,8 @@ class $PlaylistsTable extends Playlists
   List<GeneratedColumn> get $columns => [
     id,
     name,
+    customArtworkPath,
+    addedAt,
     createdAt,
     updatedAt,
     lastPlayedAt,
@@ -1054,6 +1080,21 @@ class $PlaylistsTable extends Playlists
       );
     } else if (isInserting) {
       context.missing(_nameMeta);
+    }
+    if (data.containsKey('custom_artwork_path')) {
+      context.handle(
+        _customArtworkPathMeta,
+        customArtworkPath.isAcceptableOrUnknown(
+          data['custom_artwork_path']!,
+          _customArtworkPathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('added_at')) {
+      context.handle(
+        _addedAtMeta,
+        addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta),
+      );
     }
     if (data.containsKey('created_at')) {
       context.handle(
@@ -1097,6 +1138,14 @@ class $PlaylistsTable extends Playlists
         DriftSqlType.string,
         data['${effectivePrefix}name'],
       )!,
+      customArtworkPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_artwork_path'],
+      ),
+      addedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}added_at'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1121,12 +1170,16 @@ class $PlaylistsTable extends Playlists
 class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
   final int id;
   final String name;
+  final String? customArtworkPath;
+  final DateTime addedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? lastPlayedAt;
   const PlaylistRow({
     required this.id,
     required this.name,
+    this.customArtworkPath,
+    required this.addedAt,
     required this.createdAt,
     required this.updatedAt,
     this.lastPlayedAt,
@@ -1136,6 +1189,10 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['name'] = Variable<String>(name);
+    if (!nullToAbsent || customArtworkPath != null) {
+      map['custom_artwork_path'] = Variable<String>(customArtworkPath);
+    }
+    map['added_at'] = Variable<DateTime>(addedAt);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || lastPlayedAt != null) {
@@ -1148,6 +1205,10 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     return PlaylistsCompanion(
       id: Value(id),
       name: Value(name),
+      customArtworkPath: customArtworkPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customArtworkPath),
+      addedAt: Value(addedAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       lastPlayedAt: lastPlayedAt == null && nullToAbsent
@@ -1164,6 +1225,10 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     return PlaylistRow(
       id: serializer.fromJson<int>(json['id']),
       name: serializer.fromJson<String>(json['name']),
+      customArtworkPath: serializer.fromJson<String?>(
+        json['customArtworkPath'],
+      ),
+      addedAt: serializer.fromJson<DateTime>(json['addedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       lastPlayedAt: serializer.fromJson<DateTime?>(json['lastPlayedAt']),
@@ -1175,6 +1240,8 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'name': serializer.toJson<String>(name),
+      'customArtworkPath': serializer.toJson<String?>(customArtworkPath),
+      'addedAt': serializer.toJson<DateTime>(addedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'lastPlayedAt': serializer.toJson<DateTime?>(lastPlayedAt),
@@ -1184,12 +1251,18 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
   PlaylistRow copyWith({
     int? id,
     String? name,
+    Value<String?> customArtworkPath = const Value.absent(),
+    DateTime? addedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> lastPlayedAt = const Value.absent(),
   }) => PlaylistRow(
     id: id ?? this.id,
     name: name ?? this.name,
+    customArtworkPath: customArtworkPath.present
+        ? customArtworkPath.value
+        : this.customArtworkPath,
+    addedAt: addedAt ?? this.addedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     lastPlayedAt: lastPlayedAt.present ? lastPlayedAt.value : this.lastPlayedAt,
@@ -1198,6 +1271,10 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     return PlaylistRow(
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
+      customArtworkPath: data.customArtworkPath.present
+          ? data.customArtworkPath.value
+          : this.customArtworkPath,
+      addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       lastPlayedAt: data.lastPlayedAt.present
@@ -1211,6 +1288,8 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
     return (StringBuffer('PlaylistRow(')
           ..write('id: $id, ')
           ..write('name: $name, ')
+          ..write('customArtworkPath: $customArtworkPath, ')
+          ..write('addedAt: $addedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastPlayedAt: $lastPlayedAt')
@@ -1219,13 +1298,23 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
   }
 
   @override
-  int get hashCode => Object.hash(id, name, createdAt, updatedAt, lastPlayedAt);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    customArtworkPath,
+    addedAt,
+    createdAt,
+    updatedAt,
+    lastPlayedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is PlaylistRow &&
           other.id == this.id &&
           other.name == this.name &&
+          other.customArtworkPath == this.customArtworkPath &&
+          other.addedAt == this.addedAt &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.lastPlayedAt == this.lastPlayedAt);
@@ -1234,12 +1323,16 @@ class PlaylistRow extends DataClass implements Insertable<PlaylistRow> {
 class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
   final Value<int> id;
   final Value<String> name;
+  final Value<String?> customArtworkPath;
+  final Value<DateTime> addedAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> lastPlayedAt;
   const PlaylistsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
+    this.customArtworkPath = const Value.absent(),
+    this.addedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastPlayedAt = const Value.absent(),
@@ -1247,6 +1340,8 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
   PlaylistsCompanion.insert({
     this.id = const Value.absent(),
     required String name,
+    this.customArtworkPath = const Value.absent(),
+    this.addedAt = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.lastPlayedAt = const Value.absent(),
@@ -1256,6 +1351,8 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
   static Insertable<PlaylistRow> custom({
     Expression<int>? id,
     Expression<String>? name,
+    Expression<String>? customArtworkPath,
+    Expression<DateTime>? addedAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? lastPlayedAt,
@@ -1263,6 +1360,8 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (name != null) 'name': name,
+      if (customArtworkPath != null) 'custom_artwork_path': customArtworkPath,
+      if (addedAt != null) 'added_at': addedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (lastPlayedAt != null) 'last_played_at': lastPlayedAt,
@@ -1272,6 +1371,8 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
   PlaylistsCompanion copyWith({
     Value<int>? id,
     Value<String>? name,
+    Value<String?>? customArtworkPath,
+    Value<DateTime>? addedAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? lastPlayedAt,
@@ -1279,6 +1380,8 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     return PlaylistsCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
+      customArtworkPath: customArtworkPath ?? this.customArtworkPath,
+      addedAt: addedAt ?? this.addedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
@@ -1293,6 +1396,12 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
+    }
+    if (customArtworkPath.present) {
+      map['custom_artwork_path'] = Variable<String>(customArtworkPath.value);
+    }
+    if (addedAt.present) {
+      map['added_at'] = Variable<DateTime>(addedAt.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -1311,6 +1420,8 @@ class PlaylistsCompanion extends UpdateCompanion<PlaylistRow> {
     return (StringBuffer('PlaylistsCompanion(')
           ..write('id: $id, ')
           ..write('name: $name, ')
+          ..write('customArtworkPath: $customArtworkPath, ')
+          ..write('addedAt: $addedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastPlayedAt: $lastPlayedAt')
@@ -3515,6 +3626,8 @@ typedef $$TracksTableProcessedTableManager =
 typedef $$PlaylistsTableCreateCompanionBuilder = PlaylistsCompanion Function({
   Value<int> id,
   required String name,
+  Value<String?> customArtworkPath,
+  Value<DateTime> addedAt,
   required DateTime createdAt,
   required DateTime updatedAt,
   Value<DateTime?> lastPlayedAt,
@@ -3522,6 +3635,8 @@ typedef $$PlaylistsTableCreateCompanionBuilder = PlaylistsCompanion Function({
 typedef $$PlaylistsTableUpdateCompanionBuilder = PlaylistsCompanion Function({
   Value<int> id,
   Value<String> name,
+  Value<String?> customArtworkPath,
+  Value<DateTime> addedAt,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
   Value<DateTime?> lastPlayedAt,
@@ -3566,6 +3681,16 @@ class $$PlaylistsTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
     column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customArtworkPath => $composableBuilder(
+    column: $table.customArtworkPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3629,6 +3754,16 @@ class $$PlaylistsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get customArtworkPath => $composableBuilder(
+    column: $table.customArtworkPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -3659,6 +3794,14 @@ class $$PlaylistsTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get customArtworkPath => $composableBuilder(
+    column: $table.customArtworkPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -3727,12 +3870,16 @@ class $$PlaylistsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
+                Value<String?> customArtworkPath = const Value.absent(),
+                Value<DateTime> addedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> lastPlayedAt = const Value.absent(),
               }) => PlaylistsCompanion(
                 id: id,
                 name: name,
+                customArtworkPath: customArtworkPath,
+                addedAt: addedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastPlayedAt: lastPlayedAt,
@@ -3741,12 +3888,16 @@ class $$PlaylistsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required String name,
+                Value<String?> customArtworkPath = const Value.absent(),
+                Value<DateTime> addedAt = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<DateTime?> lastPlayedAt = const Value.absent(),
               }) => PlaylistsCompanion.insert(
                 id: id,
                 name: name,
+                customArtworkPath: customArtworkPath,
+                addedAt: addedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastPlayedAt: lastPlayedAt,
