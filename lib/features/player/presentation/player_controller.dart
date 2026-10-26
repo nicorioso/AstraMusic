@@ -102,6 +102,8 @@ class PlayerViewState {
 
 class PlayerController extends Notifier<PlayerViewState> {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+  // Se cancela en _pausePositionUpdates al pausar lifecycle o disponer.
+  // ignore: cancel_subscriptions
   StreamSubscription<Duration>? _positionSubscription;
   bool _isListening = false;
 
@@ -113,13 +115,17 @@ class PlayerController extends Notifier<PlayerViewState> {
       notificationPermissionGrantedProvider,
     );
     ref.onDispose(_disposeSubscriptions);
-    ref.listen(appForegroundProvider, (_, foreground) {
+    final lifecycleSubscription = ref.listen(appForegroundProvider, (
+      _,
+      foreground,
+    ) {
       if (foreground) {
         _resumePositionUpdates();
       } else {
         _pausePositionUpdates();
       }
     });
+    ref.onDispose(lifecycleSubscription.close);
     Future.microtask(_startListening);
 
     return PlayerViewState(notificationWarning: !notificationPermissionGranted);
