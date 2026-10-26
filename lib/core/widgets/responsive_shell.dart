@@ -16,7 +16,7 @@ import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
-import 'package:astramusic/features/library/presentation/library_screen.dart';
+import 'package:astramusic/features/library/presentation/library_entities_screen.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/player_screen.dart';
 import 'package:astramusic/features/player/presentation/queue_screen.dart';
@@ -442,12 +442,17 @@ class _DestinationBody extends StatelessWidget {
     AppDestinationType.home => HomeDestination(desktop: desktop),
     AppDestinationType.search => SearchDestination(desktop: desktop),
     AppDestinationType.library => const PlaylistsDestination(),
+    AppDestinationType.artists => ArtistsScreen(artist: destination.name),
+    AppDestinationType.albums => AlbumsScreen(title: destination.name, artist: destination.artist),
+    AppDestinationType.genres => GenresScreen(genre: destination.name),
     AppDestinationType.playlist => PlaylistDetailScreen(
       playlistId: destination.playlistId!,
       embedded: true,
     ),
     AppDestinationType.queue => const QueueScreen(embedded: true),
-    AppDestinationType.folders => const MusicFoldersView(),
+    AppDestinationType.folders => destination.name == null
+        ? const FolderGroupsScreen()
+        : FolderGroupsScreen(path: destination.name),
     AppDestinationType.settings => const SettingsDestination(),
     AppDestinationType.diagnostics => const DiagnosticsDestination(),
   };
@@ -1165,6 +1170,7 @@ class PlaylistsDestination extends ConsumerWidget {
               icon: const Icon(Icons.add),
             ),
           ),
+          const _LibraryCategoryLinks(),
           Expanded(
             key: const Key('destination-content'),
             child: playlists.when(
@@ -1196,6 +1202,25 @@ class PlaylistsDestination extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _LibraryCategoryLinks extends ConsumerWidget {
+  const _LibraryCategoryLinks();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    child: Row(children: [
+      _link(ref, 'Artistas', AppDestination.artists),
+      _link(ref, 'Álbumes', AppDestination.albums),
+      _link(ref, 'Géneros', AppDestination.genres),
+      _link(ref, 'Carpetas', AppDestination.folders),
+    ]),
+  );
+
+  Widget _link(WidgetRef ref, String label, AppDestination destination) =>
+      TextButton(key: Key('library-$label-tab'), onPressed: () => ref.read(appDestinationProvider.notifier).select(destination), child: Text(label));
 }
 
 class SettingsDestination extends ConsumerWidget {
