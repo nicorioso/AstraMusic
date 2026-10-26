@@ -231,7 +231,7 @@ class StartupErrorScreen extends StatelessWidget {
   );
 }
 
-class PlaybackLifecycle extends StatefulWidget {
+class PlaybackLifecycle extends ConsumerStatefulWidget {
   const PlaybackLifecycle({
     required this.coordinator,
     required this.child,
@@ -242,18 +242,28 @@ class PlaybackLifecycle extends StatefulWidget {
   final Widget child;
 
   @override
-  State<PlaybackLifecycle> createState() => _PlaybackLifecycleState();
+  ConsumerState<PlaybackLifecycle> createState() => _PlaybackLifecycleState();
 }
 
-class _PlaybackLifecycleState extends State<PlaybackLifecycle> {
+class _PlaybackLifecycleState extends ConsumerState<PlaybackLifecycle> {
   late final AppLifecycleListener _listener;
 
   @override
   void initState() {
     super.initState();
     _listener = AppLifecycleListener(
-      onPause: () => unawaited(widget.coordinator.flush()),
-      onDetach: () => unawaited(widget.coordinator.flush()),
+      onResume: () =>
+          ref.read(appForegroundProvider.notifier).setForeground(true),
+      onInactive: () =>
+          ref.read(appForegroundProvider.notifier).setForeground(false),
+      onPause: () {
+        ref.read(appForegroundProvider.notifier).setForeground(false);
+        unawaited(widget.coordinator.flush());
+      },
+      onDetach: () {
+        ref.read(appForegroundProvider.notifier).setForeground(false);
+        unawaited(widget.coordinator.flush());
+      },
     );
   }
 

@@ -105,6 +105,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   double? _lastUnexpectedPublishedSpeed;
 
   Stream<Duration> get positionStream => _player.positionStream;
+  Duration get currentPosition => _player.position;
   Stream<Duration?> get durationStream => _player.durationStream;
   Stream<double> get volumeStream => _player.volumeStream;
   Stream<HandlerPlaybackFailure> get failureStream => _failureController.stream;

@@ -123,6 +123,25 @@ void main() {
     expect(container.read(playerControllerProvider).queue, isEmpty);
     expect(container.read(playerControllerProvider).currentItem, isNull);
   });
+
+  test(
+    'posición se pausa en segundo plano y se resincroniza al volver',
+    () async {
+      final foreground = container.read(appForegroundProvider.notifier);
+      service.emitPosition(const Duration(seconds: 4));
+      expect(container.read(playerControllerProvider).position.inSeconds, 4);
+
+      foreground.setForeground(false);
+      await Future<void>.delayed(Duration.zero);
+      service.emitPosition(const Duration(seconds: 9));
+      expect(container.read(playerControllerProvider).position.inSeconds, 4);
+
+      foreground.setForeground(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(playerControllerProvider).position.inSeconds, 9);
+      expect(service.positionSubscriptionCount, 2);
+    },
+  );
 }
 
 List<Track> _tracks(int count) => List.generate(
@@ -135,7 +154,8 @@ List<Track> _tracks(int count) => List.generate(
   ),
 );
 
-final class QueueFakeAudioPlayerService implements AudioPlayerService {
+final class QueueFakeAudioPlayerService
+    implements AudioPlayerService, PositionSnapshotProvider {
   final _playback = StreamController<AudioPlaybackState>.broadcast(sync: true);
   final _position = StreamController<Duration>.broadcast(sync: true);
   final _duration = StreamController<Duration?>.broadcast(sync: true);
@@ -150,11 +170,25 @@ final class QueueFakeAudioPlayerService implements AudioPlayerService {
   int? currentIndex;
   RepeatMode repeatMode = RepeatMode.off;
   bool failShuffle = false;
+  int positionSubscriptionCount = 0;
+  Duration _currentPosition = Duration.zero;
 
   @override
   Stream<AudioPlaybackState> get playbackStateStream => _playback.stream;
   @override
-  Stream<Duration> get positionStream => _position.stream;
+  Stream<Duration> get positionStream {
+    positionSubscriptionCount++;
+    return _position.stream;
+  }
+
+  @override
+  Duration get currentPosition => _currentPosition;
+
+  void emitPosition(Duration position) {
+    _currentPosition = position;
+    _position.add(position);
+  }
+
   @override
   Stream<Duration?> get durationStream => _duration.stream;
   @override
@@ -197,7 +231,7 @@ final class QueueFakeAudioPlayerService implements AudioPlayerService {
   Future<void> stop() => pause();
 
   @override
-  Future<void> seek(Duration position) async => _position.add(position);
+  Future<void> seek(Duration position) async => emitPosition(position);
 
   @override
   Future<void> next() => _move(1);

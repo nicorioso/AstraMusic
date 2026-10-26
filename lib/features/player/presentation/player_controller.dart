@@ -17,6 +17,17 @@ final audioFilePickerProvider = Provider<AudioFilePicker>(
 
 final notificationPermissionGrantedProvider = Provider<bool>((ref) => true);
 
+final appForegroundProvider = NotifierProvider<AppForegroundController, bool>(
+  AppForegroundController.new,
+);
+
+class AppForegroundController extends Notifier<bool> {
+  @override
+  bool build() => true;
+
+  void setForeground(bool foreground) => state = foreground;
+}
+
 final playerControllerProvider =
     NotifierProvider<PlayerController, PlayerViewState>(PlayerController.new);
 
@@ -91,6 +102,7 @@ class PlayerViewState {
 
 class PlayerController extends Notifier<PlayerViewState> {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+  StreamSubscription<Duration>? _positionSubscription;
   bool _isListening = false;
 
   AudioPlayerService get _service => ref.read(audioPlayerServiceProvider);
@@ -101,6 +113,13 @@ class PlayerController extends Notifier<PlayerViewState> {
       notificationPermissionGrantedProvider,
     );
     ref.onDispose(_disposeSubscriptions);
+    ref.listen(appForegroundProvider, (_, foreground) {
+      if (foreground) {
+        _resumePositionUpdates();
+      } else {
+        _pausePositionUpdates();
+      }
+    });
     Future.microtask(_startListening);
 
     return PlayerViewState(notificationWarning: !notificationPermissionGranted);
@@ -252,9 +271,7 @@ class PlayerController extends Notifier<PlayerViewState> {
         errorMessage: playbackState.errorMessage ?? state.errorMessage,
       );
     });
-    _subscribe(_service.positionStream, (position) {
-      if (ref.mounted) state = state.copyWith(position: position);
-    });
+    if (ref.read(appForegroundProvider)) _resumePositionUpdates();
     _subscribe(_service.durationStream, (duration) {
       if (ref.mounted) state = state.copyWith(duration: duration);
     });
@@ -297,6 +314,28 @@ class PlayerController extends Notifier<PlayerViewState> {
     );
   }
 
+  void _resumePositionUpdates() {
+    if (!ref.mounted || _positionSubscription != null) return;
+    final service = _service;
+    if (service case final PositionSnapshotProvider snapshot) {
+      state = state.copyWith(position: snapshot.currentPosition);
+    }
+    _positionSubscription = service.positionStream.listen(
+      (position) {
+        if (ref.mounted) state = state.copyWith(position: position);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        _setNonFatalError(error);
+      },
+    );
+  }
+
+  void _pausePositionUpdates() {
+    final subscription = _positionSubscription;
+    _positionSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+  }
+
   Future<void> _handleFailure(AudioPlaybackFailure failure) async {
     if (!ref.mounted) return;
     state = state.copyWith(errorMessage: failure.message);
@@ -328,6 +367,7 @@ class PlayerController extends Notifier<PlayerViewState> {
   }
 
   void _disposeSubscriptions() {
+    _pausePositionUpdates();
     for (final subscription in _subscriptions) {
       unawaited(subscription.cancel());
     }

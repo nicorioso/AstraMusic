@@ -10,7 +10,10 @@ import 'package:astramusic/features/player/data/serial_command_queue.dart';
 import 'package:audio_service/audio_service.dart';
 
 final class AudioHandlerPlayerService
-    implements AudioPlayerService, OriginalQueueProvider {
+    implements
+        AudioPlayerService,
+        OriginalQueueProvider,
+        PositionSnapshotProvider {
   AudioHandlerPlayerService(this._handler, {ArtworkProvider? artworkProvider})
     : _artworkProvider = artworkProvider {
     if (artworkProvider != null) {
@@ -43,6 +46,9 @@ final class AudioHandlerPlayerService
     _handler.positionStream,
     const Duration(milliseconds: 250),
   );
+
+  @override
+  Duration get currentPosition => _handler.currentPosition;
 
   @override
   Stream<Duration?> get durationStream => _handler.durationStream;

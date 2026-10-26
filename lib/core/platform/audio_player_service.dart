@@ -82,3 +82,7 @@ abstract interface class OriginalQueueProvider {
   List<Track> get originalQueue;
   List<Track> get playbackQueue;
 }
+
+abstract interface class PositionSnapshotProvider {
+  Duration get currentPosition;
+}
