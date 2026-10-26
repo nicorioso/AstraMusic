@@ -115,6 +115,7 @@ final class AndroidMediaStoreLibraryScanner implements LibraryScanner {
     title: values['title']! as String,
     artist: values['artist'] as String?,
     album: values['album'] as String?,
+    genre: values['genre'] as String?,
     durationMs: values['durationMs'] as int?,
     trackNumber: values['trackNumber'] as int?,
     year: values['year'] as int?,

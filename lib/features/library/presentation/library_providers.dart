@@ -15,6 +15,8 @@ import 'package:astramusic/features/library/application/artwork_backfill_service
 import 'package:astramusic/features/library/data/drift_library_folders_repository.dart';
 import 'package:astramusic/features/library/data/drift_track_repository.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
+import 'package:astramusic/features/library/domain/library_group.dart';
+import 'package:astramusic/features/library/domain/library_grouping_repository.dart';
 import 'package:astramusic/features/library/domain/library_folders_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
@@ -114,6 +116,23 @@ final allLibraryTracksProvider = StreamProvider<List<Track>>((ref) {
 final favoriteTracksProvider = StreamProvider<List<Track>>((ref) {
   return ref.watch(trackRepositoryProvider).watchFavorites();
 });
+
+final libraryGroupingRepositoryProvider = Provider<LibraryGroupingRepository>((ref) {
+  final repository = ref.watch(trackRepositoryProvider);
+  if (repository is! LibraryGroupingRepository) {
+    throw UnsupportedError('El repositorio no expone agrupaciones de biblioteca.');
+  }
+  return repository as LibraryGroupingRepository;
+});
+
+final artistsProvider = StreamProvider<List<ArtistGroup>>((ref) =>
+    ref.watch(libraryGroupingRepositoryProvider).watchArtists());
+final albumsProvider = StreamProvider<List<AlbumGroup>>((ref) =>
+    ref.watch(libraryGroupingRepositoryProvider).watchAlbums());
+final genresProvider = StreamProvider<List<GenreGroup>>((ref) =>
+    ref.watch(libraryGroupingRepositoryProvider).watchGenres());
+final folderGroupsProvider = StreamProvider<List<FolderGroup>>((ref) =>
+    ref.watch(libraryGroupingRepositoryProvider).watchFolders());
 
 final class LibrarySearchQuery extends Notifier<String> {
   Timer? _debounce;

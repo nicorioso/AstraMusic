@@ -5,6 +5,8 @@ class Track {
     required this.title,
     this.artist,
     this.album,
+    this.genre,
+    this.folderPath,
     this.duration,
     this.trackNumber,
     this.year,
@@ -22,6 +24,8 @@ class Track {
   final String title;
   final String? artist;
   final String? album;
+  final String? genre;
+  final String? folderPath;
   final Duration? duration;
   final int? trackNumber;
   final int? year;
@@ -39,6 +43,8 @@ class Track {
     title: title,
     artist: artist,
     album: album,
+    genre: genre,
+    folderPath: folderPath,
     duration: duration,
     trackNumber: trackNumber,
     year: year,
@@ -56,6 +62,8 @@ class Track {
     title: title,
     artist: artist,
     album: album,
+    genre: genre,
+    folderPath: folderPath,
     duration: duration,
     trackNumber: trackNumber,
     year: year,

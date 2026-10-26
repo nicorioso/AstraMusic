@@ -10,12 +10,16 @@ part 'app_database.g.dart';
 @TableIndex(name: 'tracks_album_idx', columns: {#album, #id})
 @TableIndex(name: 'tracks_date_added_idx', columns: {#dateAdded, #id})
 @TableIndex(name: 'tracks_is_favorite_idx', columns: {#isFavorite, #id})
+@TableIndex(name: 'tracks_folder_path_idx', columns: {#folderPath, #id})
+@TableIndex(name: 'tracks_genre_idx', columns: {#genre, #id})
 class Tracks extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get uri => text().unique()();
   TextColumn get title => text()();
   TextColumn get artist => text().nullable()();
   TextColumn get album => text().nullable()();
+  TextColumn get genre => text().nullable()();
+  TextColumn get folderPath => text().nullable()();
   IntColumn get durationMs => integer().nullable()();
   IntColumn get trackNumber => integer().nullable()();
   IntColumn get year => integer().nullable()();
@@ -118,7 +122,7 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -209,6 +213,12 @@ final class AppDatabase extends _$AppDatabase {
         await migrator.createIndex(tracksAlbumIdx);
         await migrator.createIndex(tracksDateAddedIdx);
         await migrator.createIndex(tracksIsFavoriteIdx);
+      }
+      if (from < 11) {
+        await migrator.addColumn(tracks, tracks.genre);
+        await migrator.addColumn(tracks, tracks.folderPath);
+        await migrator.createIndex(tracksFolderPathIdx);
+        await migrator.createIndex(tracksGenreIdx);
       }
     },
     beforeOpen: (details) async {

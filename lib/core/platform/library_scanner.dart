@@ -4,6 +4,7 @@ class ScannedTrack {
     required this.title,
     this.artist,
     this.album,
+    this.genre,
     this.durationMs,
     this.trackNumber,
     this.year,
@@ -18,6 +19,7 @@ class ScannedTrack {
   final String title;
   final String? artist;
   final String? album;
+  final String? genre;
   final int? durationMs;
   final int? trackNumber;
   final int? year;

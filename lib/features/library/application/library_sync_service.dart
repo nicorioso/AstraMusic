@@ -165,6 +165,11 @@ final class LibrarySyncSession {
         title: preserveMetadata ? old.title : scanned.title,
         artist: preserveMetadata ? old.artist : scanned.artist,
         album: preserveMetadata ? old.album : scanned.album,
+        genre: preserveMetadata ? old.genre : scanned.genre,
+        folderPath: switch (_scope) {
+          DesktopFolderScanScope(:final rootPath) => rootPath,
+          AndroidMediaStoreScanScope() => null,
+        },
         duration: preserveMetadata
             ? old.duration
             : scanned.durationMs == null

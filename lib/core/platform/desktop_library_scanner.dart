@@ -246,6 +246,7 @@ ScannedTrack _trackFromMessage(Map<Object?, Object?> message) => ScannedTrack(
   title: message['title']! as String,
   artist: message['artist'] as String?,
   album: message['album'] as String?,
+  genre: message['genre'] as String?,
   durationMs: message['durationMs'] as int?,
   trackNumber: message['trackNumber'] as int?,
   year: message['year'] as int?,
