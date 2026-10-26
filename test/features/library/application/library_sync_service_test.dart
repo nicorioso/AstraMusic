@@ -45,6 +45,35 @@ void main() {
     expect(await repository.count(), 1);
   });
 
+  test('sincroniza cada lote antes de finalizar el escaneo', () async {
+    final firstUri = path.join(root.path, 'primera.mp3');
+    final missingUri = path.join(root.path, 'ausente.mp3');
+    final scope = DesktopFolderScanScope(root.path);
+    await service.synchronize(
+      scannedTracks: [_scanned(missingUri)],
+      scope: scope,
+    );
+
+    final session = await service.startIncremental(scope: scope);
+    await session.addBatch([_scanned(firstUri)]);
+
+    var tracks = await repository.watchAll().first;
+    expect(tracks.any((track) => track.uri == firstUri), isTrue);
+    expect(
+      tracks.singleWhere((track) => track.uri == missingUri).isAvailable,
+      isTrue,
+    );
+
+    final summary = await session.finish();
+    tracks = await repository.watchAll().first;
+    expect(summary.newCount, 1);
+    expect(summary.unavailableCount, 1);
+    expect(
+      tracks.singleWhere((track) => track.uri == missingUri).isAvailable,
+      isFalse,
+    );
+  });
+
   test('marca ausentes y reactiva archivos que reaparecen', () async {
     final firstUri = path.join(root.path, 'primera.mp3');
     final secondUri = path.join(root.path, 'segunda.mp3');

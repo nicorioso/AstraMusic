@@ -22,22 +22,23 @@ void main() {
     );
     final events = await task.events.toList();
     final completed = events.whereType<ScanCompleted>().single;
+    final scannedTracks = events
+        .whereType<ScanBatch>()
+        .expand((event) => event.tracks)
+        .toList();
 
     expect(completed.errorCount, 2);
     expect(
-      completed.tracks.map((track) => track.title),
+      scannedTracks.map((track) => track.title),
       unorderedEquals(['Primera', 'Segunda']),
     );
     expect(
-      completed.tracks.map((track) => path.extension(track.uri).toLowerCase()),
+      scannedTracks.map((track) => path.extension(track.uri).toLowerCase()),
       unorderedEquals(['.mp3', '.flac']),
     );
-    expect(completed.tracks.every((track) => track.fileSize != null), isTrue);
-    expect(completed.tracks.every((track) => track.dateAdded != null), isTrue);
-    expect(
-      completed.tracks.every((track) => track.dateModified != null),
-      isTrue,
-    );
+    expect(scannedTracks.every((track) => track.fileSize != null), isTrue);
+    expect(scannedTracks.every((track) => track.dateAdded != null), isTrue);
+    expect(scannedTracks.every((track) => track.dateModified != null), isTrue);
     expect(events.whereType<ScanProgress>(), isNotEmpty);
   });
 
@@ -100,5 +101,14 @@ Future<ScanCompleted> _completedScan(
     rootPath: rootPath,
     knownFiles: knownFiles,
   );
-  return (await task.events.toList()).whereType<ScanCompleted>().single;
+  final events = await task.events.toList();
+  final completed = events.whereType<ScanCompleted>().single;
+  return ScanCompleted(
+    tracks: events
+        .whereType<ScanBatch>()
+        .expand((event) => event.tracks)
+        .toList(growable: false),
+    errorCount: completed.errorCount,
+    unchangedCount: completed.unchangedCount,
+  );
 }

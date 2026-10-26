@@ -130,6 +130,9 @@ instancias compartidas.
 ### Flujo de datos
 
 - Los repositorios Drift exponen `Stream` reactivos.
+- La biblioteca principal observa ventanas de 100 canciones y amplía la
+  consulta al acercarse al final; búsquedas y cambios de datos conservan la
+  reactividad sin cargar el catálogo completo al entrar a la pantalla.
 - `StreamProvider` transforma esos streams en estado consumible por widgets.
 - Los `Notifier` (`LibraryController`, `PlayerController`, `AppNavigation`)
   coordinan acciones y publican estados inmutables de vista.
@@ -140,7 +143,7 @@ instancias compartidas.
 
 ### Persistencia local
 
-`AppDatabase` usa Drift/SQLite con esquema versión 8:
+`AppDatabase` usa Drift/SQLite con esquema versión 10:
 
 | Tabla | Contenido |
 |---|---|
@@ -169,11 +172,11 @@ pantallas permanecen dentro del shell; el reproductor completo es una ruta
 ### Biblioteca e importación
 
 - **Android:** escanea el catálogo mediante MediaStore y un `MethodChannel`.
-  Solicita permiso de audio, admite progreso/cancelación y obtiene carátulas
-  nativas desde URI `content://`.
+  Consulta fuera del hilo principal, entrega resultados en lotes de 100,
+  admite progreso/cancelación y obtiene carátulas nativas desde URI `content://`.
 - **Linux/Windows:** permite registrar varias carpetas, las recorre en un
-  isolate sin seguir enlaces simbólicos y admite MP3, FLAC, M4A, AAC, OGG,
-  Opus y WAV.
+  isolate sin seguir enlaces simbólicos, entrega lotes de 100 y admite MP3,
+  FLAC, M4A, AAC, OGG, Opus y WAV.
 - **Importación manual:** permite añadir archivos individuales en todas las
   plataformas.
 - Extrae título, artista, álbum, duración, número de pista, año y carátula; si

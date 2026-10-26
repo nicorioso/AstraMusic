@@ -398,7 +398,8 @@ final class ControlledLibraryScanner implements LibraryScanner {
     required int errorCount,
   }) async {
     final controller = _controller!;
-    controller.add(ScanCompleted(tracks: tracks, errorCount: errorCount));
+    controller.add(ScanBatch(tracks));
+    controller.add(ScanCompleted(tracks: const [], errorCount: errorCount));
     await controller.close();
   }
 }

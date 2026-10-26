@@ -63,14 +63,20 @@ final class AndroidMediaStoreLibraryScanner implements LibraryScanner {
             unchangedCount: arguments['unchangedCount'] as int? ?? 0,
           ),
         );
-      case 'scanCompleted':
+      case 'scanBatch':
         final rawTracks = arguments['tracks'] as List<Object?>? ?? const [];
         controller.add(
-          ScanCompleted(
-            tracks: rawTracks
+          ScanBatch(
+            rawTracks
                 .cast<Map<Object?, Object?>>()
                 .map(_trackFromNative)
                 .toList(growable: false),
+          ),
+        );
+      case 'scanCompleted':
+        controller.add(
+          ScanCompleted(
+            tracks: const [],
             errorCount: arguments['errorCount'] as int? ?? 0,
             unchangedCount: arguments['unchangedCount'] as int? ?? 0,
           ),

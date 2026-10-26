@@ -507,9 +507,13 @@ final class LibraryController extends Notifier<LibraryViewState> {
     final task = await ref
         .read(libraryScannerProvider)
         .startScan(rootPath: rootPath, knownFiles: knownFiles);
+    final syncSession = await ref
+        .read(librarySyncServiceProvider)
+        .startIncremental(scope: scope);
     _activeScan = task;
     if (_cancelRequested) unawaited(task.cancel());
     ScanCompleted? completed;
+    var scannedCount = 0;
     var scanWasCancelled = false;
 
     await for (final event in task.events) {
@@ -526,11 +530,18 @@ final class LibraryController extends Notifier<LibraryViewState> {
               scanErrorCount: errorOffset + errorCount,
             );
           }
+        case ScanBatch(:final tracks):
+          scannedCount += tracks.length;
+          await syncSession.addBatch(tracks);
         case ScanCompleted():
           completed = event;
+          if (event.tracks.isNotEmpty) {
+            scannedCount += event.tracks.length;
+            await syncSession.addBatch(event.tracks);
+          }
           if (ref.mounted) {
             state = state.copyWith(
-              foundCount: foundOffset + event.tracks.length,
+              foundCount: foundOffset + scannedCount,
               unchangedCount: unchangedOffset + event.unchangedCount,
               scanErrorCount: errorOffset + event.errorCount,
             );
@@ -544,13 +555,7 @@ final class LibraryController extends Notifier<LibraryViewState> {
     if (_cancelRequested || scanWasCancelled || completed == null) {
       throw const _ScanWasCancelled();
     }
-    return ref
-        .read(librarySyncServiceProvider)
-        .synchronize(
-          scannedTracks: completed.tracks,
-          scope: scope,
-          scanErrorCount: completed.errorCount,
-        );
+    return syncSession.finish(scanErrorCount: completed.errorCount);
   }
 
   String _messageFor(Object error) {

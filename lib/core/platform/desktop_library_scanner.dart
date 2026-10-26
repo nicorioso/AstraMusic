@@ -17,6 +17,7 @@ const supportedAudioExtensions = <String>{
   '.wav',
 };
 const desktopScanProgressInterval = 100;
+const desktopScanBatchSize = 100;
 
 final class DesktopLibraryScanner implements LibraryScanner {
   const DesktopLibraryScanner({this.cacheDirectory});
@@ -95,14 +96,23 @@ final class DesktopLibraryScanner implements LibraryScanner {
         return;
       }
 
-      if (type == 'completed') {
+      if (type == 'batch') {
         final rawTracks = message['tracks']! as List<Object?>;
         controller.add(
-          ScanCompleted(
-            tracks: rawTracks
+          ScanBatch(
+            rawTracks
                 .cast<Map<Object?, Object?>>()
                 .map(_trackFromMessage)
                 .toList(growable: false),
+          ),
+        );
+        return;
+      }
+
+      if (type == 'completed') {
+        controller.add(
+          ScanCompleted(
+            tracks: const [],
             errorCount: errorCount,
             unchangedCount: unchangedCount,
           ),
@@ -135,17 +145,24 @@ final class _DesktopScanRequest {
 }
 
 void _scanDirectory(_DesktopScanRequest request) {
-  final tracks = <Map<String, Object?>>[];
+  final batch = <Map<String, Object?>>[];
+  var found = 0;
   var errors = 0;
   var unchanged = 0;
 
   void reportProgress() {
     request.sendPort.send({
       'type': 'progress',
-      'foundCount': tracks.length,
+      'foundCount': found,
       'errorCount': errors,
       'unchangedCount': unchanged,
     });
+  }
+
+  void flushBatch() {
+    if (batch.isEmpty) return;
+    request.sendPort.send({'type': 'batch', 'tracks': List.of(batch)});
+    batch.clear();
   }
 
   void visit(Directory directory) {
@@ -184,7 +201,7 @@ void _scanDirectory(_DesktopScanRequest request) {
           artworkPath = result.artworkPath;
           if (result.hadTagError) errors++;
         }
-        tracks.add({
+        batch.add({
           'uri': entry.path,
           'title': tags?.title ?? path.basenameWithoutExtension(entry.path),
           'artist': tags?.artist,
@@ -198,7 +215,9 @@ void _scanDirectory(_DesktopScanRequest request) {
           'unchanged': isUnchanged,
           'artworkPath': artworkPath,
         });
-        if (tracks.length % desktopScanProgressInterval == 0) {
+        found++;
+        if (batch.length >= desktopScanBatchSize) flushBatch();
+        if (found % desktopScanProgressInterval == 0) {
           reportProgress();
         }
       } on FileSystemException {
@@ -209,13 +228,13 @@ void _scanDirectory(_DesktopScanRequest request) {
   }
 
   visit(Directory(request.rootPath));
+  flushBatch();
   reportProgress();
   request.sendPort.send({
     'type': 'completed',
-    'foundCount': tracks.length,
+    'foundCount': found,
     'errorCount': errors,
     'unchangedCount': unchanged,
-    'tracks': tracks,
   });
 }
 

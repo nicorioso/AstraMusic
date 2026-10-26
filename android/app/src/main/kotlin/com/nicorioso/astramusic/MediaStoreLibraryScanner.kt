@@ -56,7 +56,8 @@ class MediaStoreLibraryScanner(
     }
 
     private fun queryMediaStore() {
-        val tracks = ArrayList<Map<String, Any?>>()
+        val batch = ArrayList<Map<String, Any?>>(BATCH_SIZE)
+        var found = 0
         var errors = 0
 
         try {
@@ -108,7 +109,7 @@ class MediaStoreLibraryScanner(
                             ?.takeUnless { it == MediaStore.UNKNOWN_STRING }
                             ?: displayName?.substringBeforeLast('.')
                             ?: "Audio $id"
-                        tracks.add(
+                        batch.add(
                             mapOf(
                                 "uri" to ContentUris.withAppendedId(mediaUri, id).toString(),
                                 "title" to title,
@@ -126,8 +127,12 @@ class MediaStoreLibraryScanner(
                                     ?.times(1000L),
                             ),
                         )
-                        if (tracks.size % PROGRESS_INTERVAL == 0) {
-                            sendProgress(tracks.size, errors)
+                        found++
+                        if (batch.size >= BATCH_SIZE) {
+                            sendBatch(batch)
+                        }
+                        if (found % PROGRESS_INTERVAL == 0) {
+                            sendProgress(found, errors)
                         }
                     } catch (_: RuntimeException) {
                         errors++
@@ -138,9 +143,10 @@ class MediaStoreLibraryScanner(
             if (cancelled) {
                 invokeFlutter("scanCancelled", emptyMap<String, Any?>())
             } else {
+                sendBatch(batch)
                 invokeFlutter(
                     "scanCompleted",
-                    mapOf("tracks" to tracks, "errorCount" to errors),
+                    mapOf("foundCount" to found, "errorCount" to errors),
                 )
             }
         } catch (error: Exception) {
@@ -158,6 +164,13 @@ class MediaStoreLibraryScanner(
             "scanProgress",
             mapOf("foundCount" to foundCount, "errorCount" to errorCount),
         )
+    }
+
+    private fun sendBatch(batch: ArrayList<Map<String, Any?>>) {
+        if (batch.isEmpty()) return
+        val payload = ArrayList(batch)
+        batch.clear()
+        invokeFlutter("scanBatch", mapOf("tracks" to payload))
     }
 
     private fun invokeFlutter(method: String, arguments: Map<String, Any?>) {
@@ -178,6 +191,7 @@ class MediaStoreLibraryScanner(
 
     private companion object {
         const val CHANNEL_NAME = "com.nicorioso.astramusic/library_scanner"
+        const val BATCH_SIZE = 100
         const val PROGRESS_INTERVAL = 100
     }
 }

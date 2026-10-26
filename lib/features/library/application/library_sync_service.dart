@@ -58,20 +58,106 @@ final class LibrarySyncService {
     required LibraryScanScope scope,
     int scanErrorCount = 0,
   }) async {
+    final session = await startIncremental(scope: scope);
+    await session.addBatch(scannedTracks);
+    return session.finish(scanErrorCount: scanErrorCount);
+  }
+
+  Future<LibrarySyncSession> startIncremental({
+    required LibraryScanScope scope,
+  }) async {
     final existing = await _tracks.watchAll().first;
     final excluded = await _tracks.excludedUris();
-    final existingByUri = {for (final track in existing) track.uri: track};
+    return LibrarySyncSession._(_tracks, scope, existing, excluded);
+  }
+
+  Future<void> deleteFolderTracks(String rootPath) async {
+    final tracks = await _tracks.watchAll().first;
+    final uris = tracks
+        .where(
+          (track) =>
+              _belongsToScope(track.uri, DesktopFolderScanScope(rootPath)),
+        )
+        .map((track) => track.uri)
+        .toSet();
+    await _tracks.deleteByUris(uris);
+  }
+
+  static bool _belongsToScope(String uriValue, LibraryScanScope scope) {
+    return switch (scope) {
+      DesktopFolderScanScope(:final rootPath) => _isInsideFolder(
+        uriValue,
+        rootPath,
+      ),
+      AndroidMediaStoreScanScope() => _isMediaStoreAudioUri(uriValue),
+    };
+  }
+
+  static bool _isInsideFolder(String uriValue, String rootPath) {
+    String filePath;
+    if (path.isAbsolute(uriValue)) {
+      filePath = uriValue;
+    } else {
+      final uri = Uri.tryParse(uriValue);
+      if (uri != null && uri.hasScheme && uri.scheme != 'file') return false;
+      try {
+        filePath = uri != null && uri.scheme == 'file'
+            ? uri.toFilePath()
+            : uriValue;
+      } on UnsupportedError {
+        return false;
+      }
+    }
+
+    final normalizedRoot = path.normalize(path.absolute(rootPath));
+    final normalizedFile = path.normalize(path.absolute(filePath));
+    return path.equals(normalizedRoot, normalizedFile) ||
+        path.isWithin(normalizedRoot, normalizedFile);
+  }
+
+  static bool _isMediaStoreAudioUri(String uriValue) {
+    final uri = Uri.tryParse(uriValue);
+    if (uri == null || uri.scheme != 'content' || uri.authority != 'media') {
+      return false;
+    }
+    final segments = uri.pathSegments;
+    return segments.length >= 4 &&
+        segments[1] == 'audio' &&
+        segments[2] == 'media';
+  }
+}
+
+final class LibrarySyncSession {
+  LibrarySyncSession._(
+    this._tracks,
+    this._scope,
+    this._existing,
+    this._excluded,
+  ) : _existingByUri = {for (final track in _existing) track.uri: track};
+
+  final TrackRepository _tracks;
+  final LibraryScanScope _scope;
+  final List<Track> _existing;
+  final Map<String, Track> _existingByUri;
+  final Set<String> _excluded;
+  final Set<String> _scannedUris = {};
+  var _summary = const LibrarySyncSummary();
+  var _finished = false;
+
+  Future<void> addBatch(List<ScannedTrack> scannedTracks) async {
+    if (_finished) throw StateError('La sincronización ya terminó.');
     final uniqueScanned = {
       for (final scanned in scannedTracks)
-        if (!excluded.contains(scanned.uri)) scanned.uri: scanned,
+        if (!_excluded.contains(scanned.uri)) scanned.uri: scanned,
     };
     final now = DateTime.now();
     var newCount = 0;
     var updatedCount = 0;
+    var unchangedCount = 0;
 
     final upserts = <Track>[];
     for (final scanned in uniqueScanned.values) {
-      final old = existingByUri[scanned.uri];
+      final old = _existingByUri[scanned.uri];
       final preserveMetadata = scanned.unchanged && old != null;
       final track = Track(
         id: old?.id,
@@ -94,12 +180,15 @@ final class LibrarySyncService {
         artworkPath: preserveMetadata ? old.artworkPath : scanned.artworkPath,
       );
       upserts.add(track);
+      _scannedUris.add(scanned.uri);
+      _existingByUri[scanned.uri] = track;
 
       if (old == null) {
         newCount++;
       } else if (!_sameTrackData(old, track)) {
         updatedCount++;
       }
+      if (scanned.unchanged) unchangedCount++;
     }
 
     for (var start = 0; start < upserts.length; start += librarySyncBatchSize) {
@@ -107,80 +196,32 @@ final class LibrarySyncService {
       await _tracks.upsertAll(upserts.sublist(start, end));
     }
 
-    final scannedUris = uniqueScanned.keys.toSet();
-    final unavailableUris = existing
-        .where(
-          (track) => track.isAvailable && _belongsToScope(track.uri, scope),
-        )
-        .map((track) => track.uri)
-        .where((uri) => !scannedUris.contains(uri))
-        .toSet();
-    await _tracks.markUnavailable(unavailableUris);
-
-    return LibrarySyncSummary(
+    _summary += LibrarySyncSummary(
       newCount: newCount,
       updatedCount: updatedCount,
-      unchangedCount: uniqueScanned.values
-          .where((track) => track.unchanged)
-          .length,
-      unavailableCount: unavailableUris.length,
-      errorCount: scanErrorCount,
+      unchangedCount: unchangedCount,
     );
   }
 
-  Future<void> deleteFolderTracks(String rootPath) async {
-    final tracks = await _tracks.watchAll().first;
-    final uris = tracks
+  Future<LibrarySyncSummary> finish({int scanErrorCount = 0}) async {
+    if (_finished) throw StateError('La sincronización ya terminó.');
+    _finished = true;
+    final unavailableUris = _existing
         .where(
           (track) =>
-              _belongsToScope(track.uri, DesktopFolderScanScope(rootPath)),
+              track.isAvailable &&
+              LibrarySyncService._belongsToScope(track.uri, _scope),
         )
         .map((track) => track.uri)
+        .where((uri) => !_scannedUris.contains(uri))
         .toSet();
-    await _tracks.deleteByUris(uris);
-  }
+    await _tracks.markUnavailable(unavailableUris);
 
-  bool _belongsToScope(String uriValue, LibraryScanScope scope) {
-    return switch (scope) {
-      DesktopFolderScanScope(:final rootPath) => _isInsideFolder(
-        uriValue,
-        rootPath,
-      ),
-      AndroidMediaStoreScanScope() => _isMediaStoreAudioUri(uriValue),
-    };
-  }
-
-  bool _isInsideFolder(String uriValue, String rootPath) {
-    String filePath;
-    if (path.isAbsolute(uriValue)) {
-      filePath = uriValue;
-    } else {
-      final uri = Uri.tryParse(uriValue);
-      if (uri != null && uri.hasScheme && uri.scheme != 'file') return false;
-      try {
-        filePath = uri != null && uri.scheme == 'file'
-            ? uri.toFilePath()
-            : uriValue;
-      } on UnsupportedError {
-        return false;
-      }
-    }
-
-    final normalizedRoot = path.normalize(path.absolute(rootPath));
-    final normalizedFile = path.normalize(path.absolute(filePath));
-    return path.equals(normalizedRoot, normalizedFile) ||
-        path.isWithin(normalizedRoot, normalizedFile);
-  }
-
-  bool _isMediaStoreAudioUri(String uriValue) {
-    final uri = Uri.tryParse(uriValue);
-    if (uri == null || uri.scheme != 'content' || uri.authority != 'media') {
-      return false;
-    }
-    final segments = uri.pathSegments;
-    return segments.length >= 4 &&
-        segments[1] == 'audio' &&
-        segments[2] == 'media';
+    return _summary +
+        LibrarySyncSummary(
+          unavailableCount: unavailableUris.length,
+          errorCount: scanErrorCount,
+        );
   }
 
   bool _sameTrackData(Track old, Track current) =>

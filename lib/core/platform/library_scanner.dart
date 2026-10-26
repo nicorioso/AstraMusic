@@ -51,6 +51,12 @@ final class ScanProgress extends ScanEvent {
   final int unchangedCount;
 }
 
+final class ScanBatch extends ScanEvent {
+  const ScanBatch(this.tracks);
+
+  final List<ScannedTrack> tracks;
+}
+
 final class ScanCompleted extends ScanEvent {
   const ScanCompleted({
     required this.tracks,
