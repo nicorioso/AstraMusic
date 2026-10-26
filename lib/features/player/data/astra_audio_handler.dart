@@ -585,22 +585,19 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
         _broadcastNonFatalError(
           'La reproducción está tardando demasiado. Puedes reintentar o '
           'cambiar de canción.',
+          restoreControls: true,
         );
       }
     });
   }
 
-  void _broadcastNonFatalError(String message) {
-    _failureController.add(
-      HandlerPlaybackFailure(
-        item:
-            mediaItem.value ??
-            const MediaItem(id: '', title: 'Reproducción actual'),
-        message: message,
-      ),
-    );
+  void _broadcastNonFatalError(String message, {bool restoreControls = false}) {
     playbackState.add(
       playbackState.value.copyWith(
+        processingState: restoreControls
+            ? AudioProcessingState.ready
+            : playbackState.value.processingState,
+        playing: restoreControls ? false : playbackState.value.playing,
         errorMessage: message,
         controls: _queueOrder.isEmpty ? const [] : _controls(_player.playing),
       ),
