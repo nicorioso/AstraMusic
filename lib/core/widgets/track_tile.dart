@@ -1,3 +1,4 @@
+import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/playing_indicator.dart';
@@ -35,6 +36,7 @@ class _TrackTileState extends ConsumerState<TrackTile> {
 
   @override
   Widget build(BuildContext context) {
+    PerformanceDiagnostics.instance.recordTrackRowBuild();
     final playback = ref.watch(
       playerControllerProvider.select(
         (state) => (state.currentItem?.trackId, state.isPlaying),

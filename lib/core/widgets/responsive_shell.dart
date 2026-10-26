@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:astramusic/core/navigation/app_navigation.dart';
+import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
+import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
@@ -440,6 +442,7 @@ class _DestinationBody extends StatelessWidget {
     AppDestinationType.queue => const QueueScreen(embedded: true),
     AppDestinationType.folders => const MusicFoldersView(),
     AppDestinationType.settings => const SettingsDestination(),
+    AppDestinationType.diagnostics => const DiagnosticsDestination(),
   };
 }
 
@@ -501,7 +504,11 @@ class HomeDestination extends ConsumerWidget {
                               final recent = _byNewest(items);
                               controller.playAll(recent);
                             }),
-                      isPlaying: ref.watch(playerControllerProvider).isPlaying,
+                      isPlaying: ref.watch(
+                        playerControllerProvider.select(
+                          (state) => state.isPlaying,
+                        ),
+                      ),
                     ),
                     IconButton(
                       key: const Key('home-shuffle-button'),
@@ -717,30 +724,45 @@ class SearchDestination extends ConsumerWidget {
                       if (trackItems.isEmpty && matches.isEmpty) {
                         return const Center(child: Text('No hay resultados.'));
                       }
-                      return ListView(
+                      return CustomScrollView(
                         key: const Key('search-results'),
-                        children: [
+                        cacheExtent: 280,
+                        slivers: [
                           if (trackItems.isNotEmpty) ...[
-                            const SectionTitle('Canciones'),
-                            for (
-                              var index = 0;
-                              index < trackItems.length;
-                              index++
-                            )
-                              _TrackListTile(
-                                track: trackItems[index],
-                                tracks: trackItems,
-                                index: index,
+                            const SliverToBoxAdapter(
+                              child: SectionTitle('Canciones'),
+                            ),
+                            SliverFixedExtentList(
+                              itemExtent: 56,
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) => _TrackListTile(
+                                  track: trackItems[index],
+                                  tracks: trackItems,
+                                  index: index,
+                                ),
+                                childCount: trackItems.length,
+                                addAutomaticKeepAlives: false,
                               ),
+                            ),
                           ],
                           if (matches.isNotEmpty) ...[
-                            const SectionTitle('Playlists'),
-                            for (final playlist in matches)
-                              _PlaylistTile(
-                                playlist: playlist,
-                                onTap: () =>
-                                    _openPlaylist(context, ref, playlist.id),
+                            const SliverToBoxAdapter(
+                              child: SectionTitle('Playlists'),
+                            ),
+                            SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) => _PlaylistTile(
+                                  playlist: matches[index],
+                                  onTap: () => _openPlaylist(
+                                    context,
+                                    ref,
+                                    matches[index].id,
+                                  ),
+                                ),
+                                childCount: matches.length,
+                                addAutomaticKeepAlives: false,
                               ),
+                            ),
                           ],
                         ],
                       );
@@ -824,12 +846,16 @@ class _MobileTrackListState extends ConsumerState<_MobileTrackList> {
 
   @override
   Widget build(BuildContext context) {
+    PerformanceDiagnostics.instance.recordListBuild();
     return Scrollbar(
       controller: _scrollController,
       thumbVisibility: MediaQuery.sizeOf(context).width >= desktopBreakpoint,
       child: ListView.builder(
         key: const Key('shell-track-list'),
         controller: _scrollController,
+        itemExtent: 56,
+        cacheExtent: 280,
+        addAutomaticKeepAlives: false,
         itemCount: widget.tracks.length,
         itemBuilder: (context, index) {
           return _TrackListTile(
@@ -874,24 +900,30 @@ class _DesktopTrackTable extends StatelessWidget {
   final bool showAlbum;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      _DesktopTrackHeader(showAlbum: showAlbum),
-      const Divider(height: 1),
-      Expanded(
-        child: ListView.builder(
-          key: const Key('desktop-track-table'),
-          itemCount: tracks.length,
-          itemBuilder: (_, index) => _DesktopTrackRow(
-            track: tracks[index],
-            tracks: tracks,
-            index: index,
-            showAlbum: showAlbum,
+  Widget build(BuildContext context) {
+    PerformanceDiagnostics.instance.recordListBuild();
+    return Column(
+      children: [
+        _DesktopTrackHeader(showAlbum: showAlbum),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.builder(
+            key: const Key('desktop-track-table'),
+            itemExtent: 56,
+            cacheExtent: 280,
+            addAutomaticKeepAlives: false,
+            itemCount: tracks.length,
+            itemBuilder: (_, index) => _DesktopTrackRow(
+              track: tracks[index],
+              tracks: tracks,
+              index: index,
+              showAlbum: showAlbum,
+            ),
           ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class _DesktopTrackHeader extends StatelessWidget {
@@ -1197,6 +1229,15 @@ class SettingsDestination extends ConsumerWidget {
                     enabled: !state.actionsDisabled,
                     onTap: controller.loadDebugTracks,
                   ),
+                if (kDebugMode)
+                  ListTile(
+                    key: const Key('settings-diagnostics-button'),
+                    leading: const Icon(Icons.speed_outlined),
+                    title: const Text('Diagnóstico'),
+                    onTap: () => ref
+                        .read(appDestinationProvider.notifier)
+                        .select(AppDestination.diagnostics),
+                  ),
                 const Divider(height: 1),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -1229,6 +1270,104 @@ class SettingsDestination extends ConsumerWidget {
     );
   }
 }
+
+class DiagnosticsDestination extends ConsumerStatefulWidget {
+  const DiagnosticsDestination({super.key});
+
+  @override
+  ConsumerState<DiagnosticsDestination> createState() =>
+      _DiagnosticsDestinationState();
+}
+
+class _DiagnosticsDestinationState
+    extends ConsumerState<DiagnosticsDestination> {
+  late final Future<int> _artworkCacheBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _artworkCacheBytes = ref.read(artworkCacheProvider).sizeBytes();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      key: const Key('diagnostics-destination'),
+      color: context.astraColors.surface.withValues(alpha: 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionTitle(
+            'Diagnóstico',
+            trailing: IconButton(
+              key: const Key('close-diagnostics-button'),
+              tooltip: 'Volver a Ajustes',
+              onPressed: ref.read(appDestinationProvider.notifier).back,
+              icon: const Icon(Icons.close),
+            ),
+          ),
+          Expanded(
+            child: ValueListenableBuilder<PerformanceSnapshot>(
+              valueListenable: PerformanceDiagnostics.instance,
+              builder: (context, snapshot, _) => ListView(
+                children: [
+                  _DiagnosticTile(
+                    label: 'Canciones',
+                    value: '${snapshot.songCount}',
+                  ),
+                  _DiagnosticTile(
+                    label: 'Arranque hasta primer frame',
+                    value: _durationLabel(snapshot.firstFrame),
+                  ),
+                  _DiagnosticTile(
+                    label: 'Arranque hasta cargar biblioteca',
+                    value: _durationLabel(snapshot.libraryLoad),
+                  ),
+                  _DiagnosticTile(
+                    label: 'Última carga de cola',
+                    value: _durationLabel(snapshot.lastQueueLoad),
+                  ),
+                  _DiagnosticTile(
+                    label: 'Caché de imágenes',
+                    value:
+                        '${PaintingBinding.instance.imageCache.currentSizeBytes} bytes',
+                  ),
+                  FutureBuilder<int>(
+                    future: _artworkCacheBytes,
+                    builder: (context, bytes) => _DiagnosticTile(
+                      label: 'Caché de carátulas',
+                      value: bytes.hasData
+                          ? '${bytes.data} bytes'
+                          : 'Midiendo…',
+                    ),
+                  ),
+                  _DiagnosticTile(
+                    label: 'Reconstrucciones del listado',
+                    value: '${snapshot.listBuilds}',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiagnosticTile extends StatelessWidget {
+  const _DiagnosticTile({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) =>
+      ListTile(title: Text(label), trailing: Text(value));
+}
+
+String _durationLabel(Duration? duration) =>
+    duration == null ? 'Sin datos' : '${duration.inMilliseconds} ms';
 
 Future<void> _confirmClearLibrary(
   BuildContext context,
@@ -1432,11 +1571,22 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(playerControllerProvider);
+    final state = ref.watch(
+      playerControllerProvider.select(
+        (state) => (
+          state.currentItem,
+          state.status,
+          state.isPlaying,
+          state.shuffleEnabled,
+          state.repeatMode,
+          state.volume,
+        ),
+      ),
+    );
     final controller = ref.read(playerControllerProvider.notifier);
-    final item = state.currentItem;
-    final enabled = item != null && state.status != AudioPlaybackStatus.error;
-    if (state.volume > 0) _lastAudibleVolume = state.volume;
+    final (item, status, isPlaying, shuffleEnabled, repeatMode, volume) = state;
+    final enabled = item != null && status != AudioPlaybackStatus.error;
+    if (volume > 0) _lastAudibleVolume = volume;
 
     return Material(
       key: const Key('desktop-player-bar'),
@@ -1459,7 +1609,7 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                         IconButton(
                           key: const Key('desktop-shuffle-button'),
                           tooltip: 'Aleatorio',
-                          color: state.shuffleEnabled
+                          color: shuffleEnabled
                               ? context.astraColors.accent
                               : null,
                           onPressed: enabled ? controller.toggleShuffle : null,
@@ -1474,7 +1624,7 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                         PlayCircleButton(
                           key: const Key('desktop-play-button'),
                           onPressed: enabled ? controller.togglePlayback : null,
-                          isPlaying: state.isPlaying,
+                          isPlaying: isPlaying,
                           size: 44,
                         ),
                         IconButton(
@@ -1486,29 +1636,21 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                         IconButton(
                           key: const Key('desktop-repeat-button'),
                           tooltip: 'Repetir',
-                          color: state.repeatMode == RepeatMode.off
+                          color: repeatMode == RepeatMode.off
                               ? null
                               : context.astraColors.accent,
                           onPressed: enabled
                               ? controller.cycleRepeatMode
                               : null,
                           icon: Icon(
-                            state.repeatMode == RepeatMode.one
+                            repeatMode == RepeatMode.one
                                 ? Icons.repeat_one
                                 : Icons.repeat,
                           ),
                         ),
                       ],
                     ),
-                    SizedBox(
-                      height: 32,
-                      child: SeekBar(
-                        compact: true,
-                        position: state.position,
-                        duration: state.duration,
-                        onSeek: enabled ? controller.seek : null,
-                      ),
-                    ),
+                    _DesktopProgressControls(enabled: enabled),
                   ],
                 ),
               ),
@@ -1521,14 +1663,12 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                 children: [
                   IconButton(
                     key: const Key('desktop-mute-button'),
-                    tooltip: state.volume == 0
-                        ? 'Restaurar volumen'
-                        : 'Silenciar',
+                    tooltip: volume == 0 ? 'Restaurar volumen' : 'Silenciar',
                     onPressed: () => controller.setVolume(
-                      state.volume == 0 ? _lastAudibleVolume : 0,
+                      volume == 0 ? _lastAudibleVolume : 0,
                     ),
                     icon: Icon(
-                      state.volume == 0 ? Icons.volume_off : Icons.volume_up,
+                      volume == 0 ? Icons.volume_off : Icons.volume_up,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1542,7 +1682,7 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                       ),
                       child: Slider(
                         key: const Key('desktop-volume-slider'),
-                        value: state.volume.clamp(0.0, 1.0),
+                        value: volume.clamp(0.0, 1.0),
                         onChanged: controller.setVolume,
                       ),
                     ),
@@ -1553,6 +1693,32 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DesktopProgressControls extends ConsumerWidget {
+  const _DesktopProgressControls({required this.enabled});
+
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref.watch(
+      playerControllerProvider.select(
+        (state) => (state.position, state.duration),
+      ),
+    );
+    return SizedBox(
+      height: 32,
+      child: SeekBar(
+        compact: true,
+        position: progress.$1,
+        duration: progress.$2,
+        onSeek: enabled
+            ? ref.read(playerControllerProvider.notifier).seek
+            : null,
       ),
     );
   }

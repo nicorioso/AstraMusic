@@ -537,6 +537,9 @@ final class RecordingArtworkCache implements ArtworkCache {
   final List<String> deletedKeys = [];
 
   @override
+  Future<int> sizeBytes() async => 0;
+
+  @override
   Future<void> clear() async {}
 
   @override

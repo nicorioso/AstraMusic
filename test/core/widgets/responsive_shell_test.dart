@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
@@ -65,6 +66,50 @@ void main() {
     expect(fixture.repository.clearCount, 1);
     expect(fixture.cache.clearCount, 1);
     expect(find.text('Biblioteca vaciada'), findsOneWidget);
+  });
+
+  testWidgets('Diagnóstico muestra las métricas debug y permite salir', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-settings-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings-diagnostics-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('diagnostics-destination')), findsOneWidget);
+    expect(find.text('Arranque hasta primer frame'), findsOneWidget);
+    expect(find.text('Caché de carátulas'), findsOneWidget);
+    expect(find.text('Reconstrucciones del listado'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('close-diagnostics-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-destination')), findsOneWidget);
+  });
+
+  testWidgets('los ticks de posición no reconstruyen el listado ni sus filas', (
+    tester,
+  ) async {
+    PerformanceDiagnostics.instance.resetForTesting();
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    final before = PerformanceDiagnostics.instance.value;
+
+    fixture.player.emitPosition(const Duration(seconds: 1));
+    await tester.pump();
+
+    final after = PerformanceDiagnostics.instance.value;
+    expect(after.listBuilds, before.listBuilds);
+    expect(after.trackRowBuilds, before.trackRowBuilds);
   });
 
   testWidgets('elige el shell y responde al cambio de ancho', (tester) async {
@@ -702,6 +747,9 @@ final class _FakeArtworkCache implements ArtworkCache {
   int clearCount = 0;
 
   @override
+  Future<int> sizeBytes() async => 0;
+
+  @override
   Future<void> clear() async => clearCount++;
 
   @override
@@ -749,6 +797,8 @@ final class _FakePlayer implements AudioPlayerService {
   }
 
   void emitShuffle(bool value) => _shuffle.add(value);
+
+  void emitPosition(Duration value) => _position.add(value);
 
   @override
   Stream<AudioItem?> get currentItemStream => _item.stream;

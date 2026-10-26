@@ -277,7 +277,8 @@ class _PlaylistChooser extends ConsumerWidget {
                     child: Text('Aún no tienes playlists'),
                   )
                 : ListView.builder(
-                    shrinkWrap: true,
+                    cacheExtent: 280,
+                    addAutomaticKeepAlives: false,
                     itemCount: items.length,
                     itemBuilder: (_, index) {
                       final playlist = items[index];
@@ -393,7 +394,9 @@ class _PlaylistDetailBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final player = ref.watch(playerControllerProvider);
+    final isPlaying = ref.watch(
+      playerControllerProvider.select((state) => state.isPlaying),
+    );
     final library = ref.read(libraryControllerProvider.notifier);
     final available = tracks.where((track) => track.isAvailable).toList();
     final duration = tracks.fold<Duration>(
@@ -488,7 +491,7 @@ class _PlaylistDetailBody extends ConsumerWidget {
                     : () => favorites
                           ? library.playAll(tracks)
                           : library.playPlaylist(playlist.id, tracks),
-                isPlaying: player.isPlaying,
+                isPlaying: isPlaying,
               ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
@@ -519,6 +522,8 @@ class _PlaylistDetailBody extends ConsumerWidget {
                 )
               : ReorderableListView.builder(
                   key: const Key('playlist-track-list'),
+                  itemExtent: 56,
+                  scrollCacheExtent: 280,
                   buildDefaultDragHandles:
                       !favorites && MediaQuery.sizeOf(context).width < 840,
                   onReorderItem: (oldIndex, newIndex) {

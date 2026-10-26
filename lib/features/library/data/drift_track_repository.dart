@@ -4,6 +4,7 @@ import 'package:astramusic/features/library/data/track_mapper.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 
 final class DriftTrackRepository implements TrackRepository {
   DriftTrackRepository(this._database, {DateTime Function()? now})
@@ -174,8 +175,18 @@ final class DriftTrackRepository implements TrackRepository {
     });
   }
 
-  List<Track> _toDomainList(List<TrackRow> rows) =>
-      List.unmodifiable(rows.map((row) => row.toDomain()));
+  List<Track> _toDomainList(List<TrackRow> rows) {
+    final stopwatch = Stopwatch()..start();
+    final result = List<Track>.unmodifiable(rows.map((row) => row.toDomain()));
+    stopwatch.stop();
+    if (kDebugMode && rows.length >= 500) {
+      debugPrint(
+        'AstraMusic DB: mapeó ${rows.length} canciones en '
+        '${stopwatch.elapsedMilliseconds} ms.',
+      );
+    }
+    return result;
+  }
 }
 
 String _escapeLike(String value) =>

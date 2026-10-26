@@ -1,3 +1,4 @@
+import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -30,6 +31,7 @@ final class SetAudioSourcesQueueLoadStrategy implements QueueLoadStrategy {
     } finally {
       stopwatch.stop();
       if (kDebugMode) {
+        PerformanceDiagnostics.instance.recordQueueLoad(stopwatch.elapsed);
         debugPrint(
           'AstraMusic: setAudioSources cargó ${sources.length} elementos '
           'en ${stopwatch.elapsedMilliseconds} ms.',

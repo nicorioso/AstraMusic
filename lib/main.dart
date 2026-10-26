@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:astramusic/core/db/app_database.dart';
+import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/platform/track_availability.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
@@ -23,7 +24,11 @@ import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runZonedGuarded(() {
+    PerformanceDiagnostics.instance.startStartup();
     WidgetsFlutterBinding.ensureInitialized();
+    if (Platform.isAndroid) {
+      PaintingBinding.instance.imageCache.maximumSizeBytes = 64 * 1024 * 1024;
+    }
     FlutterError.onError = (details) {
       _logStartupError(details.exception, details.stack ?? StackTrace.current);
       FlutterError.presentError(details);
@@ -33,6 +38,9 @@ void main() {
       return true;
     };
     runApp(const StartupGate(initializer: initializeAstraMusic));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PerformanceDiagnostics.instance.recordFirstFrame();
+    });
   }, _logStartupError);
 }
 

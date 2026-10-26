@@ -9,6 +9,7 @@ enum AppDestinationType {
   queue,
   folders,
   settings,
+  diagnostics,
 }
 
 @immutable
@@ -21,6 +22,7 @@ class AppDestination {
   static const queue = AppDestination._(AppDestinationType.queue);
   static const folders = AppDestination._(AppDestinationType.folders);
   static const settings = AppDestination._(AppDestinationType.settings);
+  static const diagnostics = AppDestination._(AppDestinationType.diagnostics);
 
   factory AppDestination.playlist(int id) =>
       AppDestination._(AppDestinationType.playlist, id);
@@ -36,6 +38,7 @@ class AppDestination {
     AppDestinationType.queue ||
     AppDestinationType.folders ||
     AppDestinationType.settings => 2,
+    AppDestinationType.diagnostics => 2,
   };
 
   @override
@@ -65,7 +68,8 @@ class AppNavigation extends Notifier<AppDestination> {
     if (destination.type == AppDestinationType.playlist ||
         destination.type == AppDestinationType.queue ||
         destination.type == AppDestinationType.folders ||
-        destination.type == AppDestinationType.settings) {
+        destination.type == AppDestinationType.settings ||
+        destination.type == AppDestinationType.diagnostics) {
       _history.add(state);
     } else {
       _history.clear();

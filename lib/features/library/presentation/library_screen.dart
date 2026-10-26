@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
@@ -457,9 +458,13 @@ class _TrackList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    PerformanceDiagnostics.instance.recordListBuild();
     return ListView.builder(
       key: const Key('library-track-list'),
       padding: const EdgeInsets.only(bottom: 88),
+      itemExtent: 56,
+      cacheExtent: 280,
+      addAutomaticKeepAlives: false,
       itemCount: tracks.length,
       itemBuilder: (context, index) {
         final track = tracks[index];

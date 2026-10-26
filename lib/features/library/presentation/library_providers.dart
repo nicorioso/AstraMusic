@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:astramusic/core/db/app_database.dart';
+import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/platform/android_media_store_library_scanner.dart';
 import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
@@ -82,11 +83,20 @@ final librarySearchQueryProvider = NotifierProvider<LibrarySearchQuery, String>(
 final libraryTracksProvider = StreamProvider<List<Track>>((ref) {
   final repository = ref.watch(trackRepositoryProvider);
   final query = ref.watch(librarySearchQueryProvider).trim();
-  return query.isEmpty ? repository.watchAll() : repository.watchSearch(query);
+  final tracks = query.isEmpty
+      ? repository.watchAll()
+      : repository.watchSearch(query);
+  return tracks.map((items) {
+    PerformanceDiagnostics.instance.recordLibraryLoaded(items.length);
+    return items;
+  });
 });
 
 final allLibraryTracksProvider = StreamProvider<List<Track>>((ref) {
-  return ref.watch(trackRepositoryProvider).watchAll();
+  return ref.watch(trackRepositoryProvider).watchAll().map((items) {
+    PerformanceDiagnostics.instance.recordLibraryLoaded(items.length);
+    return items;
+  });
 });
 
 final favoriteTracksProvider = StreamProvider<List<Track>>((ref) {

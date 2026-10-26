@@ -101,6 +101,8 @@ class PlayerQueueView extends ConsumerWidget {
     }
     return ReorderableListView.builder(
       key: const Key('queue-list'),
+      itemExtent: 56,
+      scrollCacheExtent: 280,
       buildDefaultDragHandles: false,
       itemCount: queue.length,
       onReorderItem: controller.moveInQueue,
