@@ -48,3 +48,5 @@ lib/core (platform, db, utils) y lib/features (library, player, playlists, setti
 - Playlists: `markPlayed` registra el inicio desde una playlist y `watchRecent` excluye las nunca reproducidas.
 
 Diseño: docs/diseno-ui.md (leer solo en tareas de UI)
+
+Iconos de la app: regenerar con `dart run flutter_launcher_icons`.

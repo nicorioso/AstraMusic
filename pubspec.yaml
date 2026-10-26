@@ -61,6 +61,18 @@ dev_dependencies:
   drift_dev: ^2.35.2
   build_runner: ^2.16.2
   fake_async: ^1.3.3
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  image_path: assets/branding/logo.png
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: assets/branding/logo.png
+  adaptive_icon_foreground_inset: 24
+  windows:
+    generate: true
+    image_path: assets/branding/logo.png
+    icon_size: 256
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -72,6 +84,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/branding/logo.png
 
   fonts:
     - family: Inter
