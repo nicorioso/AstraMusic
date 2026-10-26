@@ -6,6 +6,10 @@ part 'app_database.g.dart';
 
 @DataClassName('TrackRow')
 @TableIndex(name: 'tracks_sort_title_idx', columns: {#sortTitle, #id})
+@TableIndex(name: 'tracks_artist_idx', columns: {#artist, #id})
+@TableIndex(name: 'tracks_album_idx', columns: {#album, #id})
+@TableIndex(name: 'tracks_date_added_idx', columns: {#dateAdded, #id})
+@TableIndex(name: 'tracks_is_favorite_idx', columns: {#isFavorite, #id})
 class Tracks extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get uri => text().unique()();
@@ -114,7 +118,7 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -199,6 +203,12 @@ final class AppDatabase extends _$AppDatabase {
           SET added_at = created_at
           WHERE added_at = 0
         ''');
+      }
+      if (from < 10) {
+        await migrator.createIndex(tracksArtistIdx);
+        await migrator.createIndex(tracksAlbumIdx);
+        await migrator.createIndex(tracksDateAddedIdx);
+        await migrator.createIndex(tracksIsFavoriteIdx);
       }
     },
     beforeOpen: (details) async {

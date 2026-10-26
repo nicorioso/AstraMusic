@@ -2943,6 +2943,22 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'tracks_sort_title_idx',
     'CREATE INDEX tracks_sort_title_idx ON tracks (sort_title, id)',
   );
+  late final Index tracksArtistIdx = Index(
+    'tracks_artist_idx',
+    'CREATE INDEX tracks_artist_idx ON tracks (artist, id)',
+  );
+  late final Index tracksAlbumIdx = Index(
+    'tracks_album_idx',
+    'CREATE INDEX tracks_album_idx ON tracks (album, id)',
+  );
+  late final Index tracksDateAddedIdx = Index(
+    'tracks_date_added_idx',
+    'CREATE INDEX tracks_date_added_idx ON tracks (date_added, id)',
+  );
+  late final Index tracksIsFavoriteIdx = Index(
+    'tracks_is_favorite_idx',
+    'CREATE INDEX tracks_is_favorite_idx ON tracks (is_favorite, id)',
+  );
   late final Index playlistTracksPlaylistPositionIdx = Index(
     'playlist_tracks_playlist_position_idx',
     'CREATE INDEX playlist_tracks_playlist_position_idx ON playlist_tracks (playlist_id, position)',
@@ -2964,6 +2980,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     queueItems,
     excludedUris,
     tracksSortTitleIdx,
+    tracksArtistIdx,
+    tracksAlbumIdx,
+    tracksDateAddedIdx,
+    tracksIsFavoriteIdx,
     playlistTracksPlaylistPositionIdx,
     playlistTracksPlaylistTrackIdx,
   ];

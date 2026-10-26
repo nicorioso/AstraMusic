@@ -4,6 +4,43 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('migra de 9 a 10, conserva datos y crea índices de tracks', () async {
+    final executor = NativeDatabase.memory(
+      setup: (database) {
+        _createVersionNineSchema(database);
+        database.execute('''
+          INSERT INTO tracks (
+            id, uri, title, artist, album, date_added, is_favorite
+          ) VALUES (
+            1, 'file:///indexada.mp3', 'Indexada', 'Artista', 'Álbum',
+            1767225600000, 1
+          )
+        ''');
+        database.userVersion = 9;
+      },
+    );
+    final database = AppDatabase(executor);
+    addTearDown(database.close);
+
+    final track = await database.select(database.tracks).getSingle();
+    final indices = await database
+        .customSelect(
+          "SELECT name FROM sqlite_schema WHERE type = 'index' "
+          "AND name IN ('tracks_artist_idx', 'tracks_album_idx', "
+          "'tracks_date_added_idx', 'tracks_is_favorite_idx') ORDER BY name",
+        )
+        .get();
+
+    expect(database.schemaVersion, 10);
+    expect(track.uri, 'file:///indexada.mp3');
+    expect(indices.map((row) => row.read<String>('name')), [
+      'tracks_album_idx',
+      'tracks_artist_idx',
+      'tracks_date_added_idx',
+      'tracks_is_favorite_idx',
+    ]);
+  });
+
   test('migra de 8 a 9 y rellena added_at desde created_at', () async {
     final executor = NativeDatabase.memory(
       setup: (database) {
@@ -23,7 +60,7 @@ void main() {
 
     final playlist = await database.select(database.playlists).getSingle();
 
-    expect(database.schemaVersion, 9);
+    expect(database.schemaVersion, 10);
     expect(playlist.addedAt, playlist.createdAt);
     expect(playlist.customArtworkPath, isNull);
   });
@@ -48,7 +85,7 @@ void main() {
       database.tracks,
     )..orderBy([(row) => OrderingTerm.asc(row.id)])).get();
 
-    expect(database.schemaVersion, 9);
+    expect(database.schemaVersion, 10);
     expect(tracks.first.favoritedAt, tracks.first.dateAdded);
     expect(tracks.last.favoritedAt, isNull);
   });
@@ -81,7 +118,7 @@ void main() {
     final playlist = await database.select(database.playlists).getSingle();
     final relations = await database.select(database.playlistTracks).get();
 
-    expect(database.schemaVersion, 9);
+    expect(database.schemaVersion, 10);
     expect(playlist.lastPlayedAt, isNull);
     expect(relations.map((row) => row.id), [1]);
     await expectLater(
@@ -162,7 +199,7 @@ void main() {
         )
         .getSingleOrNull();
 
-    expect(database.schemaVersion, 9);
+    expect(database.schemaVersion, 10);
     expect(tracks.single.title, 'Existente');
     expect(tracks.single.searchText, 'existente');
     expect(tracks.single.sortTitle, 'existente');
@@ -187,7 +224,7 @@ void main() {
     final track = await database.select(database.tracks).getSingle();
     expect(track.title, 'Tema');
     expect(track.artworkPath, isNull);
-    expect(database.schemaVersion, 9);
+    expect(database.schemaVersion, 10);
   });
 
   test('migra de 4 a 5 y crea el estado y la cola persistidos', () async {
@@ -211,7 +248,7 @@ void main() {
       'playback_state',
       'queue_items',
     ]);
-    expect(database.schemaVersion, 9);
+    expect(database.schemaVersion, 10);
   });
 
   test('migra de 5 a 6 y crea excluded_uris con uri única', () async {
@@ -251,7 +288,7 @@ void main() {
           .insert(ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3')),
       throwsA(anything),
     );
-    expect(database.schemaVersion, 9);
+    expect(database.schemaVersion, 10);
   });
 
   test('migra de 2 a 3, hace backfill y conserva todas las tablas', () async {
@@ -304,9 +341,24 @@ void main() {
     expect(relations.single.trackId, track.id);
     expect(folders.single.path, '/música');
     expect(indices.map((row) => row.read<String>('name')), [
+      'tracks_album_idx',
+      'tracks_artist_idx',
+      'tracks_date_added_idx',
+      'tracks_is_favorite_idx',
       'tracks_sort_title_idx',
     ]);
   });
+}
+
+void _createVersionNineSchema(dynamic database) {
+  _createVersionSevenSchema(database);
+  database.execute('ALTER TABLE tracks ADD COLUMN favorited_at INTEGER NULL');
+  database.execute(
+    'ALTER TABLE playlists ADD COLUMN custom_artwork_path TEXT NULL',
+  );
+  database.execute(
+    'ALTER TABLE playlists ADD COLUMN added_at INTEGER NOT NULL DEFAULT 0',
+  );
 }
 
 void _createVersionSevenSchema(dynamic database) {
