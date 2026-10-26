@@ -12,6 +12,7 @@ void main() {
       title: '  Canción  ',
       artists: const [' Artista ', '', 'Invitado', 'Artista'],
       album: '  Álbum  ',
+      genres: const [' ', ' Rock '],
       trackNumber: 4,
       year: 2026,
       durationMs: 1234,
@@ -20,6 +21,7 @@ void main() {
     expect(tags.title, 'Canción');
     expect(tags.artist, 'Artista, Invitado');
     expect(tags.album, 'Álbum');
+    expect(tags.genre, 'Rock');
     expect(tags.trackNumber, 4);
     expect(tags.year, 2026);
     expect(tags.durationMs, 1234);

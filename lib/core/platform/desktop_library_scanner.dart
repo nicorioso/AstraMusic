@@ -206,6 +206,7 @@ void _scanDirectory(_DesktopScanRequest request) {
           'title': tags?.title ?? path.basenameWithoutExtension(entry.path),
           'artist': tags?.artist,
           'album': tags?.album,
+          'genre': tags?.genre,
           'durationMs': tags?.durationMs,
           'trackNumber': tags?.trackNumber,
           'year': tags?.year,

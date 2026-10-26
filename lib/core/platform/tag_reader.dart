@@ -9,6 +9,7 @@ class AudioTags {
     required this.title,
     this.artist,
     this.album,
+    this.genre,
     this.trackNumber,
     this.year,
     this.durationMs,
@@ -17,6 +18,7 @@ class AudioTags {
   final String title;
   final String? artist;
   final String? album;
+  final String? genre;
   final int? trackNumber;
   final int? year;
   final int? durationMs;
@@ -60,6 +62,7 @@ final class AudioMetadataTagReader implements TagReader {
       title: metadata.title,
       artists: [metadata.artist, ...metadata.performers],
       album: metadata.album,
+      genres: metadata.genres,
       trackNumber: metadata.trackNumber,
       year: metadata.year?.year,
       durationMs: metadata.duration?.inMilliseconds,
@@ -175,6 +178,7 @@ AudioTags normalizeAudioTags({
   String? title,
   Iterable<String?> artists = const [],
   String? album,
+  Iterable<String?> genres = const [],
   int? trackNumber,
   int? year,
   int? durationMs,
@@ -190,6 +194,7 @@ AudioTags normalizeAudioTags({
     title: _nonEmpty(title) ?? normalizedFallback,
     artist: uniqueArtists.isEmpty ? null : uniqueArtists.join(', '),
     album: _nonEmpty(album),
+    genre: genres.map(_nonEmpty).whereType<String>().firstOrNull,
     trackNumber: trackNumber != null && trackNumber > 0 ? trackNumber : null,
     year: year != null && year > 0 ? year : null,
     durationMs: durationMs != null && durationMs > 0 ? durationMs : null,
