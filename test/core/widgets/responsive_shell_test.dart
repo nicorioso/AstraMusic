@@ -4,6 +4,7 @@ import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/artwork_cache.dart';
+import 'package:astramusic/core/platform/android_system_settings.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
@@ -66,6 +67,28 @@ void main() {
     expect(fixture.repository.clearCount, 1);
     expect(fixture.cache.clearCount, 1);
     expect(find.text('Biblioteca vaciada'), findsOneWidget);
+  });
+
+  testWidgets('Ajustes avisa si notificaciones están denegadas', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(fixture.app(notificationPermissionGranted: false));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-settings-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('settings-notification-warning')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('open-notification-settings')));
+    await tester.pump();
+    expect(fixture.systemSettings.notificationSettingsCount, 1);
   });
 
   testWidgets('Diagnóstico muestra las métricas debug y permite salir', (
@@ -590,12 +613,13 @@ final class _Fixture {
   final player = _FakePlayer();
   final cache = _FakeArtworkCache();
   final backfill = _RecordingArtworkBackfill();
+  final systemSettings = _FakeAndroidSystemSettings();
   final _FakeTrackRepository repository;
   late final _FakePlaylistRepository playlists = _FakePlaylistRepository(
     repository.tracks,
   );
 
-  Widget app() => ProviderScope(
+  Widget app({bool notificationPermissionGranted = true}) => ProviderScope(
     overrides: [
       audioPlayerServiceProvider.overrideWithValue(player),
       trackRepositoryProvider.overrideWithValue(repository),
@@ -603,6 +627,10 @@ final class _Fixture {
       artworkCacheProvider.overrideWithValue(cache),
       artworkBackfillServiceProvider.overrideWithValue(backfill),
       playlistRepositoryProvider.overrideWithValue(playlists),
+      notificationPermissionGrantedProvider.overrideWithValue(
+        notificationPermissionGranted,
+      ),
+      androidSystemSettingsProvider.overrideWithValue(systemSettings),
     ],
     child: MaterialApp(
       theme: buildAstraTheme(),
@@ -614,6 +642,22 @@ final class _Fixture {
   );
 
   Future<void> dispose() => player.dispose();
+}
+
+final class _FakeAndroidSystemSettings implements AndroidSystemSettings {
+  int notificationSettingsCount = 0;
+  int batterySettingsCount = 0;
+
+  @override
+  Future<bool> openAppNotificationSettings() async {
+    notificationSettingsCount++;
+    return true;
+  }
+
+  @override
+  Future<void> openBatteryOptimizationSettings() async {
+    batterySettingsCount++;
+  }
 }
 
 final class _RecordingArtworkBackfill implements ArtworkBackfill {

@@ -4,6 +4,7 @@ import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/core/platform/android_system_settings.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/theme/dynamic_artwork_color.dart';
 import 'package:astramusic/core/utils/search_normalization.dart';
@@ -30,6 +31,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 const desktopBreakpoint = 840.0;
+
+final androidSystemSettingsProvider = Provider<AndroidSystemSettings>(
+  (ref) => const SystemAndroidSettings(),
+);
 
 class ResponsiveShell extends ConsumerStatefulWidget {
   const ResponsiveShell({super.key});
@@ -1173,6 +1178,10 @@ class SettingsDestination extends ConsumerWidget {
     final controller = ref.read(libraryControllerProvider.notifier);
     final state = ref.watch(libraryControllerProvider);
     final isAndroid = ref.watch(isAndroidPlatformProvider);
+    final notificationPermissionGranted = ref.watch(
+      notificationPermissionGrantedProvider,
+    );
+    final systemSettings = ref.read(androidSystemSettingsProvider);
     ref.listen<String?>(
       libraryControllerProvider.select((value) => value.message),
       (previous, next) {
@@ -1194,6 +1203,21 @@ class SettingsDestination extends ConsumerWidget {
             key: const Key('destination-content'),
             child: ListView(
               children: [
+                if (isAndroid && !notificationPermissionGranted)
+                  ListTile(
+                    key: const Key('settings-notification-warning'),
+                    leading: const Icon(Icons.notifications_off_outlined),
+                    title: const Text('Notificaciones desactivadas'),
+                    subtitle: const Text(
+                      'La música seguirá funcionando, pero Android puede '
+                      'ocultar los controles de reproducción.',
+                    ),
+                    trailing: TextButton(
+                      key: const Key('open-notification-settings'),
+                      onPressed: systemSettings.openAppNotificationSettings,
+                      child: const Text('Abrir ajustes'),
+                    ),
+                  ),
                 if (!isAndroid) ...[
                   ListTile(
                     leading: const Icon(Icons.folder_copy_outlined),
@@ -1262,6 +1286,25 @@ class SettingsDestination extends ConsumerWidget {
                   enabled: !state.actionsDisabled,
                   onTap: () => _confirmClearLibrary(context, controller),
                 ),
+                if (isAndroid) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    key: const Key('background-playback-settings'),
+                    leading: const Icon(Icons.battery_saver_outlined),
+                    title: const Text('Reproducción en segundo plano'),
+                    subtitle: const Text(
+                      'Algunos fabricantes, como Samsung, cierran apps en '
+                      'segundo plano. En Samsung: Batería → Límites de uso en '
+                      'segundo plano → quita AstraMusic de Apps en suspensión '
+                      'y añádela a Apps que nunca se suspenden.',
+                    ),
+                    trailing: TextButton(
+                      key: const Key('open-battery-settings'),
+                      onPressed: systemSettings.openBatteryOptimizationSettings,
+                      child: const Text('Optimización'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
