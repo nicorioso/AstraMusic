@@ -9,10 +9,12 @@ import 'package:path/path.dart' as path;
 
 void main() {
   test('elige el cubo de miniatura según el uso', () {
+    expect(artworkThumbnailBucket(ArtworkUsage.dynamicColor), 128);
     expect(artworkThumbnailBucket(ArtworkUsage.list), 256);
     expect(artworkThumbnailBucket(ArtworkUsage.miniPlayer), 256);
     expect(artworkThumbnailBucket(ArtworkUsage.player), 640);
-    expect(normalizeArtworkThumbnailBucket(48), 256);
+    expect(normalizeArtworkThumbnailBucket(48), 128);
+    expect(normalizeArtworkThumbnailBucket(180), 256);
     expect(normalizeArtworkThumbnailBucket(512), 640);
   });
 

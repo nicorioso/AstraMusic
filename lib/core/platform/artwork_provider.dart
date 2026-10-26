@@ -11,7 +11,7 @@ abstract interface class ArtworkProvider {
   Future<String?> artworkFor(Track track, {required int size});
 }
 
-enum ArtworkUsage { list, miniPlayer, player }
+enum ArtworkUsage { dynamicColor, list, miniPlayer, player }
 
 enum ArtworkSource { file, mediaStore, none }
 
@@ -24,12 +24,16 @@ ArtworkSource artworkSourceFor(Track track) {
 }
 
 int artworkThumbnailBucket(ArtworkUsage usage) => switch (usage) {
+  ArtworkUsage.dynamicColor => 128,
   ArtworkUsage.list || ArtworkUsage.miniPlayer => 256,
   ArtworkUsage.player => 640,
 };
 
-int normalizeArtworkThumbnailBucket(int requestedSize) =>
-    requestedSize <= 256 ? 256 : 640;
+int normalizeArtworkThumbnailBucket(int requestedSize) => requestedSize <= 128
+    ? 128
+    : requestedSize <= 256
+    ? 256
+    : 640;
 
 String artworkCacheKey({String? artist, String? album, required String uri}) {
   final normalizedArtist = artist?.trim().toLowerCase();
@@ -130,12 +134,12 @@ final class CachedArtworkProvider implements ArtworkProvider {
   ) async {
     await _acquireLoadSlot();
     String? result;
-    Uint8List? bytes;
+    var byteSize = 0;
     try {
       if (source == ArtworkSource.file) {
         final file = File(sourceValue);
         if (await file.exists()) {
-          bytes = await file.readAsBytes();
+          byteSize = await file.length();
           result = file.path;
         }
       } else {
@@ -150,10 +154,10 @@ final class CachedArtworkProvider implements ArtworkProvider {
           ),
         );
         if (await file.exists()) {
-          bytes = await file.readAsBytes();
+          byteSize = await file.length();
           result = file.path;
         } else {
-          bytes =
+          final bytes =
               await (thumbnailLoader?.call(track.uri, size) ??
                   _channel.invokeMethod<Uint8List>('loadThumbnail', {
                     'uri': track.uri,
@@ -161,6 +165,7 @@ final class CachedArtworkProvider implements ArtworkProvider {
                   }));
           if (bytes != null && bytes.isNotEmpty) {
             await file.writeAsBytes(bytes, flush: true);
+            byteSize = bytes.lengthInBytes;
             result = file.path;
           }
         }
@@ -171,12 +176,12 @@ final class CachedArtworkProvider implements ArtworkProvider {
       _pending.remove(memoryKey)?.ignore();
       _releaseLoadSlot();
     }
-    if (result != null && bytes != null && bytes.isNotEmpty) {
-      _memory[memoryKey] = _MemoryArtwork(result, bytes);
-      _memoryBytes += bytes.lengthInBytes;
+    if (result != null && byteSize > 0) {
+      _memory[memoryKey] = _MemoryArtwork(result, byteSize);
+      _memoryBytes += byteSize;
       while (_memoryBytes > memoryCapacityBytes && _memory.length > 1) {
         final removed = _memory.remove(_memory.keys.first)!;
-        _memoryBytes -= removed.bytes.lengthInBytes;
+        _memoryBytes -= removed.byteSize;
       }
     }
     return result;
@@ -200,8 +205,8 @@ final class CachedArtworkProvider implements ArtworkProvider {
 }
 
 final class _MemoryArtwork {
-  const _MemoryArtwork(this.path, this.bytes);
+  const _MemoryArtwork(this.path, this.byteSize);
 
   final String path;
-  final Uint8List bytes;
+  final int byteSize;
 }

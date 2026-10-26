@@ -58,7 +58,7 @@ final class DynamicArtworkColorCache {
     try {
       final path = await _artworkProvider.artworkFor(
         track,
-        size: artworkThumbnailBucket(ArtworkUsage.player),
+        size: artworkThumbnailBucket(ArtworkUsage.dynamicColor),
       );
       if (path == null) return null;
       final file = File(path);

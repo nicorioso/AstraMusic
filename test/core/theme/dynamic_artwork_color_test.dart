@@ -48,9 +48,38 @@ void main() {
 
     expect(color, isNull);
   });
+
+  test('calcula el color una sola vez por clave de carátula', () async {
+    final provider = _CountingArtworkProvider();
+    final cache = DynamicArtworkColorCache(provider);
+    final track = Track(
+      uri: 'file:///album/cancion.mp3',
+      title: 'Canción',
+      artist: 'Artista',
+      album: 'Álbum',
+      dateAdded: DateTime(2026),
+    );
+
+    await Future.wait([
+      cache.colorFor(track, foreground: Colors.white),
+      cache.colorFor(track, foreground: Colors.white),
+    ]);
+
+    expect(provider.calls, 1);
+  });
 }
 
 final class _NoArtworkProvider implements ArtworkProvider {
   @override
   Future<String?> artworkFor(Track track, {required int size}) async => null;
+}
+
+final class _CountingArtworkProvider implements ArtworkProvider {
+  int calls = 0;
+
+  @override
+  Future<String?> artworkFor(Track track, {required int size}) async {
+    calls++;
+    return null;
+  }
 }

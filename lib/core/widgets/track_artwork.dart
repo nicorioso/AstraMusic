@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:astramusic/core/platform/artwork_provider.dart';
@@ -25,11 +26,16 @@ class TrackArtwork extends ConsumerStatefulWidget {
 
 class _TrackArtworkState extends ConsumerState<TrackArtwork> {
   String? _path;
+  var _generation = 0;
+  var _loadScheduled = false;
+  var _initialized = false;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    _scheduleLoad();
   }
 
   @override
@@ -40,22 +46,41 @@ class _TrackArtworkState extends ConsumerState<TrackArtwork> {
         oldWidget.size != widget.size ||
         oldWidget.usage != widget.usage) {
       _path = null;
-      _load();
+      _generation++;
+      _scheduleLoad();
     }
   }
 
-  Future<void> _load() async {
+  void _scheduleLoad() {
+    if (_loadScheduled) return;
+    _loadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadScheduled = false;
+      if (!mounted) return;
+      if (Scrollable.recommendDeferredLoadingForContext(context)) {
+        Future<void>.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) _scheduleLoad();
+        });
+        return;
+      }
+      unawaited(_load(_generation));
+    });
+  }
+
+  Future<void> _load(int generation) async {
     final uri = widget.track.uri;
     final result = await ref
         .read(artworkProviderProvider)
         .artworkFor(widget.track, size: artworkThumbnailBucket(widget.usage));
-    if (mounted && widget.track.uri == uri) setState(() => _path = result);
+    if (mounted && generation == _generation && widget.track.uri == uri) {
+      setState(() => _path = result);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final path = _path;
-    if (path == null || !File(path).existsSync()) return _placeholder(context);
+    if (path == null) return _placeholder(context);
     final physicalSize = physicalArtworkPixels(
       widget.size,
       MediaQuery.devicePixelRatioOf(context),
