@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/features/player/data/latest_seek_coordinator.dart';
 import 'package:astramusic/features/player/data/queue_load_strategy.dart';
+import 'package:astramusic/features/player/data/serial_command_queue.dart';
 import 'package:astramusic/features/player/domain/interruption_policy.dart';
 import 'package:astramusic/features/player/domain/manual_queue_order.dart';
 import 'package:astramusic/features/player/domain/queue_rules.dart';
@@ -29,7 +30,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
        _queueOrder = ManualQueueOrder([], random: shuffleRandom) {
     _lastObservedSpeed = _player.speed;
     _seekCoordinator = LatestSeekCoordinator(
-      _executeSeek,
+      (position) => _commands.run(() => _executeSeek(position)),
       canExecute: () => !_queueOrder.isEmpty,
       onDiscarded: (count) {
         if (kDebugMode) {
@@ -81,13 +82,14 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
         _player.processingStateStream.listen((state) {
           _watchLoadingState(state);
           if (state == ProcessingState.completed) {
-            unawaited(_resetAtQueueEnd());
+            _scheduleCommand(_resetAtQueueEnd);
           }
         }, onError: _handleStreamError),
       );
   }
 
   final AudioPlayer _player;
+  final SerialCommandQueue _commands = SerialCommandQueue();
   final QueueLoadStrategy _queueLoadStrategy;
   final ManualQueueOrder<MediaItem> _queueOrder;
   final InterruptionPolicy _interruptionPolicy = InterruptionPolicy();
@@ -96,7 +98,6 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   final List<StreamSubscription<dynamic>> _playerSubscriptions = [];
   final _failureController =
       StreamController<HandlerPlaybackFailure>.broadcast();
-  Future<void> _failureChain = Future.value();
   bool _mutatingQueue = false;
   bool _playRequested = false;
   bool _resettingAtEnd = false;
@@ -117,25 +118,28 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
     _playerSubscriptions
       ..add(
         session.interruptionEventStream.listen(
-          _handleInterruption,
+          (event) => _scheduleCommand(() => _handleInterruption(event)),
           onError: _handleStreamError,
         ),
       )
       ..add(
         session.becomingNoisyEventStream.listen((_) {
           if (shouldPauseForBecomingNoisy(isPlaying: _player.playing)) {
-            unawaited(_pauseForInterruption());
+            _scheduleCommand(_pauseForInterruption);
           }
         }, onError: _handleStreamError),
       );
   }
 
   Future<void> setVolume(double volume) =>
-      _player.setVolume(volume.clamp(0.0, 1.0));
+      _commands.run(() => _player.setVolume(volume.clamp(0.0, 1.0)));
 
-  Future<void> loadQueue(List<MediaItem> items, {int startIndex = 0}) async {
+  Future<void> loadQueue(List<MediaItem> items, {int startIndex = 0}) =>
+      _commands.run(() => _loadQueue(items, startIndex: startIndex));
+
+  Future<void> _loadQueue(List<MediaItem> items, {int startIndex = 0}) async {
     if (items.isEmpty) {
-      await updateQueue(const []);
+      await _clearQueue();
       return;
     }
     if (startIndex < 0 || startIndex >= items.length) {
@@ -188,7 +192,9 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> play() async {
+  Future<void> play() => _commands.run(_play);
+
+  Future<void> _play() async {
     if (_queueOrder.isEmpty) return;
     _playRequested = true;
     if (_player.processingState == ProcessingState.completed) {
@@ -198,22 +204,26 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> pause() async {
+  Future<void> pause() => _commands.run(_pause);
+
+  Future<void> _pause() async {
     _playRequested = false;
     _interruptionPolicy.userPaused();
     await _player.pause();
   }
 
   @override
-  Future<void> stop() async {
+  Future<void> stop() => _commands.run(_stop);
+
+  Future<void> _stop() async {
     _playRequested = false;
     await _player.stop();
   }
 
   @override
-  Future<void> onTaskRemoved() async {
-    if (!_player.playing) await stop();
-  }
+  Future<void> onTaskRemoved() => _commands.run(() async {
+    if (!_player.playing) await _stop();
+  });
 
   @override
   Future<void> seek(Duration position) {
@@ -227,7 +237,9 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> skipToNext() async {
+  Future<void> skipToNext() => _commands.run(_skipToNext);
+
+  Future<void> _skipToNext() async {
     final nextIndex = _player.nextIndex;
     if (nextIndex != null) {
       await _player.seek(Duration.zero, index: nextIndex);
@@ -235,7 +247,9 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> skipToPrevious() async {
+  Future<void> skipToPrevious() => _commands.run(_skipToPrevious);
+
+  Future<void> _skipToPrevious() async {
     final decision = decidePrevious(
       position: _player.position,
       previousIndex: _player.previousIndex,
@@ -249,13 +263,19 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> skipToQueueItem(int index) async {
+  Future<void> skipToQueueItem(int index) =>
+      _commands.run(() => _skipToQueueItem(index));
+
+  Future<void> _skipToQueueItem(int index) async {
     if (index < 0 || index >= _queueOrder.length) return;
     await _player.seek(Duration.zero, index: index);
   }
 
   @override
-  Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
+  Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) =>
+      _commands.run(() => _setShuffleMode(shuffleMode));
+
+  Future<void> _setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
     final enabled = shuffleMode == AudioServiceShuffleMode.all;
     if (_queueOrder.isEmpty || enabled == _queueOrder.shuffleEnabled) {
       playbackState.add(playbackState.value.copyWith(shuffleMode: shuffleMode));
@@ -305,7 +325,10 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
+  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) =>
+      _commands.run(() => _setRepeatMode(repeatMode));
+
+  Future<void> _setRepeatMode(AudioServiceRepeatMode repeatMode) async {
     final loopMode = switch (repeatMode) {
       AudioServiceRepeatMode.none => LoopMode.off,
       AudioServiceRepeatMode.one => LoopMode.one,
@@ -341,23 +364,37 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
         _failedIndices.clear();
       });
 
+  Future<void> insertQueueItemAfterCurrent(MediaItem mediaItem) =>
+      _mutateQueue(() async {
+        final index = (_player.currentIndex ?? -1) + 1;
+        final safeIndex = index.clamp(0, _queueOrder.length);
+        await _player.insertAudioSource(safeIndex, _itemToSource(mediaItem));
+        _queueOrder.insertAt(safeIndex, mediaItem);
+        _failedIndices.clear();
+      });
+
   @override
   Future<void> updateQueue(List<MediaItem> queue) async {
     if (queue.isEmpty) {
-      await _mutateQueue(() async {
-        _playRequested = false;
-        await _player.stop();
-        await _player.clearAudioSources();
-        _queueOrder.clear();
-        _failedIndices.clear();
-      });
+      await _commands.run(_clearQueue);
       return;
     }
     await loadQueue(queue);
   }
 
+  Future<void> _clearQueue() => _performQueueMutation(() async {
+    _playRequested = false;
+    await _player.stop();
+    await _player.clearAudioSources();
+    _queueOrder.clear();
+    _failedIndices.clear();
+  });
+
   @override
-  Future<void> updateMediaItem(MediaItem mediaItem) async {
+  Future<void> updateMediaItem(MediaItem mediaItem) =>
+      _commands.run(() => _updateMediaItem(mediaItem));
+
+  Future<void> _updateMediaItem(MediaItem mediaItem) async {
     final index = _queueOrder.indexWhere(
       (candidate) => candidate.id == mediaItem.id,
     );
@@ -367,10 +404,15 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> removeQueueItem(MediaItem mediaItem) async {
+  Future<void> removeQueueItem(MediaItem mediaItem) => _commands.run(() async {
     final index = queue.value.indexOf(mediaItem);
-    if (index != -1) await removeQueueItemAt(index);
-  }
+    if (index == -1) return;
+    await _performQueueMutation(() async {
+      await _player.removeAudioSourceAt(index);
+      _queueOrder.removeAt(index);
+      _reindexFailedAfterRemoval(index);
+    });
+  });
 
   @override
   Future<void> removeQueueItemAt(int index) => _mutateQueue(() async {
@@ -394,7 +436,10 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
         _failedIndices.clear();
       });
 
-  Future<void> _mutateQueue(Future<void> Function() mutation) async {
+  Future<void> _mutateQueue(Future<void> Function() mutation) =>
+      _commands.run(() => _performQueueMutation(mutation));
+
+  Future<void> _performQueueMutation(Future<void> Function() mutation) async {
     _mutatingQueue = true;
     try {
       await mutation();
@@ -479,11 +524,10 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
       _broadcastError(message, code: code);
       return;
     }
-    _failureChain = _failureChain
-        .then((_) => _handleFailure(failedIndex, message, code: code))
-        .catchError((Object error, StackTrace stackTrace) {
-          _broadcastError(_messageFor(error));
-        });
+    _scheduleCommand(
+      () => _handleFailure(failedIndex, message, code: code),
+      onError: (error) => _broadcastError(_messageFor(error)),
+    );
   }
 
   Future<void> _handleFailure(
@@ -549,7 +593,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
     await _player.pause();
   }
 
-  void _handleInterruption(AudioInterruptionEvent event) {
+  Future<void> _handleInterruption(AudioInterruptionEvent event) async {
     final kind = switch (event.type) {
       AudioInterruptionType.duck => InterruptionKind.duck,
       AudioInterruptionType.pause => InterruptionKind.transient,
@@ -562,14 +606,25 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
             volume: _player.volume,
           )
         : _interruptionPolicy.end(kind);
-    if (decision.pause) unawaited(_pauseForInterruption());
+    if (decision.pause) await _pauseForInterruption();
     if (decision.volume case final volume?) {
-      unawaited(_player.setVolume(volume.clamp(0.0, 1.0)));
+      await _player.setVolume(volume.clamp(0.0, 1.0));
     }
     if (decision.resume) {
       _playRequested = true;
       _startPlayer();
     }
+  }
+
+  void _scheduleCommand(
+    Future<void> Function() command, {
+    void Function(Object error)? onError,
+  }) {
+    unawaited(
+      _commands.run(command).catchError((Object error, StackTrace stackTrace) {
+        if (onError case final callback?) callback(error);
+      }),
+    );
   }
 
   void _watchLoadingState(ProcessingState state) {
