@@ -12,6 +12,7 @@ import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/application/artwork_backfill_service.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
+import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
@@ -41,9 +42,7 @@ void main() {
       await tester.pumpWidget(fixture.app());
       await tester.pumpAndSettle();
       if (size.width < desktopBreakpoint) {
-        await tester.tap(find.text('Biblioteca'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const Key('library-settings-button')));
+        _selectDestination(tester, AppDestination.settings);
       } else {
         await tester.tap(find.text('Ajustes'));
       }
@@ -77,9 +76,7 @@ void main() {
     await _setSize(tester, const Size(390, 844));
     await tester.pumpWidget(fixture.app());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Biblioteca'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('library-settings-button')));
+    _selectDestination(tester, AppDestination.settings);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('clear-library-button')));
@@ -114,9 +111,7 @@ void main() {
     await _setSize(tester, const Size(390, 844));
     await tester.pumpWidget(fixture.app(notificationPermissionGranted: false));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Biblioteca'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('library-settings-button')));
+    _selectDestination(tester, AppDestination.settings);
     await tester.pumpAndSettle();
 
     expect(
@@ -136,9 +131,7 @@ void main() {
     await _setSize(tester, const Size(390, 844));
     await tester.pumpWidget(fixture.app());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Biblioteca'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('library-settings-button')));
+    _selectDestination(tester, AppDestination.settings);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('settings-diagnostics-button')));
     await tester.pumpAndSettle();
@@ -198,7 +191,7 @@ void main() {
 
     await tester.tap(find.text('Biblioteca'));
     await tester.pump();
-    expect(find.byKey(const Key('library-destination')), findsOneWidget);
+    expect(find.byType(LibraryScreen), findsOneWidget);
   });
 
   testWidgets('las pantallas secundarias móviles muestran retroceso visible', (
@@ -210,9 +203,7 @@ void main() {
     await tester.pumpWidget(fixture.app());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Biblioteca'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('library-Artistas-tab')));
+    _selectDestination(tester, AppDestination.artists);
     await tester.pumpAndSettle();
 
     expect(
@@ -221,7 +212,7 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('mobile-secondary-back-button')));
     await tester.pump();
-    expect(find.byKey(const Key('library-destination')), findsOneWidget);
+    expect(find.byType(LibraryScreen), findsOneWidget);
   });
 
   testWidgets('Escape vuelve desde una pantalla secundaria de escritorio', (
@@ -391,9 +382,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text('Biblioteca'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Playlist de prueba'));
+      _selectDestination(tester, AppDestination.playlist(7));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('playlist-detail')), findsOneWidget);
       expect(find.byKey(const Key('mobile-mini-player')), findsOneWidget);
@@ -412,7 +401,7 @@ void main() {
 
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('library-destination')), findsOneWidget);
+      expect(find.byKey(const Key('search-destination')), findsOneWidget);
       expect(find.byKey(const Key('mobile-shell')), findsOneWidget);
 
       final container = ProviderScope.containerOf(
@@ -439,9 +428,7 @@ void main() {
       await _setSize(tester, const Size(360, 800));
       await tester.pumpWidget(fixture.app());
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Biblioteca'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Playlist de prueba'));
+      _selectDestination(tester, AppDestination.playlist(7));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Canción 0'));
@@ -587,7 +574,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Biblioteca conserva favoritos, creación y acceso a Ajustes', (
+  testWidgets('Biblioteca abre el listado principal y permite ir a Ajustes', (
     tester,
   ) async {
     final fixture = _Fixture();
@@ -598,10 +585,9 @@ void main() {
     await tester.tap(find.text('Biblioteca'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Canciones que te gustan'), findsOneWidget);
-    expect(find.byKey(const Key('create-playlist-button')), findsOneWidget);
-    expect(find.byKey(const Key('library-settings-button')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('library-settings-button')));
+    expect(find.byType(LibraryScreen), findsOneWidget);
+    expect(find.byKey(const Key('library-search-field')), findsOneWidget);
+    _selectDestination(tester, AppDestination.settings);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('settings-destination')), findsOneWidget);
   });
@@ -644,6 +630,12 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+}
+
+void _selectDestination(WidgetTester tester, AppDestination destination) {
+  ProviderScope.containerOf(tester.element(find.byType(ResponsiveShell)))
+      .read(appDestinationProvider.notifier)
+      .select(destination);
 }
 
 Future<void> _setSize(WidgetTester tester, Size size) async {

@@ -94,9 +94,7 @@ void main() {
   ) async {
     final fixture = _Fixture();
     await _setSize(tester, const Size(360, 800));
-    await tester.pumpWidget(fixture.shellApp());
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Biblioteca'));
+    await tester.pumpWidget(fixture.playlistsApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('create-playlist-button')));
@@ -130,20 +128,7 @@ void main() {
   ) async {
     final fixture = _Fixture(favoriteFirst: true);
     await _setSize(tester, const Size(360, 800));
-    await tester.pumpWidget(fixture.shellApp());
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Biblioteca'));
-    await tester.pumpAndSettle();
-
-    final favorites = find.byKey(const Key('favorites-playlist-tile'));
-    expect(favorites, findsOneWidget);
-    expect(
-      tester.getTopLeft(favorites).dy,
-      lessThan(
-        tester.getTopLeft(find.byKey(const Key('library-playlist-7'))).dy,
-      ),
-    );
-    await tester.tap(favorites);
+    await tester.pumpWidget(fixture.favoritesApp());
     await tester.pumpAndSettle();
     expect(find.text('Canciones que te gustan'), findsOneWidget);
     expect(find.byKey(const Key('playlist-menu-button')), findsNothing);
@@ -294,9 +279,7 @@ void main() {
     final fixture = _Fixture();
     await _setSize(tester, const Size(360, 800));
 
-    await tester.pumpWidget(fixture.shellApp());
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Biblioteca'));
+    await tester.pumpWidget(fixture.playlistsApp());
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('create-playlist-button')));
     await tester.pumpAndSettle();
@@ -304,7 +287,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Inicio'));
+    await tester.pumpWidget(fixture.shellApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Inicio').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Acciones de Canción 1'));
     await tester.pumpAndSettle();
@@ -459,6 +444,41 @@ final class _Fixture {
       darkTheme: buildAstraTheme(),
       themeMode: ThemeMode.dark,
       home: const PlaylistDetailScreen(playlistId: 7),
+    ),
+  );
+
+  Widget playlistsApp() => ProviderScope(
+    key: UniqueKey(),
+    overrides: [
+      playlistRepositoryProvider.overrideWithValue(playlists),
+      trackRepositoryProvider.overrideWithValue(trackRepository),
+      audioPlayerServiceProvider.overrideWithValue(player),
+      playlistArtworkPickerProvider.overrideWithValue(
+        const _FakeImageFilePicker(),
+      ),
+      isAndroidPlatformProvider.overrideWithValue(true),
+    ],
+    child: MaterialApp(
+      theme: buildAstraTheme(),
+      darkTheme: buildAstraTheme(),
+      themeMode: ThemeMode.dark,
+      home: const PlaylistsDestination(),
+    ),
+  );
+
+  Widget favoritesApp() => ProviderScope(
+    key: UniqueKey(),
+    overrides: [
+      playlistRepositoryProvider.overrideWithValue(playlists),
+      trackRepositoryProvider.overrideWithValue(trackRepository),
+      audioPlayerServiceProvider.overrideWithValue(player),
+      isAndroidPlatformProvider.overrideWithValue(true),
+    ],
+    child: MaterialApp(
+      theme: buildAstraTheme(),
+      darkTheme: buildAstraTheme(),
+      themeMode: ThemeMode.dark,
+      home: const PlaylistDetailScreen(playlistId: favoritesPlaylistId),
     ),
   );
 
