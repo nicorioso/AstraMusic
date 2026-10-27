@@ -57,13 +57,23 @@ final class DriftTrackRepository
     }
 
     final normalizedQuery = normalizeForSearch(query.search);
-    final statement = _database.select(_database.tracks);
     if (normalizedQuery.isNotEmpty) {
-      final escapedQuery = _escapeLike(normalizedQuery);
-      statement.where(
-        (track) => track.searchText.like('%$escapedQuery%', escapeChar: r'\'),
+      if (_requiresLiteralLike(normalizedQuery)) {
+        return _watchLiteralLikePage(
+          normalizedQuery,
+          limit: limit,
+          offset: offset,
+          query: query,
+        );
+      }
+      return _watchFtsPage(
+        normalizedQuery,
+        limit: limit,
+        offset: offset,
+        query: query,
       );
     }
+    final statement = _database.select(_database.tracks);
     if (query.favoritesOnly) {
       statement.where((track) => track.favoritedAt.isNotNull());
     }
@@ -104,16 +114,78 @@ final class DriftTrackRepository
   Stream<List<Track>> watchSearch(String query) {
     final normalizedQuery = normalizeForSearch(query);
     if (normalizedQuery.isEmpty) return watchAll();
-    final escapedQuery = _escapeLike(normalizedQuery);
+    if (_requiresLiteralLike(normalizedQuery)) {
+      return _watchLiteralLikePage(
+        normalizedQuery,
+        limit: 1000000,
+        offset: 0,
+        query: const TrackListQuery(),
+      );
+    }
+    return _watchFtsPage(
+      normalizedQuery,
+      limit: 1000000,
+      offset: 0,
+      query: const TrackListQuery(),
+    );
+  }
 
+  Stream<List<Track>> _watchFtsPage(
+    String normalizedQuery, {
+    required int limit,
+    required int offset,
+    required TrackListQuery query,
+  }) {
+    final filters = <String>[];
+    if (query.favoritesOnly) filters.add('tracks.favorited_at IS NOT NULL');
+    if (query.availableOnly) filters.add('tracks.is_available = 1');
+    final where = filters.isEmpty ? '' : ' AND ${filters.join(' AND ')}';
+    final order = switch (query.sort) {
+      TrackSort.title => 'tracks.sort_title ASC, tracks.id ASC',
+      TrackSort.dateAdded => 'tracks.date_added DESC, tracks.id DESC',
+      TrackSort.artist => 'tracks.artist ASC, tracks.sort_title ASC',
+      TrackSort.year => 'tracks.year DESC, tracks.sort_title ASC',
+      TrackSort.duration => 'tracks.duration_ms DESC, tracks.sort_title ASC',
+    };
+    final statement = _database.customSelect(
+      '''SELECT tracks.* FROM tracks
+         INNER JOIN tracks_fts ON tracks_fts.rowid = tracks.id
+         WHERE tracks_fts MATCH ?$where
+         ORDER BY $order LIMIT ? OFFSET ?''',
+      variables: [
+        Variable.withString('"${normalizedQuery.replaceAll('"', '""')}"'),
+        Variable.withInt(limit),
+        Variable.withInt(offset),
+      ],
+      readsFrom: {_database.tracks},
+    );
+    return statement.watch().map(
+      (rows) => List.unmodifiable(rows.map(_customRowToDomain)),
+    );
+  }
+
+  Stream<List<Track>> _watchLiteralLikePage(
+    String normalizedQuery, {
+    required int limit,
+    required int offset,
+    required TrackListQuery query,
+  }) {
     final statement = _database.select(_database.tracks)
       ..where(
-        (track) => track.searchText.like('%$escapedQuery%', escapeChar: r'\'),
-      )
-      ..orderBy([
-        (track) => OrderingTerm.asc(track.sortTitle),
-        (track) => OrderingTerm.asc(track.id),
-      ]);
+        (track) => track.searchText.like(
+          '%${_escapeLike(normalizedQuery)}%',
+          escapeChar: r'\',
+        ),
+      );
+    if (query.favoritesOnly) {
+      statement.where((track) => track.favoritedAt.isNotNull());
+    }
+    if (query.availableOnly) {
+      statement.where((track) => track.isAvailable.equals(true));
+    }
+    statement
+      ..orderBy(_ordering(query.sort))
+      ..limit(limit, offset: offset);
     return statement.watch().map(_toDomainList);
   }
 
@@ -411,7 +483,32 @@ final class DriftTrackRepository
     }
     return result;
   }
+
+  Track _customRowToDomain(QueryRow row) => Track(
+    id: row.read<int>('id'),
+    uri: row.read<String>('uri'),
+    title: row.read<String>('title'),
+    artist: row.read<String?>('artist'),
+    album: row.read<String?>('album'),
+    genre: row.read<String?>('genre'),
+    folderPath: row.read<String?>('folder_path'),
+    duration: switch (row.read<int?>('duration_ms')) {
+      final value? => Duration(milliseconds: value),
+      null => null,
+    },
+    trackNumber: row.read<int?>('track_number'),
+    year: row.read<int?>('year'),
+    fileSize: row.read<int?>('file_size'),
+    dateAdded: row.read<DateTime>('date_added'),
+    dateModified: row.read<DateTime?>('date_modified'),
+    isAvailable: row.read<bool>('is_available'),
+    favoritedAt: row.read<DateTime?>('favorited_at'),
+    artworkPath: row.read<String?>('artwork_path'),
+  );
 }
+
+bool _requiresLiteralLike(String value) =>
+    value.contains('%') || value.contains('_') || value.contains(r'\');
 
 String _escapeLike(String value) =>
     value.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_');

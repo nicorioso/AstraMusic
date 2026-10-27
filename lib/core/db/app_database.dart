@@ -12,6 +12,17 @@ part 'app_database.g.dart';
 @TableIndex(name: 'tracks_is_favorite_idx', columns: {#isFavorite, #id})
 @TableIndex(name: 'tracks_folder_path_idx', columns: {#folderPath, #id})
 @TableIndex(name: 'tracks_genre_idx', columns: {#genre, #id})
+@TableIndex(
+  name: 'tracks_search_sort_idx',
+  columns: {#searchText, #sortTitle, #id},
+)
+@TableIndex(name: 'tracks_artist_sort_idx', columns: {#artist, #sortTitle, #id})
+@TableIndex(name: 'tracks_album_artist_idx', columns: {#album, #artist, #id})
+@TableIndex(
+  name: 'tracks_folder_sort_idx',
+  columns: {#folderPath, #sortTitle, #id},
+)
+@TableIndex(name: 'tracks_favorited_at_idx', columns: {#favoritedAt, #id})
 class Tracks extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get uri => text().unique()();
@@ -122,11 +133,14 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (migrator) => migrator.createAll(),
+    onCreate: (migrator) async {
+      await migrator.createAll();
+      await _createTrackSearchIndex();
+    },
     onUpgrade: (migrator, from, to) async {
       if (from < 2) {
         await migrator.createTable(libraryFolders);
@@ -220,9 +234,46 @@ final class AppDatabase extends _$AppDatabase {
         await migrator.createIndex(tracksFolderPathIdx);
         await migrator.createIndex(tracksGenreIdx);
       }
+      if (from < 12) {
+        await migrator.createIndex(tracksSearchSortIdx);
+        await migrator.createIndex(tracksArtistSortIdx);
+        await migrator.createIndex(tracksAlbumArtistIdx);
+        await migrator.createIndex(tracksFolderSortIdx);
+        await migrator.createIndex(tracksFavoritedAtIdx);
+        await _createTrackSearchIndex();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  Future<void> _createTrackSearchIndex() async {
+    await customStatement('''
+      CREATE VIRTUAL TABLE IF NOT EXISTS tracks_fts
+      USING fts5(search_text, content = 'tracks', content_rowid = 'id')
+    ''');
+    await customStatement('''
+      CREATE TRIGGER IF NOT EXISTS tracks_fts_insert AFTER INSERT ON tracks BEGIN
+        INSERT INTO tracks_fts(rowid, search_text) VALUES (new.id, new.search_text);
+      END
+    ''');
+    await customStatement('''
+      CREATE TRIGGER IF NOT EXISTS tracks_fts_delete AFTER DELETE ON tracks BEGIN
+        INSERT INTO tracks_fts(tracks_fts, rowid, search_text)
+        VALUES ('delete', old.id, old.search_text);
+      END
+    ''');
+    await customStatement('''
+      CREATE TRIGGER IF NOT EXISTS tracks_fts_update
+      AFTER UPDATE OF search_text ON tracks BEGIN
+        INSERT INTO tracks_fts(tracks_fts, rowid, search_text)
+        VALUES ('delete', old.id, old.search_text);
+        INSERT INTO tracks_fts(rowid, search_text) VALUES (new.id, new.search_text);
+      END
+    ''');
+    await customStatement(
+      "INSERT INTO tracks_fts(tracks_fts) VALUES ('rebuild')",
+    );
+  }
 }

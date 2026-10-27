@@ -3065,6 +3065,26 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'tracks_genre_idx',
     'CREATE INDEX tracks_genre_idx ON tracks (genre, id)',
   );
+  late final Index tracksSearchSortIdx = Index(
+    'tracks_search_sort_idx',
+    'CREATE INDEX tracks_search_sort_idx ON tracks (search_text, sort_title, id)',
+  );
+  late final Index tracksArtistSortIdx = Index(
+    'tracks_artist_sort_idx',
+    'CREATE INDEX tracks_artist_sort_idx ON tracks (artist, sort_title, id)',
+  );
+  late final Index tracksAlbumArtistIdx = Index(
+    'tracks_album_artist_idx',
+    'CREATE INDEX tracks_album_artist_idx ON tracks (album, artist, id)',
+  );
+  late final Index tracksFolderSortIdx = Index(
+    'tracks_folder_sort_idx',
+    'CREATE INDEX tracks_folder_sort_idx ON tracks (folder_path, sort_title, id)',
+  );
+  late final Index tracksFavoritedAtIdx = Index(
+    'tracks_favorited_at_idx',
+    'CREATE INDEX tracks_favorited_at_idx ON tracks (favorited_at, id)',
+  );
   late final Index playlistTracksPlaylistPositionIdx = Index(
     'playlist_tracks_playlist_position_idx',
     'CREATE INDEX playlist_tracks_playlist_position_idx ON playlist_tracks (playlist_id, position)',
@@ -3092,6 +3112,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     tracksIsFavoriteIdx,
     tracksFolderPathIdx,
     tracksGenreIdx,
+    tracksSearchSortIdx,
+    tracksArtistSortIdx,
+    tracksAlbumArtistIdx,
+    tracksFolderSortIdx,
+    tracksFavoritedAtIdx,
     playlistTracksPlaylistPositionIdx,
     playlistTracksPlaylistTrackIdx,
   ];

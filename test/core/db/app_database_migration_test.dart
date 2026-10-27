@@ -23,6 +23,9 @@ void main() {
     addTearDown(database.close);
 
     final track = await database.select(database.tracks).getSingle();
+    await database.customStatement(
+      "UPDATE tracks SET search_text = 'indexada' WHERE id = 1",
+    );
     final indices = await database
         .customSelect(
           "SELECT name FROM sqlite_schema WHERE type = 'index' "
@@ -30,8 +33,13 @@ void main() {
           "'tracks_date_added_idx', 'tracks_is_favorite_idx') ORDER BY name",
         )
         .get();
+    final ftsRows = await database
+        .customSelect(
+          "SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH 'indexada'",
+        )
+        .get();
 
-    expect(database.schemaVersion, 11);
+    expect(database.schemaVersion, 12);
     expect(track.uri, 'file:///indexada.mp3');
     expect(indices.map((row) => row.read<String>('name')), [
       'tracks_album_idx',
@@ -39,6 +47,7 @@ void main() {
       'tracks_date_added_idx',
       'tracks_is_favorite_idx',
     ]);
+    expect(ftsRows, hasLength(1));
   });
 
   test('migra de 8 a 9 y rellena added_at desde created_at', () async {
@@ -60,7 +69,7 @@ void main() {
 
     final playlist = await database.select(database.playlists).getSingle();
 
-    expect(database.schemaVersion, 11);
+    expect(database.schemaVersion, 12);
     expect(playlist.addedAt, playlist.createdAt);
     expect(playlist.customArtworkPath, isNull);
   });
@@ -85,7 +94,7 @@ void main() {
       database.tracks,
     )..orderBy([(row) => OrderingTerm.asc(row.id)])).get();
 
-    expect(database.schemaVersion, 11);
+    expect(database.schemaVersion, 12);
     expect(tracks.first.favoritedAt, tracks.first.dateAdded);
     expect(tracks.last.favoritedAt, isNull);
   });
@@ -118,7 +127,7 @@ void main() {
     final playlist = await database.select(database.playlists).getSingle();
     final relations = await database.select(database.playlistTracks).get();
 
-    expect(database.schemaVersion, 11);
+    expect(database.schemaVersion, 12);
     expect(playlist.lastPlayedAt, isNull);
     expect(relations.map((row) => row.id), [1]);
     await expectLater(
@@ -199,7 +208,7 @@ void main() {
         )
         .getSingleOrNull();
 
-    expect(database.schemaVersion, 11);
+    expect(database.schemaVersion, 12);
     expect(tracks.single.title, 'Existente');
     expect(tracks.single.searchText, 'existente');
     expect(tracks.single.sortTitle, 'existente');
@@ -224,7 +233,7 @@ void main() {
     final track = await database.select(database.tracks).getSingle();
     expect(track.title, 'Tema');
     expect(track.artworkPath, isNull);
-    expect(database.schemaVersion, 11);
+    expect(database.schemaVersion, 12);
   });
 
   test('migra de 4 a 5 y crea el estado y la cola persistidos', () async {
@@ -248,7 +257,7 @@ void main() {
       'playback_state',
       'queue_items',
     ]);
-    expect(database.schemaVersion, 11);
+    expect(database.schemaVersion, 12);
   });
 
   test('migra de 5 a 6 y crea excluded_uris con uri única', () async {
@@ -288,7 +297,7 @@ void main() {
           .insert(ExcludedUrisCompanion.insert(uri: 'file:///borrada.mp3')),
       throwsA(anything),
     );
-    expect(database.schemaVersion, 11);
+    expect(database.schemaVersion, 12);
   });
 
   test('migra de 2 a 3, hace backfill y conserva todas las tablas', () async {
@@ -340,15 +349,23 @@ void main() {
     expect(playlists.single.name, 'Favoritas');
     expect(relations.single.trackId, track.id);
     expect(folders.single.path, '/música');
-    expect(indices.map((row) => row.read<String>('name')), [
-      'tracks_album_idx',
-      'tracks_artist_idx',
-      'tracks_date_added_idx',
-      'tracks_folder_path_idx',
-      'tracks_genre_idx',
-      'tracks_is_favorite_idx',
-      'tracks_sort_title_idx',
-    ]);
+    expect(
+      indices.map((row) => row.read<String>('name')),
+      containsAll([
+        'tracks_album_idx',
+        'tracks_artist_idx',
+        'tracks_date_added_idx',
+        'tracks_folder_path_idx',
+        'tracks_genre_idx',
+        'tracks_is_favorite_idx',
+        'tracks_sort_title_idx',
+        'tracks_search_sort_idx',
+        'tracks_artist_sort_idx',
+        'tracks_album_artist_idx',
+        'tracks_folder_sort_idx',
+        'tracks_favorited_at_idx',
+      ]),
+    );
   });
 }
 
