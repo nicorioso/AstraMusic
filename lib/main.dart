@@ -47,13 +47,16 @@ void main() {
 @visibleForTesting
 Future<StartupResources> initializeAstraMusic() async {
   AppDatabase? database;
+  AstraAudioHandler? handler;
+  AudioHandlerPlayerService? playerService;
+  PlaybackPersistenceCoordinator? persistence;
   try {
     if (Platform.isLinux || Platform.isWindows) {
       JustAudioMediaKit.ensureInitialized();
     }
     final notificationPermissionGranted =
         await _requestNotificationPermission();
-    final handler = await AudioService.init<AstraAudioHandler>(
+    handler = await AudioService.init<AstraAudioHandler>(
       builder: AstraAudioHandler.new,
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.nicorioso.astramusic.channel.audio',
@@ -66,13 +69,13 @@ Future<StartupResources> initializeAstraMusic() async {
     );
     await handler.configureAudioSession();
     final artworkProvider = CachedArtworkProvider();
-    final playerService = AudioHandlerPlayerService(
+    playerService = AudioHandlerPlayerService(
       handler,
       artworkProvider: artworkProvider,
     );
     database = AppDatabase();
     await database.customSelect('SELECT 1').getSingle();
-    final persistence = PlaybackPersistenceCoordinator(
+    persistence = PlaybackPersistenceCoordinator(
       playerService,
       DriftPlaybackStateRepository(database),
     );
@@ -95,15 +98,33 @@ Future<StartupResources> initializeAstraMusic() async {
       persistence: persistence,
       notificationPermissionGranted: notificationPermissionGranted,
     );
-  } catch (_) {
-    await database?.close();
-    rethrow;
+  } catch (error, stackTrace) {
+    try {
+      await persistence?.dispose();
+    } catch (cleanupError, cleanupStackTrace) {
+      _logStartupError(cleanupError, cleanupStackTrace);
+    }
+    try {
+      if (playerService != null) {
+        await playerService.dispose();
+      } else {
+        await handler?.dispose();
+      }
+    } catch (cleanupError, cleanupStackTrace) {
+      _logStartupError(cleanupError, cleanupStackTrace);
+    }
+    try {
+      await database?.close();
+    } catch (cleanupError, cleanupStackTrace) {
+      _logStartupError(cleanupError, cleanupStackTrace);
+    }
+    Error.throwWithStackTrace(error, stackTrace);
   }
 }
 
 @visibleForTesting
 final class StartupResources {
-  const StartupResources({
+  StartupResources({
     required this.database,
     required this.playerService,
     required this.artworkProvider,
@@ -116,6 +137,21 @@ final class StartupResources {
   final ArtworkProvider artworkProvider;
   final PlaybackPersistenceCoordinator persistence;
   final bool notificationPermissionGranted;
+  Future<void>? _disposeFuture;
+
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
+    try {
+      await persistence.dispose();
+    } finally {
+      try {
+        await playerService.dispose();
+      } finally {
+        await database.close();
+      }
+    }
+  }
 }
 
 @visibleForTesting
@@ -146,7 +182,10 @@ class _StartupGateState extends State<StartupGate> {
       final resources = await widget.initializer().timeout(
         const Duration(seconds: 15),
       );
-      if (!mounted) return;
+      if (!mounted) {
+        await resources.dispose();
+        return;
+      }
       setState(() {
         _resources = resources;
         _loading = false;
@@ -175,7 +214,7 @@ class _StartupGateState extends State<StartupGate> {
           appDatabaseProvider.overrideWithValue(resources.database),
         ],
         child: PlaybackLifecycle(
-          coordinator: resources.persistence,
+          resources: resources,
           child: const AstraMusicApp(),
         ),
       );
@@ -233,12 +272,12 @@ class StartupErrorScreen extends StatelessWidget {
 
 class PlaybackLifecycle extends ConsumerStatefulWidget {
   const PlaybackLifecycle({
-    required this.coordinator,
+    required this.resources,
     required this.child,
     super.key,
   });
 
-  final PlaybackPersistenceCoordinator coordinator;
+  final StartupResources resources;
   final Widget child;
 
   @override
@@ -258,11 +297,11 @@ class _PlaybackLifecycleState extends ConsumerState<PlaybackLifecycle> {
           ref.read(appForegroundProvider.notifier).setForeground(false),
       onPause: () {
         ref.read(appForegroundProvider.notifier).setForeground(false);
-        unawaited(widget.coordinator.flush());
+        unawaited(widget.resources.persistence.flush());
       },
       onDetach: () {
         ref.read(appForegroundProvider.notifier).setForeground(false);
-        unawaited(widget.coordinator.flush());
+        unawaited(widget.resources.dispose());
       },
     );
   }
@@ -270,7 +309,7 @@ class _PlaybackLifecycleState extends ConsumerState<PlaybackLifecycle> {
   @override
   void dispose() {
     _listener.dispose();
-    unawaited(widget.coordinator.dispose());
+    unawaited(widget.resources.dispose());
     super.dispose();
   }
 

@@ -7,6 +7,7 @@ import 'package:astramusic/core/utils/throttle_latest.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/player/data/astra_audio_handler.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 
 final class AudioHandlerPlayerService
     implements
@@ -16,16 +17,16 @@ final class AudioHandlerPlayerService
   AudioHandlerPlayerService(this._handler, {ArtworkProvider? artworkProvider})
     : _artworkProvider = artworkProvider {
     if (artworkProvider != null) {
-      _handler.mediaItem.listen((item) {
-        if (item != null && item.artUri == null) {
-          unawaited(_attachArtwork(item));
-        }
-      });
+      _artworkSubscription = _handler.mediaItem.listen(_handleMediaItem);
     }
   }
 
   final AstraAudioHandler _handler;
   final ArtworkProvider? _artworkProvider;
+  StreamSubscription<MediaItem?>? _artworkSubscription;
+  var _artworkGeneration = 0;
+  bool _disposed = false;
+  Future<void>? _disposeFuture;
 
   @override
   List<Track> get originalQueue =>
@@ -233,16 +234,40 @@ final class AudioHandlerPlayerService
     return file.existsSync() ? Uri.file(file.path) : null;
   }
 
-  Future<void> _attachArtwork(MediaItem item) async {
+  void _handleMediaItem(MediaItem? item) {
+    final generation = ++_artworkGeneration;
+    if (item != null && item.artUri == null) {
+      unawaited(_attachArtwork(item, generation));
+    }
+  }
+
+  Future<void> _attachArtwork(MediaItem item, int generation) async {
     final provider = _artworkProvider;
     if (provider == null) return;
-    final artworkPath = await provider.artworkFor(_toTrack(item), size: 512);
-    if (artworkPath == null || !File(artworkPath).existsSync()) return;
-    final updatedExtras = Map<String, dynamic>.of(item.extras ?? const {})
-      ..['artworkPath'] = artworkPath;
-    await _handler.updateMediaItem(
-      item.copyWith(artUri: Uri.file(artworkPath), extras: updatedExtras),
-    );
+    try {
+      final artworkPath = await provider.artworkFor(_toTrack(item), size: 512);
+      if (_disposed || generation != _artworkGeneration) return;
+      if (artworkPath == null || !File(artworkPath).existsSync()) return;
+      final updatedExtras = Map<String, dynamic>.of(item.extras ?? const {})
+        ..['artworkPath'] = artworkPath;
+      await _handler.updateMediaItem(
+        item.copyWith(artUri: Uri.file(artworkPath), extras: updatedExtras),
+      );
+    } catch (error) {
+      if (kDebugMode && !_disposed) {
+        debugPrint('AstraMusic carátula: $error');
+      }
+    }
+  }
+
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
+    _disposed = true;
+    _artworkGeneration++;
+    await _artworkSubscription?.cancel();
+    _artworkSubscription = null;
+    await _handler.dispose();
   }
 
   AudioPlaybackState _toPlaybackState(PlaybackState state) {

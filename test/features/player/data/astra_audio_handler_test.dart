@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/player/data/audio_handler_player_service.dart';
 import 'package:astramusic/features/player/data/astra_audio_handler.dart';
 import 'package:astramusic/features/player/data/queue_load_strategy.dart';
 import 'package:audio_service/audio_service.dart';
@@ -17,8 +20,8 @@ void main() {
       queueLoadStrategy: strategy,
     );
     addTearDown(() async {
+      await handler.dispose();
       await player.closeTestStreams();
-      await player.dispose();
     });
 
     final load = handler.loadQueue(const [MediaItem(id: 'uno', title: 'Uno')]);
@@ -43,8 +46,8 @@ void main() {
         queueLoadStrategy: strategy,
       );
       addTearDown(() async {
+        await handler.dispose();
         await player.closeTestStreams();
-        await player.dispose();
       });
 
       final load = handler.loadQueue(const [
@@ -62,6 +65,51 @@ void main() {
       expect(player.pauseCalls, 1);
     },
   );
+
+  test('onTaskRemoved libera el reproductor una sola vez', () async {
+    final player = _RecordingAudioPlayer();
+    final handler = AstraAudioHandler(player: player);
+    addTearDown(player.closeTestStreams);
+
+    await Future.wait([handler.onTaskRemoved(), handler.dispose()]);
+
+    expect(player.stopCalls, 1);
+    expect(player.disposeCalls, 1);
+  });
+
+  test('el servicio cancela carátulas pendientes al desmontarse', () async {
+    final player = _RecordingAudioPlayer();
+    final handler = AstraAudioHandler(player: player);
+    final artwork = _BlockingArtworkProvider();
+    final service = AudioHandlerPlayerService(
+      handler,
+      artworkProvider: artwork,
+    );
+    addTearDown(player.closeTestStreams);
+
+    handler.mediaItem.add(const MediaItem(id: 'uno', title: 'Uno'));
+    await artwork.started.future;
+    await service.dispose();
+    handler.mediaItem.add(const MediaItem(id: 'dos', title: 'Dos'));
+    artwork.release.complete('/ruta/que/no-debe-aplicarse.jpg');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(artwork.calls, 1);
+    expect(player.disposeCalls, 1);
+  });
+}
+
+final class _BlockingArtworkProvider implements ArtworkProvider {
+  final started = Completer<void>();
+  final release = Completer<String?>();
+  int calls = 0;
+
+  @override
+  Future<String?> artworkFor(Track track, {required int size}) {
+    calls++;
+    started.complete();
+    return release.future;
+  }
 }
 
 final class _BlockingQueueLoadStrategy implements QueueLoadStrategy {
@@ -87,6 +135,8 @@ final class _RecordingAudioPlayer extends AudioPlayer {
   final _playbackEvents = StreamController<PlaybackEvent>.broadcast(sync: true);
   final _errors = StreamController<PlayerException>.broadcast(sync: true);
   int pauseCalls = 0;
+  int stopCalls = 0;
+  int disposeCalls = 0;
 
   @override
   Stream<PlaybackEvent> get playbackEventStream => _playbackEvents.stream;
@@ -133,6 +183,16 @@ final class _RecordingAudioPlayer extends AudioPlayer {
   @override
   Future<void> pause() async {
     pauseCalls++;
+  }
+
+  @override
+  Future<void> stop() async {
+    stopCalls++;
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
   }
 
   void emitPlayerError(PlayerException error) => _errors.add(error);

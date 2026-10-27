@@ -112,7 +112,9 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   Stream<HandlerPlaybackFailure> get failureStream => _failureController.stream;
   List<MediaItem> get originalQueue => List.unmodifiable(_queueOrder.original);
 
-  Future<void> configureAudioSession() async {
+  Future<void> configureAudioSession() => _commands.run(_configureAudioSession);
+
+  Future<void> _configureAudioSession() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
     _playerSubscriptions
@@ -221,9 +223,9 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> onTaskRemoved() => _commands.run(() async {
-    if (!_player.playing) await _stop();
-  });
+  Future<void> onTaskRemoved() => dispose();
+
+  Future<void> dispose() => _commands.close(_disposeResources);
 
   @override
   Future<void> seek(Duration position) {
@@ -625,6 +627,34 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
         if (onError case final callback?) callback(error);
       }),
     );
+  }
+
+  Future<void> _disposeResources() async {
+    _loadingTimer?.cancel();
+    _loadingTimer = null;
+
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    Future<void> release(Future<void> Function() action) async {
+      try {
+        await action();
+      } catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+
+    for (final subscription in _playerSubscriptions) {
+      await release(subscription.cancel);
+    }
+    _playerSubscriptions.clear();
+    await release(_player.stop);
+    await release(_player.dispose);
+    await release(_failureController.close);
+
+    if (firstError case final error?) {
+      Error.throwWithStackTrace(error, firstStackTrace!);
+    }
   }
 
   void _watchLoadingState(ProcessingState state) {

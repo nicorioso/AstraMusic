@@ -35,4 +35,36 @@ void main() {
     await expectLater(failed, throwsStateError);
     await expectLater(next, completion(42));
   });
+
+  test('cierra después de comandos pendientes y rechaza nuevos', () async {
+    final queue = SerialCommandQueue();
+    final gate = Completer<void>();
+    final events = <String>[];
+
+    final pending = queue.run(() async {
+      events.add('comando');
+      await gate.future;
+    });
+    final close = queue.close(() async => events.add('limpieza'));
+    final rejected = queue.run(() async => events.add('tardío'));
+
+    await expectLater(rejected, throwsStateError);
+    expect(events, ['comando']);
+
+    gate.complete();
+    await Future.wait([pending, close]);
+    expect(events, ['comando', 'limpieza']);
+  });
+
+  test('la limpieza de cierre se ejecuta una sola vez', () async {
+    final queue = SerialCommandQueue();
+    var cleanups = 0;
+
+    await Future.wait([
+      queue.close(() async => cleanups++),
+      queue.close(() async => cleanups++),
+    ]);
+
+    expect(cleanups, 1);
+  });
 }
