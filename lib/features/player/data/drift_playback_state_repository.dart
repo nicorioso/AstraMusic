@@ -4,7 +4,8 @@ import 'package:astramusic/core/platform/playback_state_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:drift/drift.dart';
 
-final class DriftPlaybackStateRepository implements PlaybackStateRepository {
+final class DriftPlaybackStateRepository
+    implements IncrementalPlaybackStateRepository {
   DriftPlaybackStateRepository(this._database);
 
   final AppDatabase _database;
@@ -110,6 +111,22 @@ final class DriftPlaybackStateRepository implements PlaybackStateRepository {
         }
       });
     });
+  }
+
+  @override
+  Future<void> savePlaybackState(PlaybackStateSnapshot snapshot) async {
+    if (snapshot.queue.isEmpty) return;
+    await (_database.update(
+      _database.playbackState,
+    )..where((row) => row.id.equals(1))).write(
+      PlaybackStateCompanion(
+        currentIndex: Value(snapshot.currentIndex),
+        positionMs: Value(snapshot.position.inMilliseconds),
+        shuffle: Value(snapshot.shuffle),
+        repeatMode: Value(snapshot.repeatMode.name),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Track _toTrack(TrackRow row) => Track(

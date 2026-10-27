@@ -52,3 +52,11 @@ abstract interface class PlaybackStateRepository {
   Future<void> save(PlaybackStateSnapshot snapshot);
   Future<void> clear();
 }
+
+/// Permite actualizar el estado cambiante de la reproducción sin reescribir
+/// la cola persistida. Los repositorios que no lo implementen conservan el
+/// comportamiento compatible de [PlaybackStateRepository.save].
+abstract interface class IncrementalPlaybackStateRepository
+    implements PlaybackStateRepository {
+  Future<void> savePlaybackState(PlaybackStateSnapshot snapshot);
+}

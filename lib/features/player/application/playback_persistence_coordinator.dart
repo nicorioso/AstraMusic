@@ -34,6 +34,7 @@ final class PlaybackPersistenceCoordinator {
   Future<void> _writeChain = Future.value();
   bool _restoring = false;
   bool _started = false;
+  bool _queueChanged = false;
   int _restoreGeneration = 0;
 
   Future<void> start() async {
@@ -148,6 +149,7 @@ final class PlaybackPersistenceCoordinator {
       _player.queueStream.listen((queue) {
         _queue = queue;
         if (!_shuffle) _originalQueue = queue;
+        _queueChanged = true;
         _scheduleSave();
       }),
       _player.currentIndexStream.listen((index) {
@@ -196,8 +198,16 @@ final class PlaybackPersistenceCoordinator {
       shuffle: _shuffle,
       repeatMode: _repeatMode,
     );
+    final persistQueue = _queueChanged;
+    _queueChanged = false;
     _writeChain = _writeChain
-        .then((_) => _repository.save(snapshot))
+        .then((_) {
+          if (!persistQueue &&
+              _repository is IncrementalPlaybackStateRepository) {
+            return _repository.savePlaybackState(snapshot);
+          }
+          return _repository.save(snapshot);
+        })
         .catchError((_) {});
   }
 

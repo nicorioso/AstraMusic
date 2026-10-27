@@ -32,6 +32,36 @@ void main() {
     });
   });
 
+  test('actualiza la posición sin reescribir la cola', () {
+    fakeAsync((async) {
+      final player = _FakePlayer();
+      final repository = _IncrementalRecordingRepository();
+      final coordinator = PlaybackPersistenceCoordinator(
+        player,
+        repository,
+        positionInterval: const Duration(seconds: 1),
+      );
+      coordinator.start();
+      async.flushMicrotasks();
+
+      player.emitQueue([_track(1), _track(2)]);
+      async.elapse(const Duration(milliseconds: 500));
+      async.flushMicrotasks();
+      expect(repository.queueSaves, hasLength(1));
+
+      player.emitPlayback(
+        const AudioPlaybackState(AudioPlaybackStatus.playing),
+      );
+      async.elapse(const Duration(seconds: 1));
+      async.flushMicrotasks();
+
+      expect(repository.queueSaves, hasLength(1));
+      expect(repository.stateSaves, hasLength(1));
+      coordinator.dispose();
+      async.flushMicrotasks();
+    });
+  });
+
   test(
     'descarta la cola y el estado cuando todos los archivos faltan',
     () async {
@@ -147,22 +177,44 @@ final class _RecordingRepository implements PlaybackStateRepository {
       saves.add(snapshot);
 }
 
+final class _IncrementalRecordingRepository
+    implements IncrementalPlaybackStateRepository {
+  final List<PlaybackStateSnapshot> queueSaves = [];
+  final List<PlaybackStateSnapshot> stateSaves = [];
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<PersistedPlaybackState?> load() async => null;
+
+  @override
+  Future<void> save(PlaybackStateSnapshot snapshot) async =>
+      queueSaves.add(snapshot);
+
+  @override
+  Future<void> savePlaybackState(PlaybackStateSnapshot snapshot) async =>
+      stateSaves.add(snapshot);
+}
+
 final class _FakePlayer implements AudioPlayerService {
   _FakePlayer({this.failOnLoad = false, this.loadGate});
 
   final bool failOnLoad;
   final Completer<void>? loadGate;
   final _queue = StreamController<List<Track>>.broadcast(sync: true);
+  final _playback = StreamController<AudioPlaybackState>.broadcast(sync: true);
   final List<List<Track>> loadedQueues = [];
   int? skippedIndex;
   int clearCount = 0;
 
   void emitQueue(List<Track> queue) => _queue.add(queue);
+  void emitPlayback(AudioPlaybackState state) => _playback.add(state);
 
   @override
   Stream<List<Track>> get queueStream => _queue.stream;
   @override
-  Stream<AudioPlaybackState> get playbackStateStream => const Stream.empty();
+  Stream<AudioPlaybackState> get playbackStateStream => _playback.stream;
   @override
   Stream<Duration> get positionStream => const Stream.empty();
   @override
