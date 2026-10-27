@@ -217,7 +217,7 @@ void main() {
     await tester.pumpWidget(fixture.detailApp());
     await tester.pumpAndSettle();
 
-    final list = tester.widget<ReorderableListView>(
+    final list = tester.widget<SliverReorderableList>(
       find.byKey(const Key('playlist-track-list')),
     );
     list.onReorderItem!(0, 2);

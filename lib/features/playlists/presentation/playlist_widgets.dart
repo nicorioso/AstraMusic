@@ -420,9 +420,9 @@ class _PlaylistDetailBody extends ConsumerWidget {
       Duration.zero,
       (total, track) => total + (track.duration ?? Duration.zero),
     );
-    final artwork = favorites
-        ? const FavoritesArtwork(size: 200)
-        : PlaylistCover(playlist: playlist, size: 200);
+    Widget artwork(double size) => favorites
+        ? FavoritesArtwork(size: size)
+        : PlaylistCover(playlist: playlist, size: size);
     final details = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -463,225 +463,243 @@ class _PlaylistDetailBody extends ConsumerWidget {
               ),
             ],
           );
-    return Column(
+    return SizedBox.expand(
       key: const Key('playlist-detail'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Stack(
-          children: [
-            DynamicArtworkColorBuilder(
-              track: tracks.isEmpty ? null : tracks.first,
-              builder: (context, dynamicColor) => DecoratedBox(
-                key: const Key('playlist-detail-header'),
-                decoration: BoxDecoration(
-                  gradient: dynamicColor == null
-                      ? LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            context.astraColors.gradientTop,
-                            context.astraColors.surface.withValues(alpha: 0),
-                          ],
-                        )
-                      : LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            dynamicColor,
-                            context.astraColors.surface.withValues(alpha: 0),
-                          ],
-                        ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      if (constraints.maxWidth < 600) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Align(alignment: Alignment.center, child: artwork),
-                            const SizedBox(height: 20),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Expanded(child: details),
-                                ?menu,
-                              ],
-                            ),
-                          ],
-                        );
-                      }
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          artwork,
-                          const SizedBox(width: 24),
-                          Expanded(child: details),
-                          ?menu,
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
+      child: CustomScrollView(
+        key: const Key('playlist-tracks-viewport'),
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: MediaQuery.sizeOf(context).width < 600 ? 390 : 300,
+            leading: IconButton(
+              key: const Key('playlist-detail-back-button'),
+              tooltip: 'Volver',
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                if (embedded) {
+                  ref.read(appDestinationProvider.notifier).back();
+                } else {
+                  Navigator.of(context).maybePop();
+                }
+              },
             ),
-            Positioned(
-              top: 8,
-              left: 8,
-              child: IconButton(
-                key: const Key('playlist-detail-back-button'),
-                tooltip: 'Volver',
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  if (embedded) {
-                    ref.read(appDestinationProvider.notifier).back();
-                  } else {
-                    Navigator.of(context).maybePop();
-                  }
-                },
-              ),
-            ),
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              PlayCircleButton(
-                key: const Key('playlist-play-button'),
-                onPressed: available.isEmpty
-                    ? null
-                    : () => favorites
-                          ? library.playAll(tracks)
-                          : library.playPlaylist(playlist.id, tracks),
-                isPlaying: isPlaying,
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                key: const Key('playlist-shuffle-button'),
-                onPressed: available.isEmpty
-                    ? null
-                    : () => favorites
-                          ? library.playAll(tracks, shuffle: true)
-                          : library.playPlaylist(
-                              playlist.id,
-                              tracks,
-                              shuffle: true,
-                            ),
-                icon: const Icon(Icons.shuffle),
-                label: const Text('Aleatorio'),
-              ),
-            ],
-          ),
-        ),
-        if (MediaQuery.sizeOf(context).width >= 840 && tracks.isNotEmpty)
-          const _PlaylistTrackHeader(),
-        Expanded(
-          key: const Key('playlist-tracks-viewport'),
-          child: tracks.isEmpty
-              ? const Center(
-                  child: Text(
-                    'Esta playlist aún no tiene canciones.',
-                    key: Key('empty-playlist-message'),
+            actions: [?menu],
+            flexibleSpace: FlexibleSpaceBar(
+              background: DynamicArtworkColorBuilder(
+                track: tracks.isEmpty ? null : tracks.first,
+                builder: (context, dynamicColor) => DecoratedBox(
+                  key: const Key('playlist-detail-header'),
+                  decoration: BoxDecoration(
+                    gradient: dynamicColor == null
+                        ? LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              context.astraColors.gradientTop,
+                              context.astraColors.surface.withValues(alpha: 0),
+                            ],
+                          )
+                        : LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              dynamicColor,
+                              context.astraColors.surface.withValues(alpha: 0),
+                            ],
+                          ),
                   ),
-                )
-              : ReorderableListView.builder(
-                  key: const Key('playlist-track-list'),
-                  itemExtent: 56,
-                  scrollCacheExtent: const ScrollCacheExtent.pixels(280),
-                  buildDefaultDragHandles:
-                      !favorites && MediaQuery.sizeOf(context).width < 840,
-                  onReorderItem: (oldIndex, newIndex) {
-                    if (favorites) return;
-                    // La cola en reproducción es una copia y no se reordena.
-                    ref
-                        .read(playlistRepositoryProvider)
-                        .move(playlist.id, oldIndex, newIndex);
-                  },
-                  itemCount: tracks.length,
-                  itemBuilder: (context, index) {
-                    final track = tracks[index];
-                    void playTrack() => favorites
-                        ? library.playVisibleQueue(tracks, startIndex: index)
-                        : library.playPlaylist(
-                            playlist.id,
-                            tracks,
-                            startIndex: index,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 72, 20, 12),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxHeight < 300) {
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(72, 72, 20, 12),
+                            child: Align(
+                              alignment: Alignment.bottomLeft,
+                              child: Text(
+                                playlist.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
                           );
-                    void removeTrack() => favorites
-                        ? ref
-                              .read(trackRepositoryProvider)
-                              .setFavorite(track.id!, false)
-                        : ref
-                              .read(playlistRepositoryProvider)
-                              .removeTrack(playlist.id, track.id!);
-                    if (MediaQuery.sizeOf(context).width >= 840) {
-                      final row = _PlaylistDesktopTrackRow(
-                        track: track,
-                        index: index,
-                        onTap: track.isAvailable
-                            ? playTrack
-                            : library.showUnavailableMessage,
-                        removeLabel: favorites
-                            ? 'Quitar de Me gusta'
-                            : 'Quitar de esta playlist',
-                        onRemove: removeTrack,
-                      );
-                      return favorites
-                          ? KeyedSubtree(
-                              key: ValueKey('favorite-track-${track.id}'),
-                              child: row,
-                            )
-                          : _ReorderableTrackRow(
-                              key: ValueKey('playlist-track-${track.id}'),
-                              index: index,
-                              child: row,
-                            );
-                    }
-                    final tile = TrackTile(
-                      track: track,
-                      showDateAdded: true,
-                      onTap: track.isAvailable
-                          ? playTrack
-                          : library.showUnavailableMessage,
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (track.duration case final duration?)
-                            Text(_trackDuration(duration)),
-                          PopupMenuButton<bool>(
-                            tooltip: 'Acciones de ${track.title}',
-                            itemBuilder: (_) => [
-                              PopupMenuItem(
-                                value: true,
-                                child: Text(
-                                  favorites
-                                      ? 'Quitar de Me gusta'
-                                      : 'Quitar de esta playlist',
-                                ),
+                        }
+                        final coverSize = (constraints.maxHeight - 160).clamp(
+                          80.0,
+                          200.0,
+                        );
+                        if (constraints.maxWidth < 600) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Align(
+                                alignment: Alignment.center,
+                                child: artwork(coverSize),
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [Expanded(child: details)],
                               ),
                             ],
-                            onSelected: (_) => removeTrack(),
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            artwork(coverSize),
+                            const SizedBox(width: 24),
+                            Expanded(child: details),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  PlayCircleButton(
+                    key: const Key('playlist-play-button'),
+                    onPressed: available.isEmpty
+                        ? null
+                        : () => favorites
+                              ? library.playAll(tracks)
+                              : library.playPlaylist(playlist.id, tracks),
+                    isPlaying: isPlaying,
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    key: const Key('playlist-shuffle-button'),
+                    onPressed: available.isEmpty
+                        ? null
+                        : () => favorites
+                              ? library.playAll(tracks, shuffle: true)
+                              : library.playPlaylist(
+                                  playlist.id,
+                                  tracks,
+                                  shuffle: true,
+                                ),
+                    icon: const Icon(Icons.shuffle),
+                    label: const Text('Aleatorio'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (MediaQuery.sizeOf(context).width >= 840 && tracks.isNotEmpty)
+            const SliverToBoxAdapter(child: _PlaylistTrackHeader()),
+          if (tracks.isEmpty)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Text(
+                  'Esta playlist aún no tiene canciones.',
+                  key: Key('empty-playlist-message'),
+                ),
+              ),
+            )
+          else
+            SliverReorderableList(
+              key: const Key('playlist-track-list'),
+              itemExtent: 56,
+              onReorderItem: (oldIndex, newIndex) {
+                if (favorites) return;
+                // La cola en reproducción es una copia y no se reordena.
+                ref
+                    .read(playlistRepositoryProvider)
+                    .move(playlist.id, oldIndex, newIndex);
+              },
+              itemCount: tracks.length,
+              itemBuilder: (context, index) {
+                final track = tracks[index];
+                void playTrack() => favorites
+                    ? library.playVisibleQueue(tracks, startIndex: index)
+                    : library.playPlaylist(
+                        playlist.id,
+                        tracks,
+                        startIndex: index,
+                      );
+                void removeTrack() => favorites
+                    ? ref
+                          .read(trackRepositoryProvider)
+                          .setFavorite(track.id!, false)
+                    : ref
+                          .read(playlistRepositoryProvider)
+                          .removeTrack(playlist.id, track.id!);
+                if (MediaQuery.sizeOf(context).width >= 840) {
+                  final row = _PlaylistDesktopTrackRow(
+                    track: track,
+                    index: index,
+                    onTap: track.isAvailable
+                        ? playTrack
+                        : library.showUnavailableMessage,
+                    removeLabel: favorites
+                        ? 'Quitar de Me gusta'
+                        : 'Quitar de esta playlist',
+                    onRemove: removeTrack,
+                  );
+                  return favorites
+                      ? KeyedSubtree(
+                          key: ValueKey('favorite-track-${track.id}'),
+                          child: row,
+                        )
+                      : _ReorderableTrackRow(
+                          key: ValueKey('playlist-track-${track.id}'),
+                          index: index,
+                          child: row,
+                        );
+                }
+                final tile = TrackTile(
+                  track: track,
+                  showDateAdded: true,
+                  onTap: track.isAvailable
+                      ? playTrack
+                      : library.showUnavailableMessage,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (track.duration case final duration?)
+                        Text(_trackDuration(duration)),
+                      PopupMenuButton<bool>(
+                        tooltip: 'Acciones de ${track.title}',
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: true,
+                            child: Text(
+                              favorites
+                                  ? 'Quitar de Me gusta'
+                                  : 'Quitar de esta playlist',
+                            ),
                           ),
                         ],
+                        onSelected: (_) => removeTrack(),
                       ),
-                    );
-                    if (favorites) {
-                      return KeyedSubtree(
-                        key: ValueKey('favorite-track-${track.id}'),
-                        child: tile,
-                      );
-                    }
-                    return _ReorderableTrackRow(
-                      key: ValueKey('playlist-track-${track.id}'),
-                      index: index,
-                      child: tile,
-                    );
-                  },
-                ),
-        ),
-      ],
+                    ],
+                  ),
+                );
+                if (favorites) {
+                  return KeyedSubtree(
+                    key: ValueKey('favorite-track-${track.id}'),
+                    child: tile,
+                  );
+                }
+                return _ReorderableTrackRow(
+                  key: ValueKey('playlist-track-${track.id}'),
+                  index: index,
+                  child: tile,
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 
