@@ -613,6 +613,7 @@ class _PlaylistDetailBody extends ConsumerWidget {
               onReorderItem: (oldIndex, newIndex) {
                 if (favorites) return;
                 // La cola en reproducción es una copia y no se reordena.
+                if (newIndex > oldIndex) newIndex--;
                 ref
                     .read(playlistRepositoryProvider)
                     .move(playlist.id, oldIndex, newIndex);

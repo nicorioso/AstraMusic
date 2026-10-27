@@ -210,7 +210,7 @@ void main() {
     expect(fixture.playlists.playedIds, [7]);
   });
 
-  testWidgets('reordenar en el detalle llama move con el índice final', (
+  testWidgets('reordenar hacia abajo ajusta el índice de la playlist', (
     tester,
   ) async {
     final fixture = _Fixture();
@@ -223,7 +223,22 @@ void main() {
     list.onReorderItem!(0, 2);
     await tester.pump();
 
-    expect(fixture.playlists.moves, [(0, 2)]);
+    expect(fixture.playlists.moves, [(0, 1)]);
+  });
+
+  testWidgets('reordenar hacia abajo ajusta el índice de la cola', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    await tester.pumpWidget(fixture.queueApp());
+    await tester.pumpAndSettle();
+
+    final list = tester.widget<ReorderableListView>(
+      find.byKey(const Key('queue-list')),
+    );
+    list.onReorderItem!(0, 2);
+
+    expect(fixture.player.moves, [(0, 1)]);
   });
 
   testWidgets('eliminar una playlist exige confirmación', (tester) async {
@@ -634,6 +649,7 @@ final class _RecordingPlayer implements AudioPlayerService {
   List<Track> queue = const [];
   int startIndex = 0;
   int playCalls = 0;
+  final List<(int, int)> moves = [];
 
   void seedQueue(List<Track> tracks) => queue = List.of(tracks);
 
@@ -672,7 +688,10 @@ final class _RecordingPlayer implements AudioPlayerService {
   @override
   Future<void> loadFile({required String path, required String title}) async {}
   @override
-  Future<void> moveInQueue(int oldIndex, int newIndex) async {}
+  Future<void> moveInQueue(int oldIndex, int newIndex) async {
+    moves.add((oldIndex, newIndex));
+  }
+
   @override
   Future<void> next() async {}
   @override

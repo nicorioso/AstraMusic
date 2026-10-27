@@ -106,7 +106,10 @@ class PlayerQueueView extends ConsumerWidget {
       scrollCacheExtent: const ScrollCacheExtent.pixels(280),
       buildDefaultDragHandles: false,
       itemCount: queue.length,
-      onReorderItem: controller.moveInQueue,
+      onReorderItem: (oldIndex, newIndex) {
+        if (newIndex > oldIndex) newIndex--;
+        controller.moveInQueue(oldIndex, newIndex);
+      },
       itemBuilder: (context, index) {
         final track = queue[index];
         final itemKey = ValueKey(_queueIdentity(queue, index));
