@@ -6,11 +6,13 @@ final class ArtistGroup {
     required this.name,
     required this.trackCount,
     required this.albumCount,
+    this.artworkPath,
   });
 
   final String name;
   final int trackCount;
   final int albumCount;
+  final String? artworkPath;
 }
 
 @immutable
@@ -32,10 +34,15 @@ final class AlbumGroup {
 
 @immutable
 final class GenreGroup {
-  const GenreGroup({required this.name, required this.trackCount});
+  const GenreGroup({
+    required this.name,
+    required this.trackCount,
+    this.artworkPath,
+  });
 
   final String name;
   final int trackCount;
+  final String? artworkPath;
 }
 
 @immutable

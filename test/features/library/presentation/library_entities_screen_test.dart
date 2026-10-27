@@ -24,6 +24,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Aurora'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('artwork-placeholder-group://artist:Aurora')),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const ValueKey('artist-Aurora')));
     expect(
       container.read(appDestinationProvider),
@@ -47,6 +51,10 @@ void main() {
     await tester.pumpAndSettle();
     final first = tester.widget<ListTile>(find.byType(ListTile).first);
     expect((first.title! as Text).data, 'Primera');
+    await tester.tap(find.byTooltip('Acciones de Primera'));
+    await tester.pumpAndSettle();
+    expect(find.text('Añadir a la cola'), findsOneWidget);
+    expect(find.text('Añadir a favoritos'), findsNothing);
   });
 
   testWidgets('el detalle de artista permite volver a la biblioteca', (

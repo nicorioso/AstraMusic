@@ -1,8 +1,10 @@
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/widgets/section_title.dart';
+import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/library_group.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
+import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -65,12 +67,17 @@ class ArtistsScreen extends ConsumerWidget {
     return _GroupsList<ArtistGroup>(
       title: 'Artistas',
       stream: ref.watch(artistsProvider),
-      item: (item) => ListTile(
+      item: (item) => _EntityTile(
         key: ValueKey('artist-${item.name}'),
-        leading: const Icon(Icons.person_outline),
         title: Text(item.name),
         subtitle: Text(
           '${item.trackCount} canciones · ${item.albumCount} álbumes',
+        ),
+        artwork: _groupArtwork(
+          identity: 'artist:${item.name}',
+          title: item.name,
+          artist: item.name,
+          artworkPath: item.artworkPath,
         ),
         onTap: () => ref
             .read(appDestinationProvider.notifier)
@@ -97,12 +104,17 @@ class AlbumsScreen extends ConsumerWidget {
     return _GroupsList<AlbumGroup>(
       title: 'Álbumes',
       stream: ref.watch(albumsProvider),
-      item: (item) => ListTile(
+      item: (item) => _EntityTile(
         key: ValueKey('album-${item.title}-${item.artist}'),
-        leading: const Icon(Icons.album_outlined),
         title: Text(item.title),
         subtitle: Text(
           '${item.artist}${item.year == null ? '' : ' · ${item.year}'} · ${item.trackCount} canciones',
+        ),
+        artwork: _groupArtwork(
+          identity: 'album:${item.artist}:${item.title}',
+          title: item.title,
+          artist: item.artist,
+          artworkPath: item.artworkPath,
         ),
         onTap: () => ref
             .read(appDestinationProvider.notifier)
@@ -128,17 +140,59 @@ class GenresScreen extends ConsumerWidget {
     return _GroupsList<GenreGroup>(
       title: 'Géneros',
       stream: ref.watch(genresProvider),
-      item: (item) => ListTile(
+      item: (item) => _EntityTile(
         key: ValueKey('genre-${item.name}'),
-        leading: const Icon(Icons.category_outlined),
         title: Text(item.name),
         subtitle: Text('${item.trackCount} canciones'),
+        artwork: _groupArtwork(
+          identity: 'genre:${item.name}',
+          title: item.name,
+          artworkPath: item.artworkPath,
+        ),
         onTap: () => ref
             .read(appDestinationProvider.notifier)
             .select(AppDestination.genre(item.name)),
       ),
     );
   }
+}
+
+Track _groupArtwork({
+  required String identity,
+  required String title,
+  String? artist,
+  String? artworkPath,
+}) => Track(
+  uri: 'group://$identity',
+  title: title,
+  artist: artist,
+  artworkPath: artworkPath,
+  dateAdded: DateTime.fromMillisecondsSinceEpoch(0),
+);
+
+class _EntityTile extends StatelessWidget {
+  const _EntityTile({
+    required this.title,
+    required this.subtitle,
+    required this.artwork,
+    required this.onTap,
+    super.key,
+  });
+
+  final Widget title;
+  final Widget subtitle;
+  final Track artwork;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+    leading: TrackArtwork(track: artwork, size: 56),
+    title: title,
+    subtitle: subtitle,
+    trailing: const Icon(Icons.chevron_right),
+    onTap: onTap,
+  );
 }
 
 class FolderGroupsScreen extends ConsumerWidget {
@@ -229,20 +283,77 @@ class _TrackDetail extends ConsumerWidget {
             if (items == null) {
               return const Center(child: CircularProgressIndicator());
             }
-            return ListView.builder(
-              key: const Key('library-entity-track-list'),
-              itemExtent: 56,
-              itemCount: items.length,
-              itemBuilder: (_, index) {
-                final track = items[index];
-                return ListTile(
-                  title: Text(track.title),
-                  subtitle: Text(track.artist ?? 'Artista desconocido'),
-                  trailing: track.trackNumber == null
-                      ? null
-                      : Text('${track.trackNumber}'),
-                );
-              },
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton.icon(
+                      onPressed: items.isEmpty
+                          ? null
+                          : () => ref
+                                .read(libraryControllerProvider.notifier)
+                                .playAll(items),
+                      icon: const Icon(Icons.play_arrow),
+                      label: Text('Reproducir (${items.length})'),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    key: const Key('library-entity-track-list'),
+                    itemExtent: 56,
+                    itemCount: items.length,
+                    itemBuilder: (_, index) {
+                      final track = items[index];
+                      final controller = ref.read(
+                        libraryControllerProvider.notifier,
+                      );
+                      return ListTile(
+                        enabled: track.isAvailable,
+                        leading: TrackArtwork(track: track, size: 48),
+                        title: Text(track.title),
+                        subtitle: Text(track.artist ?? 'Artista desconocido'),
+                        onTap: track.isAvailable
+                            ? () => controller.playVisibleQueue(
+                                items,
+                                startIndex: index,
+                              )
+                            : controller.showUnavailableMessage,
+                        trailing: PopupMenuButton<_TrackAction>(
+                          tooltip: 'Acciones de ${track.title}',
+                          onSelected: (action) => switch (action) {
+                            _TrackAction.addToQueue => controller.addToQueue(
+                              track,
+                            ),
+                            _TrackAction.toggleFavorite when track.id != null =>
+                              ref
+                                  .read(trackRepositoryProvider)
+                                  .setFavorite(track.id!, !track.isFavorite),
+                            _ => null,
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: _TrackAction.addToQueue,
+                              child: Text('Añadir a la cola'),
+                            ),
+                            if (track.id != null)
+                              PopupMenuItem(
+                                value: _TrackAction.toggleFavorite,
+                                child: Text(
+                                  track.isFavorite
+                                      ? 'Quitar de favoritos'
+                                      : 'Añadir a favoritos',
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -250,3 +361,5 @@ class _TrackDetail extends ConsumerWidget {
     ],
   );
 }
+
+enum _TrackAction { addToQueue, toggleFavorite }

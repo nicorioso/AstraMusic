@@ -10,7 +10,10 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 
 final class DriftTrackRepository
-    implements PaginatedTrackRepository, FilteredTrackRepository, LibraryGroupingRepository {
+    implements
+        PaginatedTrackRepository,
+        FilteredTrackRepository,
+        LibraryGroupingRepository {
   DriftTrackRepository(this._database, {DateTime Function()? now})
     : _now = now ?? DateTime.now;
 
@@ -33,7 +36,11 @@ final class DriftTrackRepository
     int offset = 0,
     String query = '',
   }) {
-    return watchFilteredPage(limit: limit, offset: offset, query: TrackListQuery(search: query));
+    return watchFilteredPage(
+      limit: limit,
+      offset: offset,
+      query: TrackListQuery(search: query),
+    );
   }
 
   @override
@@ -57,21 +64,41 @@ final class DriftTrackRepository
         (track) => track.searchText.like('%$escapedQuery%', escapeChar: r'\'),
       );
     }
-    if (query.favoritesOnly) statement.where((track) => track.favoritedAt.isNotNull());
-    if (query.availableOnly) statement.where((track) => track.isAvailable.equals(true));
+    if (query.favoritesOnly) {
+      statement.where((track) => track.favoritedAt.isNotNull());
+    }
+    if (query.availableOnly) {
+      statement.where((track) => track.isAvailable.equals(true));
+    }
     statement
       ..orderBy(_ordering(query.sort))
       ..limit(limit, offset: offset);
     return statement.watch().map(_toDomainList);
   }
 
-  List<OrderingTerm Function(Tracks)> _ordering(TrackSort sort) => switch (sort) {
-    TrackSort.title => [(track) => OrderingTerm.asc(track.sortTitle), (track) => OrderingTerm.asc(track.id)],
-    TrackSort.dateAdded => [(track) => OrderingTerm.desc(track.dateAdded), (track) => OrderingTerm.desc(track.id)],
-    TrackSort.artist => [(track) => OrderingTerm.asc(track.artist), (track) => OrderingTerm.asc(track.sortTitle)],
-    TrackSort.year => [(track) => OrderingTerm.desc(track.year), (track) => OrderingTerm.asc(track.sortTitle)],
-    TrackSort.duration => [(track) => OrderingTerm.desc(track.durationMs), (track) => OrderingTerm.asc(track.sortTitle)],
-  };
+  List<OrderingTerm Function(Tracks)> _ordering(TrackSort sort) =>
+      switch (sort) {
+        TrackSort.title => [
+          (track) => OrderingTerm.asc(track.sortTitle),
+          (track) => OrderingTerm.asc(track.id),
+        ],
+        TrackSort.dateAdded => [
+          (track) => OrderingTerm.desc(track.dateAdded),
+          (track) => OrderingTerm.desc(track.id),
+        ],
+        TrackSort.artist => [
+          (track) => OrderingTerm.asc(track.artist),
+          (track) => OrderingTerm.asc(track.sortTitle),
+        ],
+        TrackSort.year => [
+          (track) => OrderingTerm.desc(track.year),
+          (track) => OrderingTerm.asc(track.sortTitle),
+        ],
+        TrackSort.duration => [
+          (track) => OrderingTerm.desc(track.durationMs),
+          (track) => OrderingTerm.asc(track.sortTitle),
+        ],
+      };
 
   @override
   Stream<List<Track>> watchSearch(String query) {
@@ -102,82 +129,149 @@ final class DriftTrackRepository
   }
 
   @override
-  Stream<List<ArtistGroup>> watchArtists() => _database.customSelect(
-    '''SELECT COALESCE(NULLIF(TRIM(artist), ''), 'Artista desconocido') AS name,
+  Stream<List<ArtistGroup>> watchArtists() => _database
+      .customSelect(
+        '''SELECT COALESCE(NULLIF(TRIM(artist), ''), 'Artista desconocido') AS name,
        COUNT(*) AS track_count,
-       COUNT(DISTINCT NULLIF(TRIM(album), '')) AS album_count
+       COUNT(DISTINCT NULLIF(TRIM(album), '')) AS album_count,
+       MAX(artwork_path) AS artwork_path
        FROM tracks GROUP BY COALESCE(NULLIF(TRIM(artist), ''), 'Artista desconocido')
        ORDER BY name COLLATE NOCASE''',
-    readsFrom: {_database.tracks},
-  ).watch().map((rows) => List.unmodifiable(rows.map((row) => ArtistGroup(
-    name: row.read<String>('name'),
-    trackCount: row.read<int>('track_count'),
-    albumCount: row.read<int>('album_count'),
-  ))));
+        readsFrom: {_database.tracks},
+      )
+      .watch()
+      .map(
+        (rows) => List.unmodifiable(
+          rows.map(
+            (row) => ArtistGroup(
+              name: row.read<String>('name'),
+              trackCount: row.read<int>('track_count'),
+              albumCount: row.read<int>('album_count'),
+              artworkPath: row.read<String?>('artwork_path'),
+            ),
+          ),
+        ),
+      );
 
   @override
-  Stream<List<AlbumGroup>> watchAlbums() => _database.customSelect(
-    '''SELECT COALESCE(NULLIF(TRIM(album), ''), 'Álbum desconocido') AS title,
+  Stream<List<AlbumGroup>> watchAlbums() => _database
+      .customSelect(
+        '''SELECT COALESCE(NULLIF(TRIM(album), ''), 'Álbum desconocido') AS title,
        COALESCE(NULLIF(TRIM(artist), ''), 'Artista desconocido') AS artist,
        COUNT(*) AS track_count, MAX(artwork_path) AS artwork_path, MIN(year) AS year
        FROM tracks
        GROUP BY COALESCE(NULLIF(TRIM(album), ''), 'Álbum desconocido'),
                 COALESCE(NULLIF(TRIM(artist), ''), 'Artista desconocido')
        ORDER BY title COLLATE NOCASE, artist COLLATE NOCASE''',
-    readsFrom: {_database.tracks},
-  ).watch().map((rows) => List.unmodifiable(rows.map((row) => AlbumGroup(
-    title: row.read<String>('title'), artist: row.read<String>('artist'),
-    trackCount: row.read<int>('track_count'), artworkPath: row.read<String?>('artwork_path'),
-    year: row.read<int?>('year'),
-  ))));
+        readsFrom: {_database.tracks},
+      )
+      .watch()
+      .map(
+        (rows) => List.unmodifiable(
+          rows.map(
+            (row) => AlbumGroup(
+              title: row.read<String>('title'),
+              artist: row.read<String>('artist'),
+              trackCount: row.read<int>('track_count'),
+              artworkPath: row.read<String?>('artwork_path'),
+              year: row.read<int?>('year'),
+            ),
+          ),
+        ),
+      );
 
   @override
-  Stream<List<GenreGroup>> watchGenres() => _database.customSelect(
-    '''SELECT COALESCE(NULLIF(TRIM(genre), ''), 'Sin género') AS name,
-       COUNT(*) AS track_count FROM tracks
+  Stream<List<GenreGroup>> watchGenres() => _database
+      .customSelect(
+        '''SELECT COALESCE(NULLIF(TRIM(genre), ''), 'Sin género') AS name,
+       COUNT(*) AS track_count, MAX(artwork_path) AS artwork_path FROM tracks
        GROUP BY COALESCE(NULLIF(TRIM(genre), ''), 'Sin género')
-       ORDER BY name COLLATE NOCASE''', readsFrom: {_database.tracks},
-  ).watch().map((rows) => List.unmodifiable(rows.map((row) => GenreGroup(
-    name: row.read<String>('name'), trackCount: row.read<int>('track_count'),
-  ))));
+       ORDER BY name COLLATE NOCASE''',
+        readsFrom: {_database.tracks},
+      )
+      .watch()
+      .map(
+        (rows) => List.unmodifiable(
+          rows.map(
+            (row) => GenreGroup(
+              name: row.read<String>('name'),
+              trackCount: row.read<int>('track_count'),
+              artworkPath: row.read<String?>('artwork_path'),
+            ),
+          ),
+        ),
+      );
 
   @override
-  Stream<List<FolderGroup>> watchFolders() => _database.customSelect(
-    '''SELECT library_folders.id, library_folders.path, COUNT(tracks.id) AS track_count
+  Stream<List<FolderGroup>> watchFolders() => _database
+      .customSelect(
+        '''SELECT library_folders.id, library_folders.path, COUNT(tracks.id) AS track_count
        FROM library_folders LEFT JOIN tracks ON tracks.folder_path = library_folders.path
        GROUP BY library_folders.id, library_folders.path
        ORDER BY library_folders.path COLLATE NOCASE''',
-    readsFrom: {_database.libraryFolders, _database.tracks},
-  ).watch().map((rows) => List.unmodifiable(rows.map((row) => FolderGroup(
-    id: row.read<int>('id'), path: row.read<String>('path'),
-    trackCount: row.read<int>('track_count'),
-  ))));
+        readsFrom: {_database.libraryFolders, _database.tracks},
+      )
+      .watch()
+      .map(
+        (rows) => List.unmodifiable(
+          rows.map(
+            (row) => FolderGroup(
+              id: row.read<int>('id'),
+              path: row.read<String>('path'),
+              trackCount: row.read<int>('track_count'),
+            ),
+          ),
+        ),
+      );
 
   @override
   Stream<List<Track>> watchArtistTracks(String artist) => _watchGroupTracks(
-    artist == 'Artista desconocido' ? _database.tracks.artist.isNull() | _database.tracks.artist.equals('') : _database.tracks.artist.equals(artist),
+    artist == 'Artista desconocido'
+        ? _database.tracks.artist.isNull() | _database.tracks.artist.equals('')
+        : _database.tracks.artist.equals(artist),
   );
 
   @override
-  Stream<List<Track>> watchAlbumTracks({required String title, required String artist}) {
-    final album = title == 'Álbum desconocido' ? _database.tracks.album.isNull() | _database.tracks.album.equals('') : _database.tracks.album.equals(title);
-    final owner = artist == 'Artista desconocido' ? _database.tracks.artist.isNull() | _database.tracks.artist.equals('') : _database.tracks.artist.equals(artist);
+  Stream<List<Track>> watchAlbumTracks({
+    required String title,
+    required String artist,
+  }) {
+    final album = title == 'Álbum desconocido'
+        ? _database.tracks.album.isNull() | _database.tracks.album.equals('')
+        : _database.tracks.album.equals(title);
+    final owner = artist == 'Artista desconocido'
+        ? _database.tracks.artist.isNull() | _database.tracks.artist.equals('')
+        : _database.tracks.artist.equals(artist);
     return _watchGroupTracks(album & owner, byTrack: true);
   }
 
   @override
   Stream<List<Track>> watchGenreTracks(String genre) => _watchGroupTracks(
-    genre == 'Sin género' ? _database.tracks.genre.isNull() | _database.tracks.genre.equals('') : _database.tracks.genre.equals(genre),
+    genre == 'Sin género'
+        ? _database.tracks.genre.isNull() | _database.tracks.genre.equals('')
+        : _database.tracks.genre.equals(genre),
   );
 
   @override
-  Stream<List<Track>> watchFolderTracks(String path) => _watchGroupTracks(_database.tracks.folderPath.equals(path));
+  Stream<List<Track>> watchFolderTracks(String path) =>
+      _watchGroupTracks(_database.tracks.folderPath.equals(path));
 
-  Stream<List<Track>> _watchGroupTracks(Expression<bool> predicate, {bool byTrack = false}) {
+  Stream<List<Track>> _watchGroupTracks(
+    Expression<bool> predicate, {
+    bool byTrack = false,
+  }) {
     final query = _database.select(_database.tracks)..where((_) => predicate);
-    query.orderBy(byTrack
-        ? [(track) => OrderingTerm.asc(track.trackNumber), (track) => OrderingTerm.asc(track.sortTitle)]
-        : [(track) => OrderingTerm.asc(track.sortTitle), (track) => OrderingTerm.asc(track.id)]);
+    query.orderBy(
+      byTrack
+          ? [
+              (track) => OrderingTerm.asc(track.trackNumber),
+              (track) => OrderingTerm.asc(track.sortTitle),
+            ]
+          : [
+              (track) => OrderingTerm.asc(track.sortTitle),
+              (track) => OrderingTerm.asc(track.id),
+            ],
+    );
     return query.watch().map(_toDomainList);
   }
 
