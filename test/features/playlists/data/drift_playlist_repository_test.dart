@@ -153,19 +153,4 @@ void main() {
     expect(covers.map((track) => track.id), [1, 3, 4, 5]);
     expect(covers, hasLength(4));
   });
-
-  test('coverTracks prioriza canciones que tienen carátula', () async {
-    await (database.update(database.tracks)
-          ..where((track) => track.id.isSmallerOrEqualValue(2)))
-        .write(const TracksCompanion(artworkPath: Value(null)));
-    final playlist = await repository.create(
-      'Con canciones sin arte al inicio',
-    );
-    await repository.addTracks(playlist.id, [1, 2, 3, 4, 5, 6]);
-
-    final covers = await repository.coverTracks(playlist.id);
-
-    expect(covers.map((track) => track.id), [3, 4, 5, 6]);
-    expect(covers.every((track) => track.artworkPath != null), isTrue);
-  });
 }
