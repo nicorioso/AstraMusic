@@ -467,62 +467,82 @@ class _PlaylistDetailBody extends ConsumerWidget {
       key: const Key('playlist-detail'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DynamicArtworkColorBuilder(
-          track: tracks.isEmpty ? null : tracks.first,
-          builder: (context, dynamicColor) => DecoratedBox(
-            key: const Key('playlist-detail-header'),
-            decoration: BoxDecoration(
-              gradient: dynamicColor == null
-                  ? LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        context.astraColors.gradientTop,
-                        context.astraColors.surface.withValues(alpha: 0),
-                      ],
-                    )
-                  : LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        dynamicColor,
-                        context.astraColors.surface.withValues(alpha: 0),
-                      ],
-                    ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.maxWidth < 600) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(alignment: Alignment.center, child: artwork),
-                        const SizedBox(height: 20),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(child: details),
-                            ?menu,
+        Stack(
+          children: [
+            DynamicArtworkColorBuilder(
+              track: tracks.isEmpty ? null : tracks.first,
+              builder: (context, dynamicColor) => DecoratedBox(
+                key: const Key('playlist-detail-header'),
+                decoration: BoxDecoration(
+                  gradient: dynamicColor == null
+                      ? LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            context.astraColors.gradientTop,
+                            context.astraColors.surface.withValues(alpha: 0),
+                          ],
+                        )
+                      : LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            dynamicColor,
+                            context.astraColors.surface.withValues(alpha: 0),
                           ],
                         ),
-                      ],
-                    );
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.maxWidth < 600) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Align(alignment: Alignment.center, child: artwork),
+                            const SizedBox(height: 20),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(child: details),
+                                ?menu,
+                              ],
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          artwork,
+                          const SizedBox(width: 24),
+                          Expanded(child: details),
+                          ?menu,
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: IconButton(
+                key: const Key('playlist-detail-back-button'),
+                tooltip: 'Volver',
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  if (embedded) {
+                    ref.read(appDestinationProvider.notifier).back();
+                  } else {
+                    Navigator.of(context).maybePop();
                   }
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      artwork,
-                      const SizedBox(width: 24),
-                      Expanded(child: details),
-                      ?menu,
-                    ],
-                  );
                 },
               ),
             ),
-          ),
+          ],
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
