@@ -240,7 +240,10 @@ final class DriftPlaylistRepository implements PlaylistRepository {
                 ),
               ])
               ..where(_database.playlistTracks.playlistId.equals(playlistId))
-              ..orderBy([OrderingTerm.asc(_database.playlistTracks.position)]))
+              ..orderBy([
+                OrderingTerm.desc(_database.tracks.artworkPath.isNotNull()),
+                OrderingTerm.asc(_database.playlistTracks.position),
+              ]))
             .get();
     final keys = <String>{};
     final result = <Track>[];
