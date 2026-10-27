@@ -1,11 +1,15 @@
+import 'dart:io';
+
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/theme/contrast.dart';
 import 'package:astramusic/core/theme/dynamic_artwork_color.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:image/image.dart' as image;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test('oscurece el color y conserva contraste AA', () {
     const foreground = Color(0xFFF5EBDD);
     final result = darkAccessibleArtworkColor(
@@ -66,6 +70,29 @@ void main() {
     ]);
 
     expect(provider.calls, 1);
+  });
+
+  test('cachea la carátula personalizada sin consultar canciones', () async {
+    final directory = await Directory.systemTemp.createTemp('astra-cover-');
+    addTearDown(() => directory.delete(recursive: true));
+    final bitmap = image.Image(width: 32, height: 32);
+    image.fill(bitmap, color: image.ColorRgb8(220, 30, 50));
+    final file = File('${directory.path}/playlist.png')
+      ..writeAsBytesSync(image.encodePng(bitmap));
+    final scheme = await ColorScheme.fromImageProvider(
+      provider: FileImage(file),
+      brightness: Brightness.dark,
+    );
+    expect(scheme.primaryContainer, isA<Color>());
+    final provider = _CountingArtworkProvider();
+    final cache = DynamicArtworkColorCache(provider);
+
+    final first = cache.colorForImage(file.path, foreground: Colors.white);
+    final second = cache.colorForImage(file.path, foreground: Colors.white);
+
+    expect(identical(first, second), isTrue);
+    expect(await first, isNotNull);
+    expect(provider.calls, 0);
   });
 }
 

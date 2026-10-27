@@ -41,12 +41,21 @@ final class DynamicArtworkColorCache {
       album: track.album,
       uri: track.uri,
     );
+    return _colorFor(key, () => _extract(track, foreground));
+  }
+
+  Future<Color?> colorForImage(String imagePath, {required Color foreground}) {
+    final key = 'file:$imagePath';
+    return _colorFor(key, () => _extractFile(imagePath, foreground));
+  }
+
+  Future<Color?> _colorFor(String key, Future<Color?> Function() load) {
     final cached = _colors.remove(key);
     if (cached != null) {
       _colors[key] = cached;
       return cached;
     }
-    final result = _extract(track, foreground);
+    final result = load();
     _colors[key] = result;
     while (_colors.length > capacity) {
       _colors.remove(_colors.keys.first);
@@ -61,6 +70,14 @@ final class DynamicArtworkColorCache {
         size: artworkThumbnailBucket(ArtworkUsage.dynamicColor),
       );
       if (path == null) return null;
+      return await _extractFile(path, foreground);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<Color?> _extractFile(String path, Color foreground) async {
+    try {
       final file = File(path);
       if (!await file.exists()) return null;
       final scheme = await ColorScheme.fromImageProvider(
@@ -86,10 +103,12 @@ class DynamicArtworkColorBuilder extends ConsumerStatefulWidget {
   const DynamicArtworkColorBuilder({
     required this.track,
     required this.builder,
+    this.imagePath,
     super.key,
   });
 
   final Track? track;
+  final String? imagePath;
   final DynamicArtworkColorWidgetBuilder builder;
 
   @override
@@ -110,16 +129,21 @@ class _DynamicArtworkColorBuilderState
   @override
   void didUpdateWidget(DynamicArtworkColorBuilder oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_identity(oldWidget.track) != _identity(widget.track)) _load();
+    if (_identity(oldWidget.track, oldWidget.imagePath) !=
+        _identity(widget.track, widget.imagePath)) {
+      _load();
+    }
   }
 
   void _load() {
     final track = widget.track;
-    _future = track == null
+    final cache = ref.read(dynamicArtworkColorCacheProvider);
+    final imagePath = widget.imagePath;
+    _future = imagePath != null && imagePath.isNotEmpty
+        ? cache.colorForImage(imagePath, foreground: context.astraColors.text)
+        : track == null
         ? Future<Color?>.value()
-        : ref
-              .read(dynamicArtworkColorCacheProvider)
-              .colorFor(track, foreground: context.astraColors.text);
+        : cache.colorFor(track, foreground: context.astraColors.text);
   }
 
   @override
@@ -129,7 +153,10 @@ class _DynamicArtworkColorBuilderState
   );
 }
 
-String? _identity(Track? track) => track == null
+String? _identity(Track? track, String? imagePath) =>
+    imagePath != null && imagePath.isNotEmpty
+    ? 'file:$imagePath'
+    : track == null
     ? null
     : artworkCacheKey(artist: track.artist, album: track.album, uri: track.uri);
 

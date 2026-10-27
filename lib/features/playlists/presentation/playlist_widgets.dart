@@ -487,6 +487,7 @@ class _PlaylistDetailBody extends ConsumerWidget {
             flexibleSpace: FlexibleSpaceBar(
               background: DynamicArtworkColorBuilder(
                 track: tracks.isEmpty ? null : tracks.first,
+                imagePath: playlist.customArtworkPath,
                 builder: (context, dynamicColor) => DecoratedBox(
                   key: const Key('playlist-detail-header'),
                   decoration: BoxDecoration(

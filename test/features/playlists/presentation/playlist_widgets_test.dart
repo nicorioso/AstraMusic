@@ -161,6 +161,44 @@ void main() {
     );
   }
 
+  testWidgets('muestra la imagen personalizada de la playlist', (tester) async {
+    final playlist = Playlist(
+      id: 7,
+      name: 'Portada personalizada',
+      trackCount: 0,
+      addedAt: DateTime(2026),
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+      customArtworkPath: '/tmp/playlist-cover.png',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(body: PlaylistCover(playlist: playlist, size: 96)),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+      find.byKey(ValueKey('playlist-custom-cover-${playlist.id}')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Image>(
+            find.descendant(
+              of: find.byKey(ValueKey('playlist-custom-cover-${playlist.id}')),
+              matching: find.byType(Image),
+            ),
+          )
+          .image,
+      isA<FileImage>(),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('añade una canción a una playlist desde su menú', (tester) async {
     final fixture = _Fixture();
     await _setSize(tester, const Size(1400, 900));
