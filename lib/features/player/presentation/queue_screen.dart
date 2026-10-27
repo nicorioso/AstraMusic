@@ -3,6 +3,7 @@ import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/theme/queue_colors.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/section_title.dart';
+import 'package:astramusic/core/widgets/secondary_back_header.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
@@ -11,9 +12,14 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class QueueScreen extends ConsumerWidget {
-  const QueueScreen({this.embedded = false, super.key});
+  const QueueScreen({
+    this.embedded = false,
+    this.showMobileBackButton = false,
+    super.key,
+  });
 
   final bool embedded;
+  final bool showMobileBackButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -26,14 +32,22 @@ class QueueScreen extends ConsumerWidget {
       return Column(
         key: const Key('queue-destination'),
         children: [
-          SectionTitle(
-            'Cola',
-            trailing: TextButton(
-              key: const Key('clear-queue-button'),
-              onPressed: queue.isEmpty ? null : controller.clearQueue,
-              child: const Text('Vaciar cola'),
+          if (showMobileBackButton)
+            SecondaryBackHeader(
+              title: 'Cola',
+              trailing: _ClearQueueButton(
+                enabled: queue.isNotEmpty,
+                onPressed: controller.clearQueue,
+              ),
+            )
+          else
+            SectionTitle(
+              'Cola',
+              trailing: _ClearQueueButton(
+                enabled: queue.isNotEmpty,
+                onPressed: controller.clearQueue,
+              ),
             ),
-          ),
           Expanded(child: body),
         ],
       );
@@ -52,6 +66,20 @@ class QueueScreen extends ConsumerWidget {
       body: AstraBackground(child: SafeArea(child: body)),
     );
   }
+}
+
+class _ClearQueueButton extends StatelessWidget {
+  const _ClearQueueButton({required this.enabled, required this.onPressed});
+
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    key: const Key('clear-queue-button'),
+    onPressed: enabled ? onPressed : null,
+    child: const Text('Vaciar cola'),
+  );
 }
 
 class PlayerQueuePanel extends StatelessWidget {

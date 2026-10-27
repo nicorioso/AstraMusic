@@ -1,5 +1,6 @@
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/widgets/section_title.dart';
+import 'package:astramusic/core/widgets/secondary_back_header.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/library_group.dart';
 import 'package:astramusic/features/library/domain/track.dart';
@@ -52,8 +53,9 @@ class _EntityLink extends ConsumerWidget {
 }
 
 class ArtistsScreen extends ConsumerWidget {
-  const ArtistsScreen({this.artist, super.key});
+  const ArtistsScreen({this.artist, this.showTitle = true, super.key});
   final String? artist;
+  final bool showTitle;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (artist != null) {
@@ -66,6 +68,7 @@ class ArtistsScreen extends ConsumerWidget {
     }
     return _GroupsList<ArtistGroup>(
       title: 'Artistas',
+      showTitle: showTitle,
       stream: ref.watch(artistsProvider),
       item: (item) => _EntityTile(
         key: ValueKey('artist-${item.name}'),
@@ -88,9 +91,15 @@ class ArtistsScreen extends ConsumerWidget {
 }
 
 class AlbumsScreen extends ConsumerWidget {
-  const AlbumsScreen({this.title, this.artist, super.key});
+  const AlbumsScreen({
+    this.title,
+    this.artist,
+    this.showTitle = true,
+    super.key,
+  });
   final String? title;
   final String? artist;
+  final bool showTitle;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (title != null && artist != null) {
@@ -103,6 +112,7 @@ class AlbumsScreen extends ConsumerWidget {
     }
     return _GroupsList<AlbumGroup>(
       title: 'Álbumes',
+      showTitle: showTitle,
       stream: ref.watch(albumsProvider),
       item: (item) => _EntityTile(
         key: ValueKey('album-${item.title}-${item.artist}'),
@@ -125,8 +135,9 @@ class AlbumsScreen extends ConsumerWidget {
 }
 
 class GenresScreen extends ConsumerWidget {
-  const GenresScreen({this.genre, super.key});
+  const GenresScreen({this.genre, this.showTitle = true, super.key});
   final String? genre;
+  final bool showTitle;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (genre != null) {
@@ -139,6 +150,7 @@ class GenresScreen extends ConsumerWidget {
     }
     return _GroupsList<GenreGroup>(
       title: 'Géneros',
+      showTitle: showTitle,
       stream: ref.watch(genresProvider),
       item: (item) => _EntityTile(
         key: ValueKey('genre-${item.name}'),
@@ -196,8 +208,9 @@ class _EntityTile extends StatelessWidget {
 }
 
 class FolderGroupsScreen extends ConsumerWidget {
-  const FolderGroupsScreen({this.path, super.key});
+  const FolderGroupsScreen({this.path, this.showTitle = true, super.key});
   final String? path;
+  final bool showTitle;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (path != null) {
@@ -210,6 +223,7 @@ class FolderGroupsScreen extends ConsumerWidget {
     }
     return _GroupsList<FolderGroup>(
       title: 'Carpetas',
+      showTitle: showTitle,
       stream: ref.watch(folderGroupsProvider),
       item: (item) => ListTile(
         key: ValueKey('folder-${item.id}'),
@@ -229,15 +243,17 @@ class _GroupsList<T> extends StatelessWidget {
     required this.title,
     required this.stream,
     required this.item,
+    this.showTitle = true,
   });
   final String title;
   final AsyncValue<List<T>> stream;
   final Widget Function(T item) item;
+  final bool showTitle;
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      SectionTitle(title),
+      if (showTitle) SectionTitle(title),
       Expanded(
         child: stream.when(
           data: (items) => items.isEmpty
@@ -264,17 +280,7 @@ class _TrackDetail extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Row(
-        children: [
-          IconButton(
-            key: const Key('library-entity-back-button'),
-            tooltip: 'Volver',
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => ref.read(appDestinationProvider.notifier).back(),
-          ),
-          Expanded(child: SectionTitle(title)),
-        ],
-      ),
+      SecondaryBackHeader(title: title),
       Expanded(
         child: StreamBuilder<List<Track>>(
           stream: tracks,

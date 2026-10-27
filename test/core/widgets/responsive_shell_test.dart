@@ -201,6 +201,29 @@ void main() {
     expect(find.byKey(const Key('library-destination')), findsOneWidget);
   });
 
+  testWidgets('las pantallas secundarias móviles muestran retroceso visible', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(600, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Biblioteca'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-Artistas-tab')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('mobile-secondary-back-button')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('mobile-secondary-back-button')));
+    await tester.pump();
+    expect(find.byKey(const Key('library-destination')), findsOneWidget);
+  });
+
   testWidgets('Escape vuelve desde una pantalla secundaria de escritorio', (
     tester,
   ) async {

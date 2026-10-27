@@ -11,6 +11,7 @@ import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/section_title.dart';
+import 'package:astramusic/core/widgets/secondary_back_header.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/track.dart';
@@ -442,20 +443,48 @@ class _DestinationBody extends StatelessWidget {
     AppDestinationType.home => HomeDestination(desktop: desktop),
     AppDestinationType.search => SearchDestination(desktop: desktop),
     AppDestinationType.library => const PlaylistsDestination(),
-    AppDestinationType.artists => ArtistsScreen(artist: destination.name),
-    AppDestinationType.albums => AlbumsScreen(title: destination.name, artist: destination.artist),
-    AppDestinationType.genres => GenresScreen(genre: destination.name),
+    AppDestinationType.artists =>
+      destination.name == null
+          ? _mobileSecondary('Artistas', const ArtistsScreen(showTitle: false))
+          : ArtistsScreen(artist: destination.name),
+    AppDestinationType.albums =>
+      destination.name == null
+          ? _mobileSecondary('Álbumes', const AlbumsScreen(showTitle: false))
+          : AlbumsScreen(title: destination.name, artist: destination.artist),
+    AppDestinationType.genres =>
+      destination.name == null
+          ? _mobileSecondary('Géneros', const GenresScreen(showTitle: false))
+          : GenresScreen(genre: destination.name),
     AppDestinationType.playlist => PlaylistDetailScreen(
       playlistId: destination.playlistId!,
       embedded: true,
     ),
-    AppDestinationType.queue => const QueueScreen(embedded: true),
-    AppDestinationType.folders => destination.name == null
-        ? const FolderGroupsScreen()
-        : FolderGroupsScreen(path: destination.name),
-    AppDestinationType.settings => const SettingsDestination(),
+    AppDestinationType.queue => QueueScreen(
+      embedded: true,
+      showMobileBackButton: !desktop,
+    ),
+    AppDestinationType.folders =>
+      destination.name == null
+          ? _mobileSecondary(
+              'Carpetas',
+              const FolderGroupsScreen(showTitle: false),
+            )
+          : FolderGroupsScreen(path: destination.name),
+    AppDestinationType.settings => SettingsDestination(
+      showMobileBackButton: !desktop,
+    ),
     AppDestinationType.diagnostics => const DiagnosticsDestination(),
   };
+
+  Widget _mobileSecondary(String title, Widget child) => desktop
+      ? child
+      : Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SecondaryBackHeader(title: title),
+            Expanded(child: child),
+          ],
+        );
 }
 
 class HomeDestination extends ConsumerWidget {
@@ -1211,20 +1240,29 @@ class _LibraryCategoryLinks extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => SingleChildScrollView(
     scrollDirection: Axis.horizontal,
     padding: const EdgeInsets.symmetric(horizontal: 12),
-    child: Row(children: [
-      _link(ref, 'Artistas', AppDestination.artists),
-      _link(ref, 'Álbumes', AppDestination.albums),
-      _link(ref, 'Géneros', AppDestination.genres),
-      _link(ref, 'Carpetas', AppDestination.folders),
-    ]),
+    child: Row(
+      children: [
+        _link(ref, 'Artistas', AppDestination.artists),
+        _link(ref, 'Álbumes', AppDestination.albums),
+        _link(ref, 'Géneros', AppDestination.genres),
+        _link(ref, 'Carpetas', AppDestination.folders),
+      ],
+    ),
   );
 
   Widget _link(WidgetRef ref, String label, AppDestination destination) =>
-      TextButton(key: Key('library-$label-tab'), onPressed: () => ref.read(appDestinationProvider.notifier).select(destination), child: Text(label));
+      TextButton(
+        key: Key('library-$label-tab'),
+        onPressed: () =>
+            ref.read(appDestinationProvider.notifier).select(destination),
+        child: Text(label),
+      );
 }
 
 class SettingsDestination extends ConsumerWidget {
-  const SettingsDestination({super.key});
+  const SettingsDestination({this.showMobileBackButton = false, super.key});
+
+  final bool showMobileBackButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1251,6 +1289,7 @@ class SettingsDestination extends ConsumerWidget {
         key: const Key('settings-destination'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (showMobileBackButton) const SecondaryBackHeader(title: 'Ajustes'),
           const _SettingsHeader(),
           Expanded(
             key: const Key('destination-content'),

@@ -82,7 +82,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('library-entity-back-button')));
+    await tester.tap(find.byKey(const Key('mobile-secondary-back-button')));
     expect(container.read(appDestinationProvider), AppDestination.artists);
   });
 }
