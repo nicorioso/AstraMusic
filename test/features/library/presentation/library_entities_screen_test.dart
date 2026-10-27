@@ -24,6 +24,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Aurora'), findsOneWidget);
+    final artistTitle = tester.widget<Text>(find.text('Aurora'));
+    expect(artistTitle.maxLines, 1);
+    expect(artistTitle.overflow, TextOverflow.ellipsis);
     expect(
       find.byKey(const ValueKey('artwork-placeholder-group://artist:Aurora')),
       findsOneWidget,
@@ -51,6 +54,10 @@ void main() {
     await tester.pumpAndSettle();
     final first = tester.widget<ListTile>(find.byType(ListTile).first);
     expect((first.title! as Text).data, 'Primera');
+    expect((first.title! as Text).maxLines, 1);
+    expect((first.title! as Text).overflow, TextOverflow.ellipsis);
+    expect((first.subtitle! as Text).maxLines, 1);
+    expect((first.subtitle! as Text).overflow, TextOverflow.ellipsis);
     await tester.tap(find.byTooltip('Acciones de Primera'));
     await tester.pumpAndSettle();
     expect(find.text('Añadir a la cola'), findsOneWidget);

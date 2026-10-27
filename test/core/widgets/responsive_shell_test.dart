@@ -177,6 +177,33 @@ void main() {
     expect(find.byKey(const Key('desktop-shell')), findsOneWidget);
   });
 
+  testWidgets('conserva la búsqueda al redimensionar entre shells', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(1000, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pump();
+
+    await tester.enterText(
+      find.byKey(const Key('desktop-search-field')),
+      'canción extensa',
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('search-destination')), findsOneWidget);
+
+    await _setSize(tester, const Size(600, 800));
+    await tester.pump();
+
+    final mobileField = tester.widget<TextField>(
+      find.byKey(const Key('mobile-search-field')),
+    );
+    expect(mobileField.controller?.text, 'canción extensa');
+    expect(mobileField.controller?.selection.baseOffset, 15);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('cambia de destino desde la navegación móvil', (tester) async {
     final fixture = _Fixture();
     addTearDown(fixture.dispose);

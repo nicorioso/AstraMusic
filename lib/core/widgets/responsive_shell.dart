@@ -45,12 +45,30 @@ class ResponsiveShell extends ConsumerStatefulWidget {
 }
 
 class _ResponsiveShellState extends ConsumerState<ResponsiveShell> {
+  late final TextEditingController _searchController;
+
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController(
+      text: ref.read(librarySearchQueryProvider),
+    );
+    ref.listenManual(librarySearchQueryProvider, (_, query) {
+      if (_searchController.text == query) return;
+      _searchController.value = TextEditingValue(
+        text: query,
+        selection: TextSelection.collapsed(offset: query.length),
+      );
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(ref.read(artworkBackfillServiceProvider).runOnce());
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -58,14 +76,22 @@ class _ResponsiveShellState extends ConsumerState<ResponsiveShell> {
     return LayoutBuilder(
       builder: (context, constraints) =>
           constraints.maxWidth >= desktopBreakpoint
-          ? const DesktopShell(key: Key('desktop-shell'))
-          : const MobileShell(key: Key('mobile-shell')),
+          ? DesktopShell(
+              key: const Key('desktop-shell'),
+              searchController: _searchController,
+            )
+          : MobileShell(
+              key: const Key('mobile-shell'),
+              searchController: _searchController,
+            ),
     );
   }
 }
 
 class DesktopShell extends ConsumerStatefulWidget {
-  const DesktopShell({super.key});
+  const DesktopShell({required this.searchController, super.key});
+
+  final TextEditingController searchController;
 
   @override
   ConsumerState<DesktopShell> createState() => _DesktopShellState();
@@ -100,7 +126,9 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                         color: context.astraColors.surface,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const _DesktopCenter(),
+                      child: _DesktopCenter(
+                        searchController: widget.searchController,
+                      ),
                     ),
                   ),
                 ],
@@ -302,7 +330,9 @@ class _CollapsedSidebarButton extends StatelessWidget {
 }
 
 class _DesktopCenter extends ConsumerWidget {
-  const _DesktopCenter();
+  const _DesktopCenter({required this.searchController});
+
+  final TextEditingController searchController;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -334,6 +364,7 @@ class _DesktopCenter extends ConsumerWidget {
                 Expanded(
                   child: TextField(
                     key: const Key('desktop-search-field'),
+                    controller: searchController,
                     onChanged: (query) {
                       ref
                           .read(librarySearchQueryProvider.notifier)
@@ -352,7 +383,11 @@ class _DesktopCenter extends ConsumerWidget {
             ),
           ),
           Expanded(
-            child: _DestinationBody(destination: destination, desktop: true),
+            child: _DestinationBody(
+              destination: destination,
+              desktop: true,
+              searchController: searchController,
+            ),
           ),
         ],
       ),
@@ -369,7 +404,9 @@ class _DesktopCenter extends ConsumerWidget {
 }
 
 class MobileShell extends ConsumerWidget {
-  const MobileShell({super.key});
+  const MobileShell({required this.searchController, super.key});
+
+  final TextEditingController searchController;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -387,7 +424,11 @@ class MobileShell extends ConsumerWidget {
         body: SafeArea(
           bottom: false,
           child: AstraBackground(
-            child: _DestinationBody(destination: destination, desktop: false),
+            child: _DestinationBody(
+              destination: destination,
+              desktop: false,
+              searchController: searchController,
+            ),
           ),
         ),
         bottomNavigationBar: SafeArea(
@@ -433,15 +474,23 @@ class MobileShell extends ConsumerWidget {
 }
 
 class _DestinationBody extends StatelessWidget {
-  const _DestinationBody({required this.destination, required this.desktop});
+  const _DestinationBody({
+    required this.destination,
+    required this.desktop,
+    required this.searchController,
+  });
 
   final AppDestination destination;
   final bool desktop;
+  final TextEditingController searchController;
 
   @override
   Widget build(BuildContext context) => switch (destination.type) {
     AppDestinationType.home => HomeDestination(desktop: desktop),
-    AppDestinationType.search => SearchDestination(desktop: desktop),
+    AppDestinationType.search => SearchDestination(
+      desktop: desktop,
+      searchController: searchController,
+    ),
     AppDestinationType.library => const PlaylistsDestination(),
     AppDestinationType.artists =>
       destination.name == null
@@ -704,9 +753,14 @@ class _HomeShortcutTileState extends ConsumerState<_HomeShortcutTile> {
 }
 
 class SearchDestination extends ConsumerWidget {
-  const SearchDestination({required this.desktop, super.key});
+  const SearchDestination({
+    required this.desktop,
+    required this.searchController,
+    super.key,
+  });
 
   final bool desktop;
+  final TextEditingController searchController;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -724,6 +778,7 @@ class SearchDestination extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: TextField(
               key: const Key('mobile-search-field'),
+              controller: searchController,
               onChanged: ref.read(librarySearchQueryProvider.notifier).update,
               decoration: const InputDecoration(
                 hintText: 'Buscar por título, artista o álbum',

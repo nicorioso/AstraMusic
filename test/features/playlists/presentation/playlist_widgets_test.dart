@@ -44,6 +44,14 @@ void main() {
             expect(find.text('Aún no tienes playlists'), findsWidgets);
           } else {
             expect(find.textContaining('播放列表'), findsWidgets);
+            final playlistTitle = tester.widget<Text>(
+              find.descendant(
+                of: find.byKey(const Key('playlist-chooser')),
+                matching: find.text(fixture.playlists.items.first.name),
+              ),
+            );
+            expect(playlistTitle.maxLines, 1);
+            expect(playlistTitle.overflow, TextOverflow.ellipsis);
           }
 
           await tester.sendKeyEvent(LogicalKeyboardKey.escape);

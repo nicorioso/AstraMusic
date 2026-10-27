@@ -13,7 +13,7 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    await container.read(homeRecentTracksProvider.future);
+    container.read(homeRecentTracksProvider);
 
     expect(repository.requestedLimit, homeRecentTrackLimit);
     expect(repository.requestedQuery?.sort, TrackSort.dateAdded);

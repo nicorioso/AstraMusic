@@ -303,8 +303,16 @@ class _PlaylistChooser extends ConsumerWidget {
                       final playlist = items[index];
                       return ListTile(
                         leading: PlaylistCover(playlist: playlist, size: 40),
-                        title: Text(playlist.name),
-                        subtitle: Text(playlistTrackCount(playlist.trackCount)),
+                        title: Text(
+                          playlist.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          playlistTrackCount(playlist.trackCount),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         onTap: () => Navigator.of(context).pop(playlist.id),
                       );
                     },

@@ -72,9 +72,11 @@ class ArtistsScreen extends ConsumerWidget {
       stream: ref.watch(artistsProvider),
       item: (item) => _EntityTile(
         key: ValueKey('artist-${item.name}'),
-        title: Text(item.name),
+        title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           '${item.trackCount} canciones · ${item.albumCount} álbumes',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         artwork: _groupArtwork(
           identity: 'artist:${item.name}',
@@ -116,9 +118,11 @@ class AlbumsScreen extends ConsumerWidget {
       stream: ref.watch(albumsProvider),
       item: (item) => _EntityTile(
         key: ValueKey('album-${item.title}-${item.artist}'),
-        title: Text(item.title),
+        title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           '${item.artist}${item.year == null ? '' : ' · ${item.year}'} · ${item.trackCount} canciones',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         artwork: _groupArtwork(
           identity: 'album:${item.artist}:${item.title}',
@@ -154,8 +158,12 @@ class GenresScreen extends ConsumerWidget {
       stream: ref.watch(genresProvider),
       item: (item) => _EntityTile(
         key: ValueKey('genre-${item.name}'),
-        title: Text(item.name),
-        subtitle: Text('${item.trackCount} canciones'),
+        title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          '${item.trackCount} canciones',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         artwork: _groupArtwork(
           identity: 'genre:${item.name}',
           title: item.name,
@@ -228,8 +236,12 @@ class FolderGroupsScreen extends ConsumerWidget {
       item: (item) => ListTile(
         key: ValueKey('folder-${item.id}'),
         leading: const Icon(Icons.folder_outlined),
-        title: Text(item.path),
-        subtitle: Text('${item.trackCount} canciones'),
+        title: Text(item.path, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          '${item.trackCount} canciones',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         onTap: () => ref
             .read(appDestinationProvider.notifier)
             .select(AppDestination.folder(item.path)),
@@ -319,8 +331,16 @@ class _TrackDetail extends ConsumerWidget {
                       return ListTile(
                         enabled: track.isAvailable,
                         leading: TrackArtwork(track: track, size: 48),
-                        title: Text(track.title),
-                        subtitle: Text(track.artist ?? 'Artista desconocido'),
+                        title: Text(
+                          track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          track.artist ?? 'Artista desconocido',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         onTap: track.isAvailable
                             ? () => controller.playVisibleQueue(
                                 items,
