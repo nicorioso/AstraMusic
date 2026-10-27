@@ -311,6 +311,40 @@ void main() {
     expect(find.text('3:00'), findsWidgets);
   });
 
+  testWidgets('la cabecera móvil usa un alto compacto', (tester) async {
+    final fixture = _Fixture();
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(fixture.detailApp());
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<SliverAppBar>(find.byType(SliverAppBar)).expandedHeight,
+      348,
+    );
+    expect(find.byKey(const Key('playlist-header-cover')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'la portada permanece visible en el panel estrecho de escritorio',
+    (tester) async {
+      final fixture = _Fixture();
+      await _setSize(tester, const Size(840, 900));
+      await tester.pumpWidget(fixture.shellApp());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('sidebar-playlist-7')));
+      await tester.pumpAndSettle();
+
+      final cover = tester.getSize(
+        find.byKey(const Key('playlist-header-cover')),
+      );
+      expect(cover.width, greaterThan(0));
+      expect(cover.height, greaterThan(0));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('abre overlays desde sus flujos reales sin excepciones', (
     tester,
   ) async {

@@ -132,8 +132,9 @@ class FavoritesArtwork extends StatelessWidget {
 }
 
 const favoritesPlaylistId = -1;
-const _mobilePlaylistHeaderCollapseHeight = 340.0;
+const _mobilePlaylistHeaderCollapseHeight = 280.0;
 const _desktopPlaylistHeaderCollapseHeight = 270.0;
+const _mobilePlaylistHeaderExpandedHeight = 348.0;
 
 String playlistTrackCount(int count) =>
     count == 1 ? 'Playlist · 1 canción' : 'Playlist · $count canciones';
@@ -438,6 +439,8 @@ class _PlaylistDetailBody extends ConsumerWidget {
         const SizedBox(height: 8),
         Text(
           '${playlistTrackCount(playlist.trackCount)} · ${_durationLabel(duration)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -472,7 +475,9 @@ class _PlaylistDetailBody extends ConsumerWidget {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: MediaQuery.sizeOf(context).width < 840 ? 380 : 300,
+            expandedHeight: MediaQuery.sizeOf(context).width < 840
+                ? _mobilePlaylistHeaderExpandedHeight
+                : 300,
             leading: IconButton(
               key: const Key('playlist-detail-back-button'),
               tooltip: 'Volver',
@@ -513,13 +518,17 @@ class _PlaylistDetailBody extends ConsumerWidget {
                   ),
                   child: LayoutBuilder(
                     builder: (context, headerConstraints) {
-                      final mobile = headerConstraints.maxWidth < 840;
+                      // El shell determina la variante móvil. El panel central
+                      // puede ser más angosto que 840 dp en escritorio por la
+                      // barra lateral, pero debe conservar su composición
+                      // horizontal y ajustar la portada al espacio disponible.
+                      final mobile = MediaQuery.sizeOf(context).width < 840;
                       final collapseHeight = mobile
                           ? _mobilePlaylistHeaderCollapseHeight
                           : _desktopPlaylistHeaderCollapseHeight;
                       if (headerConstraints.maxHeight < collapseHeight) {
                         return Padding(
-                          padding: const EdgeInsets.fromLTRB(72, 72, 20, 12),
+                          padding: const EdgeInsets.fromLTRB(72, 64, 16, 12),
                           child: Align(
                             alignment: Alignment.bottomLeft,
                             child: Text(
@@ -533,21 +542,27 @@ class _PlaylistDetailBody extends ConsumerWidget {
                       }
                       return Padding(
                         padding: EdgeInsets.fromLTRB(
-                          20,
-                          mobile ? 48 : 36,
-                          20,
+                          16,
+                          mobile ? 56 : 36,
+                          16,
                           12,
                         ),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final coverSize = mobile
-                                ? (constraints.maxHeight - 152).clamp(
+                                ? (constraints.maxHeight - 104).clamp(
+                                    112.0,
                                     140.0,
-                                    220.0,
                                   )
-                                : (constraints.maxHeight - 48).clamp(
-                                    180.0,
-                                    250.0,
+                                : math.min(
+                                    (constraints.maxHeight - 48).clamp(
+                                      72.0,
+                                      250.0,
+                                    ),
+                                    (constraints.maxWidth - 144).clamp(
+                                      72.0,
+                                      250.0,
+                                    ),
                                   );
                             if (mobile) {
                               return Column(
@@ -555,9 +570,12 @@ class _PlaylistDetailBody extends ConsumerWidget {
                                 children: [
                                   Align(
                                     alignment: Alignment.center,
-                                    child: artwork(coverSize),
+                                    child: KeyedSubtree(
+                                      key: const Key('playlist-header-cover'),
+                                      child: artwork(coverSize),
+                                    ),
                                   ),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 12),
                                   details,
                                 ],
                               );
@@ -565,7 +583,10 @@ class _PlaylistDetailBody extends ConsumerWidget {
                             return Row(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                artwork(coverSize),
+                                KeyedSubtree(
+                                  key: const Key('playlist-header-cover'),
+                                  child: artwork(coverSize),
+                                ),
                                 const SizedBox(width: 24),
                                 Expanded(child: details),
                               ],
