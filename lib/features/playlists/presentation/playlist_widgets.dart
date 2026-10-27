@@ -132,7 +132,7 @@ class FavoritesArtwork extends StatelessWidget {
 }
 
 const favoritesPlaylistId = -1;
-const _playlistHeaderCollapsedContentHeight = 180.0;
+const _playlistHeaderCollapseHeight = 300.0;
 
 String playlistTrackCount(int count) =>
     count == 1 ? 'Playlist · 1 canción' : 'Playlist · $count canciones';
@@ -471,7 +471,7 @@ class _PlaylistDetailBody extends ConsumerWidget {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: MediaQuery.sizeOf(context).width < 600 ? 390 : 300,
+            expandedHeight: MediaQuery.sizeOf(context).width < 840 ? 440 : 380,
             leading: IconButton(
               key: const Key('playlist-detail-back-button'),
               tooltip: 'Volver',
@@ -510,56 +510,62 @@ class _PlaylistDetailBody extends ConsumerWidget {
                             ],
                           ),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 72, 20, 12),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (constraints.maxHeight <
-                            _playlistHeaderCollapsedContentHeight) {
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(72, 72, 20, 12),
-                            child: Align(
-                              alignment: Alignment.bottomLeft,
-                              child: Text(
-                                playlist.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
+                  child: LayoutBuilder(
+                    builder: (context, headerConstraints) {
+                      if (headerConstraints.maxHeight <
+                          _playlistHeaderCollapseHeight) {
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(72, 72, 20, 12),
+                          child: Align(
+                            alignment: Alignment.bottomLeft,
+                            child: Text(
+                              playlist.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleLarge,
                             ),
-                          );
-                        }
-                        final coverSize = (constraints.maxHeight - 160).clamp(
-                          80.0,
-                          200.0,
+                          ),
                         );
-                        if (constraints.maxWidth < 600 &&
-                            constraints.maxHeight >= 260) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Align(
-                                alignment: Alignment.center,
-                                child: artwork(coverSize),
-                              ),
-                              const SizedBox(height: 20),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [Expanded(child: details)],
-                              ),
-                            ],
-                          );
-                        }
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            artwork(coverSize),
-                            const SizedBox(width: 24),
-                            Expanded(child: details),
-                          ],
-                        );
-                      },
-                    ),
+                      }
+                      final mobile = headerConstraints.maxWidth < 840;
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 72, 20, 20),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final coverSize = mobile
+                                ? (constraints.maxHeight - 155).clamp(
+                                    140.0,
+                                    220.0,
+                                  )
+                                : (constraints.maxHeight - 48).clamp(
+                                    180.0,
+                                    250.0,
+                                  );
+                            if (mobile) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Align(
+                                    alignment: Alignment.center,
+                                    child: artwork(coverSize),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  details,
+                                ],
+                              );
+                            }
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                artwork(coverSize),
+                                const SizedBox(width: 24),
+                                Expanded(child: details),
+                              ],
+                            );
+                          },
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),

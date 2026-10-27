@@ -400,6 +400,11 @@ void main() {
           findsOneWidget,
           reason: 'la cabecera expandida debe mostrar el arte de la playlist',
         );
+        expect(
+          tester.getSize(find.byType(PlaylistCover)).shortestSide,
+          greaterThanOrEqualTo(140),
+          reason: 'la portada principal debe conservar jerarquía visual',
+        );
         for (final key in const [
           Key('playlist-play-button'),
           Key('playlist-shuffle-button'),
