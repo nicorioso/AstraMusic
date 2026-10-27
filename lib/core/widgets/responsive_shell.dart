@@ -18,7 +18,6 @@ import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/library/presentation/library_entities_screen.dart';
-import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/player_screen.dart';
 import 'package:astramusic/features/player/presentation/queue_screen.dart';
@@ -443,7 +442,7 @@ class _DestinationBody extends StatelessWidget {
   Widget build(BuildContext context) => switch (destination.type) {
     AppDestinationType.home => HomeDestination(desktop: desktop),
     AppDestinationType.search => SearchDestination(desktop: desktop),
-    AppDestinationType.library => const LibraryScreen(),
+    AppDestinationType.library => const PlaylistsDestination(),
     AppDestinationType.artists =>
       destination.name == null
           ? _mobileSecondary('Artistas', const ArtistsScreen(showTitle: false))

@@ -12,7 +12,6 @@ import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/application/artwork_backfill_service.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
-import 'package:astramusic/features/library/presentation/library_screen.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
@@ -191,7 +190,7 @@ void main() {
 
     await tester.tap(find.text('Biblioteca'));
     await tester.pump();
-    expect(find.byType(LibraryScreen), findsOneWidget);
+    expect(find.byKey(const Key('library-destination')), findsOneWidget);
   });
 
   testWidgets('las pantallas secundarias móviles muestran retroceso visible', (
@@ -212,7 +211,7 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('mobile-secondary-back-button')));
     await tester.pump();
-    expect(find.byType(LibraryScreen), findsOneWidget);
+    expect(find.byKey(const Key('library-destination')), findsOneWidget);
   });
 
   testWidgets('Escape vuelve desde una pantalla secundaria de escritorio', (
@@ -574,7 +573,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Biblioteca abre el listado principal y permite ir a Ajustes', (
+  testWidgets('Biblioteca conserva favoritos, creación y acceso a Ajustes', (
     tester,
   ) async {
     final fixture = _Fixture();
@@ -585,9 +584,10 @@ void main() {
     await tester.tap(find.text('Biblioteca'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(LibraryScreen), findsOneWidget);
-    expect(find.byKey(const Key('library-search-field')), findsOneWidget);
-    _selectDestination(tester, AppDestination.settings);
+    expect(find.text('Canciones que te gustan'), findsOneWidget);
+    expect(find.byKey(const Key('create-playlist-button')), findsOneWidget);
+    expect(find.byKey(const Key('library-settings-button')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('library-settings-button')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('settings-destination')), findsOneWidget);
   });
