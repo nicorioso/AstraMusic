@@ -132,7 +132,8 @@ class FavoritesArtwork extends StatelessWidget {
 }
 
 const favoritesPlaylistId = -1;
-const _playlistHeaderCollapseHeight = 300.0;
+const _mobilePlaylistHeaderCollapseHeight = 340.0;
+const _desktopPlaylistHeaderCollapseHeight = 270.0;
 
 String playlistTrackCount(int count) =>
     count == 1 ? 'Playlist · 1 canción' : 'Playlist · $count canciones';
@@ -471,7 +472,7 @@ class _PlaylistDetailBody extends ConsumerWidget {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: MediaQuery.sizeOf(context).width < 840 ? 440 : 380,
+            expandedHeight: MediaQuery.sizeOf(context).width < 840 ? 380 : 300,
             leading: IconButton(
               key: const Key('playlist-detail-back-button'),
               tooltip: 'Volver',
@@ -512,8 +513,11 @@ class _PlaylistDetailBody extends ConsumerWidget {
                   ),
                   child: LayoutBuilder(
                     builder: (context, headerConstraints) {
-                      if (headerConstraints.maxHeight <
-                          _playlistHeaderCollapseHeight) {
+                      final mobile = headerConstraints.maxWidth < 840;
+                      final collapseHeight = mobile
+                          ? _mobilePlaylistHeaderCollapseHeight
+                          : _desktopPlaylistHeaderCollapseHeight;
+                      if (headerConstraints.maxHeight < collapseHeight) {
                         return Padding(
                           padding: const EdgeInsets.fromLTRB(72, 72, 20, 12),
                           child: Align(
@@ -527,13 +531,17 @@ class _PlaylistDetailBody extends ConsumerWidget {
                           ),
                         );
                       }
-                      final mobile = headerConstraints.maxWidth < 840;
                       return Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 72, 20, 20),
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          mobile ? 48 : 36,
+                          20,
+                          12,
+                        ),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final coverSize = mobile
-                                ? (constraints.maxHeight - 155).clamp(
+                                ? (constraints.maxHeight - 152).clamp(
                                     140.0,
                                     220.0,
                                   )
