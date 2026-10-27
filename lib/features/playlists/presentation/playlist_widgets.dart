@@ -132,6 +132,7 @@ class FavoritesArtwork extends StatelessWidget {
 }
 
 const favoritesPlaylistId = -1;
+const _playlistHeaderCollapsedContentHeight = 180.0;
 
 String playlistTrackCount(int count) =>
     count == 1 ? 'Playlist · 1 canción' : 'Playlist · $count canciones';
@@ -513,7 +514,8 @@ class _PlaylistDetailBody extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(20, 72, 20, 12),
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        if (constraints.maxHeight < 300) {
+                        if (constraints.maxHeight <
+                            _playlistHeaderCollapsedContentHeight) {
                           return Padding(
                             padding: const EdgeInsets.fromLTRB(72, 72, 20, 12),
                             child: Align(
@@ -531,7 +533,8 @@ class _PlaylistDetailBody extends ConsumerWidget {
                           80.0,
                           200.0,
                         );
-                        if (constraints.maxWidth < 600) {
+                        if (constraints.maxWidth < 600 &&
+                            constraints.maxHeight >= 260) {
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [

@@ -395,6 +395,11 @@ void main() {
           viewport.height,
           greaterThanOrEqualTo((size.height - 56) * minimumViewportRatio),
         );
+        expect(
+          find.byType(PlaylistCover),
+          findsOneWidget,
+          reason: 'la cabecera expandida debe mostrar el arte de la playlist',
+        );
         for (final key in const [
           Key('playlist-play-button'),
           Key('playlist-shuffle-button'),
