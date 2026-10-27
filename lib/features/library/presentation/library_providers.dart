@@ -145,10 +145,23 @@ class LibraryTrackFilters extends Notifier<LibraryTrackFilterState> {
   void setSort(TrackSort sort) { state = state.copyWith(sort: sort); ref.read(libraryTrackLimitProvider.notifier).reset(); }
 }
 
-final allLibraryTracksProvider = StreamProvider<List<Track>>((ref) {
-  return ref.watch(trackRepositoryProvider).watchAll().map((items) {
-    PerformanceDiagnostics.instance.recordLibraryLoaded(items.length);
-    return items;
+const homeRecentTrackLimit = 100;
+
+final homeRecentTracksProvider = StreamProvider<List<Track>>((ref) {
+  final repository = ref.watch(trackRepositoryProvider);
+  if (repository case final FilteredTrackRepository filtered) {
+    return filtered.watchFilteredPage(
+      limit: homeRecentTrackLimit,
+      query: const TrackListQuery(sort: TrackSort.dateAdded),
+    );
+  }
+  return repository.watchAll().map((items) {
+    final recent = [...items]
+      ..sort((a, b) {
+        final byDate = b.dateAdded.compareTo(a.dateAdded);
+        return byDate != 0 ? byDate : (b.id ?? -1).compareTo(a.id ?? -1);
+      });
+    return List.unmodifiable(recent.take(homeRecentTrackLimit));
   });
 });
 

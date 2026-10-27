@@ -494,7 +494,7 @@ class HomeDestination extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tracks = ref.watch(allLibraryTracksProvider);
+    final tracks = ref.watch(homeRecentTracksProvider);
     final shortcuts = ref.watch(homePlaylistShortcutsProvider);
     final state = ref.watch(libraryControllerProvider);
     final controller = ref.read(libraryControllerProvider.notifier);
@@ -541,10 +541,7 @@ class HomeDestination extends ConsumerWidget {
                       size: 48,
                       onPressed: state.actionsDisabled
                           ? null
-                          : () => tracks.whenData((items) {
-                              final recent = _byNewest(items);
-                              controller.playAll(recent);
-                            }),
+                          : () => tracks.whenData(controller.playAll),
                       isPlaying: ref.watch(
                         playerControllerProvider.select(
                           (state) => state.isPlaying,
@@ -556,10 +553,10 @@ class HomeDestination extends ConsumerWidget {
                       tooltip: 'Aleatorio',
                       onPressed: state.actionsDisabled
                           ? null
-                          : () => tracks.whenData((items) {
-                              final recent = _byNewest(items);
-                              controller.playAll(recent, shuffle: true);
-                            }),
+                          : () => tracks.whenData(
+                              (items) =>
+                                  controller.playAll(items, shuffle: true),
+                            ),
                       icon: const Icon(Icons.shuffle),
                     ),
                   ],
@@ -568,13 +565,9 @@ class HomeDestination extends ConsumerWidget {
               Expanded(
                 child: tracks.when(
                   data: (items) {
-                    final recent = _byNewest(items);
-                    return recent.isEmpty
+                    return items.isEmpty
                         ? _EmptyTracksState(desktop: desktop)
-                        : _ResponsiveTrackList(
-                            tracks: recent,
-                            desktop: desktop,
-                          );
+                        : _ResponsiveTrackList(tracks: items, desktop: desktop);
                   },
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
@@ -590,12 +583,6 @@ class HomeDestination extends ConsumerWidget {
     );
   }
 }
-
-List<Track> _byNewest(List<Track> tracks) => [...tracks]
-  ..sort((a, b) {
-    final byDate = b.dateAdded.compareTo(a.dateAdded);
-    return byDate != 0 ? byDate : (b.id ?? -1).compareTo(a.id ?? -1);
-  });
 
 class _HomeShortcutGrid extends StatelessWidget {
   const _HomeShortcutGrid({required this.shortcuts, required this.desktop});
