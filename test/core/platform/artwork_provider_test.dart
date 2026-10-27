@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
@@ -65,6 +66,23 @@ void main() {
       expect(path.basename(selectFolderArtwork(directory)!.path), 'COVER.PNG');
     },
   );
+
+  test('la cuota elimina primero los archivos menos usados', () async {
+    final directory = await Directory.systemTemp.createTemp('artwork_quota_');
+    addTearDown(() => directory.delete(recursive: true));
+    final old = File(path.join(directory.path, 'old.jpg'))
+      ..writeAsBytesSync(List.filled(4, 1));
+    final recent = File(path.join(directory.path, 'recent.jpg'))
+      ..writeAsBytesSync(List.filled(4, 2));
+    await old.setLastModified(DateTime(2020));
+    await recent.setLastModified(DateTime(2025));
+
+    enforceArtworkCacheQuotaSync(directory, quotaBytes: 5);
+
+    expect(old.existsSync(), isFalse);
+    expect(recent.existsSync(), isTrue);
+    expect(recent.lengthSync(), 4);
+  });
 
   test('ignora una ruta de carátula inválida o eliminada', () async {
     final provider = CachedArtworkProvider();

@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:path/path.dart' as path;
+import 'package:image/image.dart' as image;
 
 class AudioTags {
   const AudioTags({
@@ -122,18 +125,22 @@ LocalAudioFileInfo readLocalAudioFileWithArtwork(
     String? artworkPath;
     if (metadata.pictures.isNotEmpty) {
       final picture = selectPrimaryArtwork(metadata.pictures);
-      final extension = picture.mimetype.toLowerCase().contains('png')
-          ? '.png'
-          : '.jpg';
-      final target = File(path.join(artworkDirectory.path, '$key$extension'));
-      if (!target.existsSync()) target.writeAsBytesSync(picture.bytes);
+      final target = File(path.join(artworkDirectory.path, '$key.jpg'));
+      if (!target.existsSync()) {
+        target.writeAsBytesSync(_thumbnailBytes(picture.bytes));
+        enforceArtworkCacheQuotaSync(artworkDirectory, preserve: target);
+      }
       artworkPath = target.path;
     } else {
       final folderImage = selectFolderArtwork(file.parent);
       if (folderImage != null) {
-        final extension = path.extension(folderImage.path).toLowerCase();
-        final target = File(path.join(artworkDirectory.path, '$key$extension'));
-        if (!target.existsSync()) folderImage.copySync(target.path);
+        final target = File(path.join(artworkDirectory.path, '$key.jpg'));
+        if (!target.existsSync()) {
+          target.writeAsBytesSync(
+            _thumbnailBytes(folderImage.readAsBytesSync()),
+          );
+          enforceArtworkCacheQuotaSync(artworkDirectory, preserve: target);
+        }
         artworkPath = target.path;
       }
     }
@@ -153,6 +160,23 @@ LocalAudioFileInfo readLocalAudioFileWithArtwork(
       hadTagError: true,
     );
   }
+}
+
+Uint8List _thumbnailBytes(List<int> bytes) {
+  final decoded = image.decodeImage(Uint8List.fromList(bytes));
+  if (decoded == null) return Uint8List.fromList(bytes);
+  final longestSide = decoded.width > decoded.height
+      ? decoded.width
+      : decoded.height;
+  final resized = longestSide <= 640
+      ? decoded
+      : image.copyResize(
+          decoded,
+          width: decoded.width >= decoded.height ? 640 : null,
+          height: decoded.height > decoded.width ? 640 : null,
+          interpolation: image.Interpolation.average,
+        );
+  return Uint8List.fromList(image.encodeJpg(resized, quality: 82));
 }
 
 Picture selectPrimaryArtwork(List<Picture> pictures) {

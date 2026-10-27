@@ -19,6 +19,7 @@ final class ArtworkBackfillService implements ArtworkBackfill {
     required this.cacheDirectory,
     this.extractor = readLocalAudioFileWithArtwork,
     this.batchSize = 4,
+    this.pageSize = 100,
     this.useIsolate = true,
   });
 
@@ -26,6 +27,7 @@ final class ArtworkBackfillService implements ArtworkBackfill {
   final Future<String> Function() cacheDirectory;
   final ArtworkExtractor extractor;
   final int batchSize;
+  final int pageSize;
   final bool useIsolate;
   bool _started = false;
 
@@ -34,35 +36,45 @@ final class ArtworkBackfillService implements ArtworkBackfill {
     if (_started) return;
     _started = true;
     try {
-      final tracks = await _repository.watchAll().first;
-      final pending = tracks
-          .where(
-            (track) =>
-                track.artworkPath == null &&
-                localFilePathFromLocation(track.uri) != null,
-          )
-          .toList(growable: false);
-      if (pending.isEmpty) return;
       final cache = await cacheDirectory();
-      for (var start = 0; start < pending.length; start += batchSize) {
-        final end = (start + batchSize).clamp(0, pending.length);
-        final updates = <Track>[];
-        for (final track in pending.sublist(start, end)) {
-          final filePath = localFilePathFromLocation(track.uri)!;
-          try {
-            final info = useIsolate
-                ? await Isolate.run(() => extractor(filePath, cache))
-                : extractor(filePath, cache);
-            final artworkPath = info.artworkPath;
-            if (artworkPath != null) {
-              updates.add(track.withArtworkPath(artworkPath));
+      var offset = 0;
+      while (true) {
+        final page = _repository is PaginatedTrackRepository
+            ? await _repository.watchPage(limit: pageSize, offset: offset).first
+            : await _repository.watchAll().first;
+        if (page.isEmpty) break;
+        final pending = page
+            .where(
+              (track) =>
+                  track.artworkPath == null &&
+                  localFilePathFromLocation(track.uri) != null,
+            )
+            .toList(growable: false);
+        for (var start = 0; start < pending.length; start += batchSize) {
+          final end = (start + batchSize).clamp(0, pending.length);
+          final updates = <Track>[];
+          for (final track in pending.sublist(start, end)) {
+            final filePath = localFilePathFromLocation(track.uri)!;
+            try {
+              final info = useIsolate
+                  ? await Isolate.run(() => extractor(filePath, cache))
+                  : extractor(filePath, cache);
+              final artworkPath = info.artworkPath;
+              if (artworkPath != null) {
+                updates.add(track.withArtworkPath(artworkPath));
+              }
+            } on Object {
+              // Un archivo ausente o ilegible no detiene el relleno del lote.
             }
-          } on Object {
-            // Un archivo ausente o ilegible no detiene el relleno del lote.
           }
+          if (updates.isNotEmpty) await _repository.upsertAll(updates);
+          await Future<void>.delayed(Duration.zero);
         }
-        if (updates.isNotEmpty) await _repository.upsertAll(updates);
-        await Future<void>.delayed(Duration.zero);
+        if (_repository is! PaginatedTrackRepository ||
+            page.length < pageSize) {
+          break;
+        }
+        offset += page.length;
       }
     } on Object {
       // El relleno es oportunista y nunca debe impedir abrir la biblioteca.

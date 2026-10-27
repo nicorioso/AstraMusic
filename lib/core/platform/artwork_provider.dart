@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:io';
 
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -165,6 +166,7 @@ final class CachedArtworkProvider implements ArtworkProvider {
                   }));
           if (bytes != null && bytes.isNotEmpty) {
             await file.writeAsBytes(bytes, flush: true);
+            await enforceArtworkCacheQuota(directory, preserve: file);
             byteSize = bytes.lengthInBytes;
             result = file.path;
           }

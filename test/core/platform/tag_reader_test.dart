@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:astramusic/core/platform/tag_reader.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as image;
 
 void main() {
   test('normaliza campos y une artistas sin duplicados', () {
@@ -67,13 +68,19 @@ void main() {
     final directory = await Directory.systemTemp.createTemp('tag_artwork_');
     addTearDown(() => directory.delete(recursive: true));
     final audio = File('${directory.path}/sample.mp3');
-    final image = Uint8List.fromList([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
-    await audio.writeAsBytes(_mp3WithPicture(image));
+    final sourceImage = image.encodePng(image.Image(width: 1200, height: 900));
+    await audio.writeAsBytes(_mp3WithPicture(Uint8List.fromList(sourceImage)));
 
     final result = readLocalAudioFileWithArtwork(audio.path, directory.path);
 
     expect(result.artworkPath, isNotNull);
-    expect(await File(result.artworkPath!).readAsBytes(), image);
+    final saved = image.decodeImage(
+      await File(result.artworkPath!).readAsBytes(),
+    );
+    expect(saved, isNotNull);
+    expect(saved!.width, 640);
+    expect(saved.height, 480);
+    expect(result.artworkPath, endsWith('.jpg'));
   });
 
   test('prefiere la portada frontal entre varias imágenes incrustadas', () {

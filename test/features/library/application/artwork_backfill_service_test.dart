@@ -24,6 +24,7 @@ void main() {
       repository,
       cacheDirectory: () async => '/cache',
       batchSize: 2,
+      pageSize: 2,
       useIsolate: false,
       extractor: (filePath, cacheDirectory) {
         extractions++;
@@ -42,6 +43,8 @@ void main() {
 
     expect(extractions, 5);
     expect(repository.batchSizes, [2, 2, 1]);
+    expect(repository.pageOffsets, [0, 2, 4, 6]);
+    expect(repository.watchAllCalls, 0);
     expect(
       repository.tracks
           .where((track) => track.uri.startsWith('/'))
@@ -52,14 +55,29 @@ void main() {
   });
 }
 
-final class _Repository implements TrackRepository {
+final class _Repository implements PaginatedTrackRepository {
   _Repository(this.tracks);
 
   final List<Track> tracks;
   final List<int> batchSizes = [];
+  final List<int> pageOffsets = [];
+  var watchAllCalls = 0;
 
   @override
-  Stream<List<Track>> watchAll() => Stream.value(List.of(tracks));
+  Stream<List<Track>> watchAll() {
+    watchAllCalls++;
+    return Stream.value(List.of(tracks));
+  }
+
+  @override
+  Stream<List<Track>> watchPage({
+    required int limit,
+    int offset = 0,
+    String query = '',
+  }) {
+    pageOffsets.add(offset);
+    return Stream.value(tracks.skip(offset).take(limit).toList());
+  }
 
   @override
   Future<void> upsertAll(List<Track> values) async {
