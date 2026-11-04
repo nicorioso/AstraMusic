@@ -281,13 +281,13 @@ final class LibraryController extends Notifier<LibraryViewState> {
     }
   }
 
-  Future<void> playVisibleQueue(
+  Future<bool> playVisibleQueue(
     List<Track> tracks, {
     required int startIndex,
     bool shuffle = false,
   }) async {
-    if (state.actionsDisabled) return;
-    await ref
+    if (state.actionsDisabled) return false;
+    return ref
         .read(playerControllerProvider.notifier)
         .playQueue(tracks, startIndex: startIndex, shuffle: shuffle);
   }
@@ -303,8 +303,12 @@ final class LibraryController extends Notifier<LibraryViewState> {
     int startIndex = 0,
     bool shuffle = false,
   }) async {
-    await playVisibleQueue(tracks, startIndex: startIndex, shuffle: shuffle);
-    await ref.read(playlistRepositoryProvider).markPlayed(playlistId);
+    final started = await playVisibleQueue(
+      tracks,
+      startIndex: startIndex,
+      shuffle: shuffle,
+    );
+    if (started) await ref.read(playlistRepositoryProvider).markPlayed(playlistId);
   }
 
   Future<void> playNext(Track track) async {

@@ -55,5 +55,10 @@ final class DriftSmartPlaylistRepository implements SmartPlaylistRepository {
         .insert(
           PlayHistoryCompanion.insert(trackId: trackId, playedAt: _now()),
         );
+    await _database.customUpdate(
+      'DELETE FROM play_history WHERE id <= '
+      '(SELECT COALESCE(MAX(id), 0) - 10000 FROM play_history)',
+      updates: {_database.playHistory},
+    );
   });
 }

@@ -107,6 +107,7 @@ class PlayerController extends Notifier<PlayerViewState> {
   StreamSubscription<Duration>? _positionSubscription;
   bool _isListening = false;
   int? _recordedTrackId;
+  Duration? _lastPosition;
   bool _replacingQueue = false;
   bool _recordCheckScheduled = false;
 
@@ -153,7 +154,7 @@ class PlayerController extends Notifier<PlayerViewState> {
     }
   }
 
-  Future<void> playQueue(
+  Future<bool> playQueue(
     List<Track> tracks, {
     int startIndex = 0,
     bool shuffle = false,
@@ -166,7 +167,7 @@ class PlayerController extends Notifier<PlayerViewState> {
           'No hay canciones disponibles para reproducir.',
         ),
       );
-      return;
+      return false;
     }
 
     var availableStartIndex = 0;
@@ -198,6 +199,7 @@ class PlayerController extends Notifier<PlayerViewState> {
       _replacingQueue = false;
       if (started) _recordCurrentTrackNow();
     }
+    return started;
   }
 
   Future<void> togglePlayback() => _run(() async {
@@ -377,7 +379,18 @@ class PlayerController extends Notifier<PlayerViewState> {
     }
     _positionSubscription = service.positionStream.listen(
       (position) {
-        if (ref.mounted) state = state.copyWith(position: position);
+        if (!ref.mounted) return;
+        final previous = _lastPosition;
+        _lastPosition = position;
+        state = state.copyWith(position: position);
+        if (previous != null &&
+            previous > const Duration(seconds: 5) &&
+            position < const Duration(seconds: 2) &&
+            state.isPlaying &&
+            !_replacingQueue) {
+          _recordedTrackId = null;
+          _recordCurrentTrack();
+        }
       },
       onError: (Object error, StackTrace stackTrace) {
         _setNonFatalError(error);
