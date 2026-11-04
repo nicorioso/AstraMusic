@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 final class DriftTrackRepository
     implements
         PaginatedTrackRepository,
+        SyncTrackRepository,
         FilteredTrackRepository,
         LibraryGroupingRepository {
   DriftTrackRepository(this._database, {DateTime Function()? now})
@@ -19,6 +20,35 @@ final class DriftTrackRepository
 
   final AppDatabase _database;
   final DateTime Function() _now;
+
+  @override
+  Future<List<Track>> findByUris(Set<String> uris) async {
+    if (uris.isEmpty) return [];
+    final rows = await (_database.select(
+      _database.tracks,
+    )..where((row) => row.uri.isIn(uris))).get();
+    return rows.map((row) => row.toDomain()).toList();
+  }
+
+  @override
+  Future<List<Track>> readPageAfterId(int id, int limit) async {
+    final rows =
+        await (_database.select(_database.tracks)
+              ..where((row) => row.id.isBiggerThanValue(id))
+              ..orderBy([(row) => OrderingTerm.asc(row.id)])
+              ..limit(limit))
+            .get();
+    return rows.map((row) => row.toDomain()).toList();
+  }
+
+  @override
+  Future<Set<String>> excludedAmong(Set<String> uris) async {
+    if (uris.isEmpty) return {};
+    final rows = await (_database.select(
+      _database.excludedUris,
+    )..where((row) => row.uri.isIn(uris))).get();
+    return rows.map((row) => row.uri).toSet();
+  }
 
   @override
   Stream<List<Track>> watchAll() {

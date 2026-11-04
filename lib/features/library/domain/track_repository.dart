@@ -27,6 +27,12 @@ abstract interface class PaginatedTrackRepository implements TrackRepository {
   });
 }
 
+abstract interface class SyncTrackRepository implements TrackRepository {
+  Future<List<Track>> findByUris(Set<String> uris);
+  Future<List<Track>> readPageAfterId(int id, int limit);
+  Future<Set<String>> excludedAmong(Set<String> uris);
+}
+
 abstract interface class FilteredTrackRepository implements TrackRepository {
   Stream<List<Track>> watchFilteredPage({
     required int limit,

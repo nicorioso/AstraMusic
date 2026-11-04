@@ -66,21 +66,21 @@ final class LibrarySyncService {
   Future<LibrarySyncSession> startIncremental({
     required LibraryScanScope scope,
   }) async {
-    final existing = await _tracks.watchAll().first;
-    final excluded = await _tracks.excludedUris();
-    return LibrarySyncSession._(_tracks, scope, existing, excluded);
+    return LibrarySyncSession._(_tracks, scope);
   }
 
   Future<void> deleteFolderTracks(String rootPath) async {
-    final tracks = await _tracks.watchAll().first;
-    final uris = tracks
-        .where(
-          (track) =>
-              _belongsToScope(track.uri, DesktopFolderScanScope(rootPath)),
-        )
-        .map((track) => track.uri)
-        .toSet();
-    await _tracks.deleteByUris(uris);
+    var lastId = 0;
+    while (true) {
+      final page = await _readPageAfterId(_tracks, lastId);
+      if (page.isEmpty) break;
+      lastId = page.last.id!;
+      await _tracks.deleteByUris({
+        for (final track in page)
+          if (_belongsToScope(track.uri, DesktopFolderScanScope(rootPath)))
+            track.uri,
+      });
+    }
   }
 
   static bool _belongsToScope(String uriValue, LibraryScanScope scope) {
@@ -128,28 +128,32 @@ final class LibrarySyncService {
 }
 
 final class LibrarySyncSession {
-  LibrarySyncSession._(
-    this._tracks,
-    this._scope,
-    this._existing,
-    this._excluded,
-  ) : _existingByUri = {for (final track in _existing) track.uri: track};
+  LibrarySyncSession._(this._tracks, this._scope);
 
   final TrackRepository _tracks;
   final LibraryScanScope _scope;
-  final List<Track> _existing;
-  final Map<String, Track> _existingByUri;
-  final Set<String> _excluded;
   final Set<String> _scannedUris = {};
   var _summary = const LibrarySyncSummary();
   var _finished = false;
 
   Future<void> addBatch(List<ScannedTrack> scannedTracks) async {
     if (_finished) throw StateError('La sincronización ya terminó.');
-    final uniqueScanned = {
-      for (final scanned in scannedTracks)
-        if (!_excluded.contains(scanned.uri)) scanned.uri: scanned,
-    };
+    for (
+      var start = 0;
+      start < scannedTracks.length;
+      start += librarySyncBatchSize
+    ) {
+      final end = (start + librarySyncBatchSize).clamp(0, scannedTracks.length);
+      await _addPage(scannedTracks.sublist(start, end));
+    }
+  }
+
+  Future<void> _addPage(List<ScannedTrack> page) async {
+    final uniqueScanned = {for (final scanned in page) scanned.uri: scanned};
+    final uris = uniqueScanned.keys.toSet();
+    final excluded = await _excludedAmong(_tracks, uris);
+    final existing = await _findByUris(_tracks, uris);
+    final existingByUri = {for (final track in existing) track.uri: track};
     final now = DateTime.now();
     var newCount = 0;
     var updatedCount = 0;
@@ -157,7 +161,8 @@ final class LibrarySyncSession {
 
     final upserts = <Track>[];
     for (final scanned in uniqueScanned.values) {
-      final old = _existingByUri[scanned.uri];
+      if (excluded.contains(scanned.uri)) continue;
+      final old = existingByUri[scanned.uri];
       final preserveMetadata = scanned.unchanged && old != null;
       final track = Track(
         id: old?.id,
@@ -186,7 +191,6 @@ final class LibrarySyncSession {
       );
       upserts.add(track);
       _scannedUris.add(scanned.uri);
-      _existingByUri[scanned.uri] = track;
 
       if (old == null) {
         newCount++;
@@ -196,10 +200,7 @@ final class LibrarySyncSession {
       if (scanned.unchanged) unchangedCount++;
     }
 
-    for (var start = 0; start < upserts.length; start += librarySyncBatchSize) {
-      final end = (start + librarySyncBatchSize).clamp(0, upserts.length);
-      await _tracks.upsertAll(upserts.sublist(start, end));
-    }
+    await _tracks.upsertAll(upserts);
 
     _summary += LibrarySyncSummary(
       newCount: newCount,
@@ -211,20 +212,26 @@ final class LibrarySyncSession {
   Future<LibrarySyncSummary> finish({int scanErrorCount = 0}) async {
     if (_finished) throw StateError('La sincronización ya terminó.');
     _finished = true;
-    final unavailableUris = _existing
-        .where(
-          (track) =>
-              track.isAvailable &&
-              LibrarySyncService._belongsToScope(track.uri, _scope),
-        )
-        .map((track) => track.uri)
-        .where((uri) => !_scannedUris.contains(uri))
-        .toSet();
-    await _tracks.markUnavailable(unavailableUris);
+    var unavailableCount = 0;
+    var lastId = 0;
+    while (true) {
+      final page = await _readPageAfterId(_tracks, lastId);
+      if (page.isEmpty) break;
+      lastId = page.last.id!;
+      final unavailableUris = {
+        for (final track in page)
+          if (track.isAvailable &&
+              LibrarySyncService._belongsToScope(track.uri, _scope) &&
+              !_scannedUris.contains(track.uri))
+            track.uri,
+      };
+      await _tracks.markUnavailable(unavailableUris);
+      unavailableCount += unavailableUris.length;
+    }
 
     return _summary +
         LibrarySyncSummary(
-          unavailableCount: unavailableUris.length,
+          unavailableCount: unavailableCount,
           errorCount: scanErrorCount,
         );
   }
@@ -242,4 +249,32 @@ final class LibrarySyncSession {
       old.isAvailable == current.isAvailable &&
       old.isFavorite == current.isFavorite &&
       old.artworkPath == current.artworkPath;
+}
+
+Future<List<Track>> _findByUris(
+  TrackRepository tracks,
+  Set<String> uris,
+) async {
+  if (tracks is SyncTrackRepository) return tracks.findByUris(uris);
+  return (await tracks.watchAll().first)
+      .where((track) => uris.contains(track.uri))
+      .toList();
+}
+
+Future<List<Track>> _readPageAfterId(TrackRepository tracks, int id) async {
+  if (tracks is SyncTrackRepository) {
+    return tracks.readPageAfterId(id, librarySyncBatchSize);
+  }
+  return (await tracks.watchAll().first)
+      .where((track) => (track.id ?? 0) > id)
+      .take(librarySyncBatchSize)
+      .toList();
+}
+
+Future<Set<String>> _excludedAmong(
+  TrackRepository tracks,
+  Set<String> uris,
+) async {
+  if (tracks is SyncTrackRepository) return tracks.excludedAmong(uris);
+  return (await tracks.excludedUris()).intersection(uris);
 }

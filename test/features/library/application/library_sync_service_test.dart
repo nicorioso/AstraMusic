@@ -45,6 +45,27 @@ void main() {
     expect(await repository.count(), 1);
   });
 
+  test('procesa más de un lote y conserva cambios reactivos de Drift', () async {
+    final scope = DesktopFolderScanScope(root.path);
+    final scanned = [
+      for (var index = 0; index < librarySyncBatchSize + 25; index++)
+        _scanned(path.join(root.path, '$index.mp3')),
+    ];
+    final counts = <int>[];
+    final subscription = repository.watchAll().listen((tracks) {
+      counts.add(tracks.length);
+    });
+
+    final first = await service.synchronize(scannedTracks: scanned, scope: scope);
+    final second = await service.synchronize(scannedTracks: scanned, scope: scope);
+
+    expect(first.newCount, scanned.length);
+    expect(second.newCount, 0);
+    expect(await repository.count(), scanned.length);
+    expect(counts, contains(scanned.length));
+    await subscription.cancel();
+  });
+
   test('sincroniza cada lote antes de finalizar el escaneo', () async {
     final firstUri = path.join(root.path, 'primera.mp3');
     final missingUri = path.join(root.path, 'ausente.mp3');

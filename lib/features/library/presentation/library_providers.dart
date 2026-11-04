@@ -40,8 +40,8 @@ final smartPlaylistRepositoryProvider = Provider<SmartPlaylistRepository>(
   (ref) => DriftSmartPlaylistRepository(ref.watch(appDatabaseProvider)),
 );
 
-final smartPlaylistTracksProvider =
-    StreamProvider.autoDispose.family<List<Track>, SmartPlaylist>(
+final smartPlaylistTracksProvider = StreamProvider.autoDispose
+    .family<List<Track>, SmartPlaylist>(
       (ref, playlist) =>
           ref.watch(smartPlaylistRepositoryProvider).watch(playlist),
     );
