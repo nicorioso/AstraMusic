@@ -5,7 +5,7 @@ import 'package:file_picker/file_picker.dart';
 abstract interface class PortableFilePicker {
   Future<String?> pickFile(List<String> extensions);
   Future<String?> pickFolder();
-  Future<void> save(String name, Uint8List bytes, String mimeType);
+  Future<bool> save(String name, Uint8List bytes, String mimeType);
 }
 
 final class SystemPortableFilePicker implements PortableFilePicker {
@@ -21,7 +21,8 @@ final class SystemPortableFilePicker implements PortableFilePicker {
   Future<String?> pickFolder() => FilePicker.getDirectoryPath();
 
   @override
-  Future<void> save(String name, Uint8List bytes, String mimeType) async {
-    await FilePicker.saveFile(fileName: name, bytes: bytes, mimeType: mimeType);
+  Future<bool> save(String name, Uint8List bytes, String mimeType) async {
+    final saved = await FilePicker.saveFile(fileName: name, bytes: bytes, mimeType: mimeType);
+    return saved != null;
   }
 }

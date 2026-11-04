@@ -80,8 +80,7 @@ class _PortableLibrarySectionState extends ConsumerState<PortableLibrarySection>
     if (playlist == null || !mounted) return;
     final selected = playlists.firstWhere((item) => item.id == playlist);
     await run((actions) async {
-      await actions.exportPlaylist(selected.id, selected.name);
-      return 'Playlist exportada.';
+      return await actions.exportPlaylist(selected.id, selected.name) ? 'Playlist exportada.' : null;
     });
   }
 
@@ -121,7 +120,7 @@ class _PortableLibrarySectionState extends ConsumerState<PortableLibrarySection>
       ),
       ListTile(key: const Key('settings-export-m3u'), leading: const Icon(Icons.upload_file_outlined), title: const Text('Exportar playlist M3U8'), enabled: !busy, onTap: exportPlaylist),
       ListTile(key: const Key('settings-import-m3u'), leading: const Icon(Icons.playlist_add_outlined), title: const Text('Importar playlist M3U'), enabled: !busy, onTap: importPlaylist),
-      ListTile(key: const Key('settings-create-backup'), leading: const Icon(Icons.backup_outlined), title: const Text('Crear copia de seguridad'), enabled: !busy, onTap: () => run((actions) async { await actions.createBackup(); return 'Copia de seguridad creada.'; })),
+      ListTile(key: const Key('settings-create-backup'), leading: const Icon(Icons.backup_outlined), title: const Text('Crear copia de seguridad'), enabled: !busy, onTap: () => run((actions) async { return await actions.createBackup() ? 'Copia de seguridad creada.' : null; })),
       ListTile(key: const Key('settings-restore-backup'), leading: const Icon(Icons.restore_outlined), title: const Text('Restaurar copia de seguridad'), enabled: !busy, onTap: restore),
       ListTile(key: const Key('settings-repair-tracks'), leading: const Icon(Icons.folder_open_outlined), title: const Text('Reparar rutas de canciones'), enabled: !busy, onTap: () => run((actions) async {
         final result = await actions.repair();

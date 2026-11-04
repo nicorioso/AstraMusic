@@ -42,8 +42,7 @@ final class PortableLibraryActions {
     final picker = ref.read(portableFilePickerProvider);
     final tracks = await ref.read(playlistRepositoryProvider).watchTracks(id).first;
     final content = M3uService.encode(tracks);
-    await picker.save('$name.m3u8', utf8.encode(content), 'audio/x-mpegurl');
-    return true;
+    return picker.save('$name.m3u8', utf8.encode(content), 'audio/x-mpegurl');
   }
 
   Future<({int added, int missing})?> importPlaylist(String name) async {
@@ -58,8 +57,7 @@ final class PortableLibraryActions {
     final temp = File('${(await getTemporaryDirectory()).path}/astramusic-backup-${DateTime.now().microsecondsSinceEpoch}.gz');
     try {
       await ref.read(backupServiceProvider).export(temp);
-      await ref.read(portableFilePickerProvider).save('astramusic-backup.gz', await temp.readAsBytes(), 'application/gzip');
-      return true;
+      return await ref.read(portableFilePickerProvider).save('astramusic-backup.gz', await temp.readAsBytes(), 'application/gzip');
     } finally {
       if (await temp.exists()) await temp.delete();
     }
