@@ -120,16 +120,18 @@ lib/
 
 ### Ensamblaje y arranque
 
-`main.dart` inicializa bindings, diagnósticos, backend de escritorio,
-`AudioService`, sesión de audio y Drift. `StartupGate` ejecuta la inicialización
-después del primer frame, aplica un timeout y ofrece reintento en caso de error.
-Después arranca, sin bloquear la UI, la restauración de reproducción y la
-verificación de disponibilidad de archivos. `ProviderScope` inyecta las
-instancias compartidas.
+`main.dart` prepara bindings y diagnósticos y monta `StartupGate` antes de
+abrir archivos del usuario. Tras el primer frame, el gate inicializa el backend
+de escritorio, `AudioService`, sesión de audio y Drift; aplica un timeout de 15 s
+y ofrece reintento. La restauración de cola y la verificación de disponibilidad
+arrancan después en segundo plano con manejo de errores. `ProviderScope`
+inyecta la base, el servicio de audio y el proveedor de carátulas compartidos;
+`StartupResources.dispose` cierra coordinador, servicio y base en ese orden.
 
 ### Flujo de datos
 
-- Los repositorios Drift exponen `Stream` reactivos.
+- Los repositorios Drift exponen `Stream` reactivos; Riverpod administra sus
+  suscripciones mientras los widgets observan los providers.
 - La biblioteca principal observa ventanas de 100 canciones y amplía la
   consulta al acercarse al final; búsquedas y cambios de datos conservan la
   reactividad sin cargar el catálogo completo al entrar a la pantalla.
@@ -141,23 +143,69 @@ instancias compartidas.
 - Los comandos de audio que alteran estado se serializan; la posición se limita
   a una actualización cada 250 ms y se escucha solo con la app en primer plano.
 
+### Modelos y estado global
+
+- `Track` es la entidad de canción que usan biblioteca, cola y UI; contiene
+  URI, etiquetas, duración, fechas, disponibilidad, favorito y carátula. El
+  contador vive en la tabla `tracks` y se consulta para ordenar las listas
+  inteligentes; no forma parte del modelo `Track` actual.
+- `Playlist` y `LibraryFolder` representan listas manuales y carpetas. Los
+  grupos `ArtistGroup`, `AlbumGroup`, `GenreGroup` y `FolderGroup` proyectan
+  agrupaciones para Biblioteca. `SmartPlaylist` es un enum de consultas
+  virtuales, no una entidad persistida.
+- `PlayerViewState` publica estado, posición, duración, ítem actual, cola,
+  índice, aleatorio, repetición, volumen y mensaje de error. `LibraryViewState`
+  concentra escaneo y acciones de biblioteca. `AppDestination` y
+  `AppNavigation` conservan destino y pila simple.
+- `appDatabaseProvider` se sobrescribe con la instancia creada en el arranque;
+  los providers de repositorio reciben esa misma base. `libraryTracksProvider`
+  usa filtros, búsqueda y límite de ventana; `smartPlaylistTracksProvider`
+  recibe un `SmartPlaylist`; `playlistsProvider`, `favoriteTracksProvider` y
+  los providers de grupos exponen otras proyecciones reactivas.
+
 ### Persistencia local
 
-`AppDatabase` usa Drift/SQLite con esquema versión 10:
+`AppDatabase` usa Drift/SQLite con esquema versión **13** (`schema_versions/13.json`):
 
 | Tabla | Contenido |
 |---|---|
-| `tracks` | URI, metadatos, claves de búsqueda/orden, disponibilidad, favorito y carátula |
+| `tracks` | URI, metadatos, claves de búsqueda/orden, disponibilidad, favorito, carátula y `play_count` (entero, 0 por defecto) |
 | `playlists` | Nombre, creación, actualización y última reproducción |
 | `playlist_tracks` | Relación ordenada playlist–canción, sin duplicados |
+| `play_history` | Un evento por inicio de pista: `track_id`, `played_at` e ID de evento; FK con borrado en cascada |
 | `library_folders` | Carpetas de escritorio y última fecha de escaneo |
 | `playback_state` | Índice, posición, aleatorio, repetición y actualización |
 | `queue_items` | Cola persistida y posición original para aleatorio |
 | `excluded_uris` | Canciones borradas de la app que el escaneo no debe revivir |
 
-Las migraciones incluyen backfills de búsqueda y favoritos, índices, claves
-foráneas y limpieza de duplicados. El estado de reproducción restaura cola,
-índice, posición, repetición y orden aleatorio.
+Las migraciones incluyen backfills de búsqueda, favoritos y fecha de adición de
+playlists, índices y limpieza de duplicados. La v13 agrega `play_count` con
+backfill a cero y crea `play_history`; índices cubren contador, fecha e ID de
+pista. `recordPlay` actualiza contador e inserta historial en una transacción
+asíncrona; no registra pistas ausentes de la biblioteca. Las FK se habilitan
+antes de abrir la base, por lo que borrar una pista elimina su historial.
+El estado de reproducción restaura cola, índice, posición, repetición y orden
+aleatorio.
+
+### Playlists inteligentes y estadísticas
+
+`SmartPlaylistRepository` define las cuatro consultas y `recordPlay`;
+`DriftSmartPlaylistRepository` implementa ambas operaciones. El
+`smartPlaylistTracksProvider` parametrizado entrega `Stream<List<Track>>` a
+Inicio. Las consultas limitan a 100 pistas disponibles: `Recientes` toma la
+última fecha por pista y desempata con el ID del último evento;
+`Más escuchadas` ordena por `play_count` descendente; `Nunca reproducidas`
+filtra contador cero; `Añadidas recientemente` ordena por `date_added`
+descendente. La pestaña inicial de Inicio usa `homeRecentTracksProvider`, que
+aplica el mismo orden de adición y tiene fallback para repositorios de prueba.
+No son filas de la tabla `playlists` ni se editan como listas manuales.
+
+`PlayerController` escucha estado, cola e índice del servicio y registra el
+inicio cuando hay reproducción activa y un ID de biblioteca válido. Evita
+recontar pausas, reanudaciones y reordenaciones, y suprime emisiones
+intermedias al reemplazar la cola. El guardado no bloquea la acción de audio;
+si falla, muestra un error no fatal. `play_history` conserva todos los eventos:
+no hay política de retención implementada.
 
 ### Navegación
 
@@ -216,6 +264,24 @@ pantallas permanecen dentro del shell; el reproductor completo es una ruta
 - Cola editable: añadir al final, reproducir a continuación, saltar, eliminar,
   vaciar y reordenar con arrastre.
 
+### Trayecto de un comando de audio
+
+`PlayerController` recibe la acción de la vista y llama a `AudioPlayerService`.
+La implementación `AudioHandlerPlayerService` adapta ese contrato a
+`AstraAudioHandler`, que serializa órdenes, gestiona `just_audio`, publica
+`queue`, `mediaItem` y `playbackState` en `audio_service` y traduce eventos de
+sesión con `InterruptionPolicy`. `ManualQueueOrder` conserva el orden original
+al activar aleatorio. `LatestSeekCoordinator` coalesce seeks pendientes.
+`PlaybackPersistenceCoordinator` escucha el servicio y guarda cola/posición con
+debounce y escritura serializada mediante `DriftPlaybackStateRepository`;
+restaura en pausa tras el primer frame. El controller mantiene suscripciones
+hasta `ref.onDispose`; el coordinador cancela timers y streams en `dispose`.
+El provider parametrizado de listas inteligentes usa `autoDispose` para cancelar
+su consulta al dejar de observar una selección; otros providers globales
+permanecen vivos según el ciclo de vida del `ProviderScope`. El escáner de
+Android cierra su `StreamController` al terminar, cancelar o fallar; el de
+escritorio detiene su isolate.
+
 ### Playlists
 
 - Crear, renombrar y eliminar playlists sin borrar archivos de audio.
@@ -223,8 +289,27 @@ pantallas permanecen dentro del shell; el reproductor completo es una ruta
 - Reproducir en orden o aleatorio; el inicio registra `lastPlayedAt`.
 - Portada tipo mosaico 2×2 con hasta cuatro carátulas distintas y fallback
   visual cuando no existen.
-- Inicio presenta hasta ocho accesos: playlists reproducidas recientemente,
-  luego Favoritos y finalmente las más nuevas, sin duplicados.
+- Inicio presenta hasta ocho accesos a playlists manuales: reproducidas
+  recientemente, luego Favoritos y finalmente las más nuevas, sin duplicados.
+- Debajo, cuatro selecciones de canciones inteligentes reutilizan la lista
+  responsive y sus acciones de reproducción. Una selección sin resultados
+  muestra su propio estado vacío, sin declarar vacía toda la biblioteca.
+
+### Límites observados en la auditoría
+
+- `LibrarySyncService.startIncremental` carga el catálogo completo mediante
+  `watchAll().first` y mantiene mapas de URI y conjuntos de pistas escaneadas
+  durante el escaneo. El I/O del escáner de escritorio corre en un isolate y
+  la escritura se agrupa; aun así, el uso de memoria del proceso crece con el
+  tamaño total de la biblioteca. Una sincronización por páginas/consultas
+  puntuales requeriría rediseñar el contrato del repositorio.
+- El historial no tiene poda ni paginación administrativa. Su tabla crece con
+  cada inicio, aunque las listas visibles solo consultan hasta 100 pistas.
+  La consulta de Recientes calcula el último evento por pista; el costo de
+  refresco puede crecer con el tamaño del catálogo y del historial.
+- El contador representa inicios detectados, no minutos escuchados ni
+  reproducciones completas. Una repetición automática de la misma pista sin
+  cambio de índice/estado puede no generar un nuevo evento de historial.
 
 ### Carátulas y caché
 
