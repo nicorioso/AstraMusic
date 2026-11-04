@@ -143,6 +143,14 @@ inyecta la base, el servicio de audio y el proveedor de carátulas compartidos;
 - Los comandos de audio que alteran estado se serializan; la posición se limita
   a una actualización cada 250 ms y se escucha solo con la app en primer plano.
 
+| Flujo | Persistencia y adaptación | Estado observado por la vista |
+|---|---|---|
+| Biblioteca y búsqueda | `DriftTrackRepository` consulta `tracks` y `tracks_fts`; `track_mapper` produce `Track` | `libraryTracksProvider` entrega una ventana y `LibraryController` coordina acciones |
+| Playlists manuales | `DriftPlaylistRepository` une `playlists`, `playlist_tracks` y `tracks`; entrega modelos `Playlist` y `Track` | `playlistsProvider`, `playlistTracksProvider` y destinos del shell |
+| Playlists inteligentes | `DriftSmartPlaylistRepository` consulta `tracks` y, para Recientes, `play_history` | `smartPlaylistTracksProvider` cancela la observación al dejar la selección; Inicio trata listas vacías por separado |
+| Reproducción | `AstraAudioHandler` publica cola, ítem y estado; `AudioHandlerPlayerService` los adapta | `PlayerController` une streams en `PlayerViewState`; el progreso se observa aparte |
+| Historial | `PlayerController` detecta un inicio con ID de pista y llama `recordPlay` | La transacción actualiza `play_count` y `play_history`, lo que invalida las consultas reactivas |
+
 ### Modelos y estado global
 
 - `Track` es la entidad de canción que usan biblioteca, cola y UI; contiene
@@ -203,7 +211,9 @@ No son filas de la tabla `playlists` ni se editan como listas manuales.
 `PlayerController` escucha estado, cola e índice del servicio y registra el
 inicio cuando hay reproducción activa y un ID de biblioteca válido. Evita
 recontar pausas, reanudaciones y reordenaciones, y suprime emisiones
-intermedias al reemplazar la cola. El guardado no bloquea la acción de audio;
+intermedias al reemplazar la cola. Al iniciar otra cola reinicia la deduplicación
+para contar también una nueva reproducción de la misma pista. El guardado no
+bloquea la acción de audio;
 si falla, muestra un error no fatal. `play_history` conserva todos los eventos:
 no hay política de retención implementada.
 
@@ -282,6 +292,14 @@ permanecen vivos según el ciclo de vida del `ProviderScope`. El escáner de
 Android cierra su `StreamController` al terminar, cancelar o fallar; el de
 escritorio detiene su isolate.
 
+La sesión de escaneo consume el stream con `await for` y espera cada escritura
+de lote antes de seguir. `LibraryController` cancela el escaneo activo al
+disponerse. `AudioHandlerPlayerService` cancela la escucha de carátulas y
+`AstraAudioHandler` cancela las suscripciones del motor y de `audio_session` al
+cerrarse. Las consultas sin filas producen listas vacías; Inicio y Biblioteca
+muestran estados vacíos y las operaciones de reproducción rechazan una cola sin
+pistas disponibles.
+
 ### Playlists
 
 - Crear, renombrar y eliminar playlists sin borrar archivos de audio.
@@ -310,6 +328,18 @@ escritorio detiene su isolate.
 - El contador representa inicios detectados, no minutos escuchados ni
   reproducciones completas. Una repetición automática de la misma pista sin
   cambio de índice/estado puede no generar un nuevo evento de historial.
+- El escaneo de escritorio construye un mapa de metadatos de todos los archivos
+  conocidos y la sincronización carga otra copia del catálogo. El recorrido de
+  archivos corre en un isolate, pero la comparación de cada lote ocurre en el
+  isolate de UI; con bibliotecas muy grandes conviene medir pausas y memoria.
+- `PlaybackPersistenceCoordinator` encadena escrituras y descarta sus errores
+  en `_writeChain`; un fallo de guardado de cola puede quedar sin aviso visible.
+  Esto requiere un canal de error antes de cambiar la política de persistencia.
+- `LibraryController.playPlaylist` llama `markPlayed` después de
+  `PlayerController.playQueue`, cuyo contrato captura errores de reproducción y
+  no devuelve éxito o fracaso. Por ello `lastPlayedAt` puede actualizarse aunque
+  la pista no haya comenzado; el flujo necesita un resultado explícito para
+  garantizar esa semántica.
 
 ### Carátulas y caché
 
