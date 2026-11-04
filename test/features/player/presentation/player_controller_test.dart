@@ -56,6 +56,16 @@ void main() {
     expect(smart.recorded, [1, 3]);
   });
 
+  test('reiniciar la cola con la misma pista registra otro inicio', () async {
+    final controller = container.read(playerControllerProvider.notifier);
+    final tracks = _tracks(2);
+
+    await controller.playQueue(tracks);
+    await controller.playQueue(tracks);
+
+    expect(smart.recorded, [1, 1]);
+  });
+
   test('reordenar la cola no cuenta otra reproducción', () async {
     final controller = container.read(playerControllerProvider.notifier);
     await controller.playQueue(_tracks(2), startIndex: 1);

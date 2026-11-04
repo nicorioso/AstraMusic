@@ -189,6 +189,8 @@ class PlayerController extends Notifier<PlayerViewState> {
         _setNonFatalError(error);
       }
       await _service.play();
+      // Una cola nueva inicia otra reproducción, aunque empiece en la misma pista.
+      _recordedTrackId = null;
       started = true;
     } catch (error) {
       _setFatalError(error);
