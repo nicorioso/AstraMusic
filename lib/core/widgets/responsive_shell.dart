@@ -26,6 +26,7 @@ import 'package:astramusic/features/player/presentation/seek_bar.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
+import 'package:astramusic/features/settings/portable_library_section.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
@@ -1429,6 +1430,7 @@ class SettingsDestination extends ConsumerWidget {
                   enabled: !state.actionsDisabled,
                   onTap: controller.addFiles,
                 ),
+                const PortableLibrarySection(),
                 if (kDebugMode)
                   ListTile(
                     leading: const Icon(Icons.bug_report_outlined),

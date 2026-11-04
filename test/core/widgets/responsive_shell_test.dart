@@ -26,6 +26,28 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Ajustes abre los flujos de portabilidad por el camino real', (tester) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    _selectDestination(tester, AppDestination.settings);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-export-m3u')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('settings-import-m3u')));
+    await tester.tap(find.byKey(const Key('settings-import-m3u')));
+    await tester.pumpAndSettle();
+    expect(find.text('Importar playlist M3U'), findsWidgets);
+    await tester.tap(find.text('Cancelar').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('settings-restore-backup')));
+    await tester.tap(find.byKey(const Key('settings-restore-backup')));
+    await tester.pumpAndSettle();
+    expect(find.text('Se reemplazarán la biblioteca, las playlists y los datos locales actuales.'), findsOneWidget);
+    await tester.tap(find.text('Cancelar').last);
+    await tester.pumpAndSettle();
+  });
   testWidgets('Inicio muestra listas inteligentes y reproduce desde la fila', (
     tester,
   ) async {

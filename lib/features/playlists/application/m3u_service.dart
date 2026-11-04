@@ -32,12 +32,12 @@ final class M3uService {
     return entries;
   }
 
-  static String encode(Iterable<Track> tracks, {required String baseDirectory}) {
+  static String encode(Iterable<Track> tracks, {String? baseDirectory}) {
     final lines = <String>['#EXTM3U'];
     for (final track in tracks) {
       final uri = Uri.tryParse(track.uri);
       final location = uri?.scheme == 'file'
-          ? path.relative(uri!.toFilePath(), from: baseDirectory)
+          ? (baseDirectory == null ? track.uri : path.relative(uri!.toFilePath(), from: baseDirectory))
           : track.uri;
       lines.add(location);
     }
