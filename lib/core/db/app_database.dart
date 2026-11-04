@@ -23,6 +23,7 @@ part 'app_database.g.dart';
   columns: {#folderPath, #sortTitle, #id},
 )
 @TableIndex(name: 'tracks_favorited_at_idx', columns: {#favoritedAt, #id})
+@TableIndex(name: 'tracks_play_count_idx', columns: {#playCount, #id})
 class Tracks extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get uri => text().unique()();
@@ -43,6 +44,7 @@ class Tracks extends Table {
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
   DateTimeColumn get favoritedAt => dateTime().nullable()();
   TextColumn get artworkPath => text().nullable()();
+  IntColumn get playCount => integer().withDefault(const Constant(0))();
 }
 
 @DataClassName('PlaylistRow')
@@ -75,6 +77,16 @@ class PlaylistTracks extends Table {
       integer().references(Tracks, #id, onDelete: KeyAction.cascade)();
   IntColumn get position => integer()();
   DateTimeColumn get addedAt => dateTime()();
+}
+
+@DataClassName('PlayHistoryRow')
+@TableIndex(name: 'play_history_played_at_idx', columns: {#playedAt, #id})
+@TableIndex(name: 'play_history_track_id_idx', columns: {#trackId, #id})
+class PlayHistory extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get trackId =>
+      integer().references(Tracks, #id, onDelete: KeyAction.cascade)();
+  DateTimeColumn get playedAt => dateTime()();
 }
 
 @DataClassName('LibraryFolderRow')
@@ -122,6 +134,7 @@ class ExcludedUris extends Table {
     Tracks,
     Playlists,
     PlaylistTracks,
+    PlayHistory,
     LibraryFolders,
     PlaybackState,
     QueueItems,
@@ -133,7 +146,7 @@ final class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'astramusic'));
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -153,11 +166,13 @@ final class AppDatabase extends _$AppDatabase {
           const batchSize = 500;
           var offset = 0;
           while (true) {
-            final rows =
-                await (select(tracks)
-                      ..orderBy([(track) => OrderingTerm.asc(track.id)])
-                      ..limit(batchSize, offset: offset))
-                    .get();
+            final rows = await customSelect(
+              'SELECT id, title, artist, album FROM tracks ORDER BY id LIMIT ? OFFSET ?',
+              variables: [
+                Variable.withInt(batchSize),
+                Variable.withInt(offset),
+              ],
+            ).get();
             if (rows.isEmpty) break;
             await batch((batch) {
               for (final row in rows) {
@@ -166,14 +181,16 @@ final class AppDatabase extends _$AppDatabase {
                   TracksCompanion(
                     searchText: Value(
                       buildTrackSearchText(
-                        title: row.title,
-                        artist: row.artist,
-                        album: row.album,
+                        title: row.read<String>('title'),
+                        artist: row.read<String?>('artist'),
+                        album: row.read<String?>('album'),
                       ),
                     ),
-                    sortTitle: Value(normalizeForSearch(row.title)),
+                    sortTitle: Value(
+                      normalizeForSearch(row.read<String>('title')),
+                    ),
                   ),
-                  where: (track) => track.id.equals(row.id),
+                  where: (track) => track.id.equals(row.read<int>('id')),
                 );
               }
             });
@@ -241,6 +258,11 @@ final class AppDatabase extends _$AppDatabase {
         await migrator.createIndex(tracksFolderSortIdx);
         await migrator.createIndex(tracksFavoritedAtIdx);
         await _createTrackSearchIndex();
+      }
+      if (from < 13) {
+        await migrator.addColumn(tracks, tracks.playCount);
+        await migrator.createIndex(tracksPlayCountIdx);
+        await migrator.createTable(playHistory);
       }
     },
     beforeOpen: (details) async {
