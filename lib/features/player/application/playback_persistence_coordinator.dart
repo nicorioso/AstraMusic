@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/platform/playback_state_repository.dart';
@@ -13,6 +14,7 @@ final class PlaybackPersistenceCoordinator {
     this.positionInterval = const Duration(seconds: 5),
     this.restoreTimeout = const Duration(seconds: 5),
     this.availabilityChecker = const SystemTrackAvailabilityChecker(),
+    this.onQueueSaveFailure,
   });
 
   final AudioPlayerService _player;
@@ -21,6 +23,7 @@ final class PlaybackPersistenceCoordinator {
   final Duration positionInterval;
   final Duration restoreTimeout;
   final TrackAvailabilityChecker availabilityChecker;
+  final void Function()? onQueueSaveFailure;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   List<Track> _queue = const [];
   List<Track> _originalQueue = const [];
@@ -35,6 +38,8 @@ final class PlaybackPersistenceCoordinator {
   bool _restoring = false;
   bool _started = false;
   bool _queueChanged = false;
+  bool _queueSaveFailed = false;
+  bool _queueFailureNotified = false;
   int _restoreGeneration = 0;
 
   Future<void> start() async {
@@ -198,17 +203,48 @@ final class PlaybackPersistenceCoordinator {
       shuffle: _shuffle,
       repeatMode: _repeatMode,
     );
-    final persistQueue = _queueChanged;
+    final persistQueue = _queueChanged || _queueSaveFailed;
     _queueChanged = false;
-    _writeChain = _writeChain
-        .then((_) {
-          if (!persistQueue &&
-              _repository is IncrementalPlaybackStateRepository) {
-            return _repository.savePlaybackState(snapshot);
+    _writeChain = _writeChain.then((_) async {
+      final writesQueue =
+          persistQueue ||
+          _queueSaveFailed ||
+          _repository is! IncrementalPlaybackStateRepository;
+      try {
+        if (!writesQueue) {
+          await _repository.savePlaybackState(snapshot);
+        } else {
+          await _repository.save(snapshot);
+          _queueSaveFailed = false;
+          _queueFailureNotified = false;
+        }
+      } catch (error, stackTrace) {
+        developer.log(
+          writesQueue
+              ? 'No se pudo guardar la cola de reproducción'
+              : 'No se pudo guardar el estado de reproducción',
+          name: 'AstraMusic.playbackPersistence',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        if (writesQueue) {
+          _queueSaveFailed = true;
+          if (!_queueFailureNotified) {
+            _queueFailureNotified = true;
+            try {
+              onQueueSaveFailure?.call();
+            } catch (notificationError, notificationStack) {
+              developer.log(
+                'No se pudo notificar el fallo al guardar la cola',
+                name: 'AstraMusic.playbackPersistence',
+                error: notificationError,
+                stackTrace: notificationStack,
+              );
+            }
           }
-          return _repository.save(snapshot);
-        })
-        .catchError((_) {});
+        }
+      }
+    });
   }
 
   Future<void> flush() async {

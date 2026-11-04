@@ -5,7 +5,9 @@ import 'package:astramusic/core/platform/playback_state_repository.dart';
 import 'package:astramusic/core/platform/track_availability.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/player/application/playback_persistence_coordinator.dart';
+import 'package:astramusic/main.dart' as app;
 import 'package:fake_async/fake_async.dart';
+import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -60,6 +62,71 @@ void main() {
       coordinator.dispose();
       async.flushMicrotasks();
     });
+  });
+
+  test(
+    'reporta el fallo de cola, evita avisos repetidos y reintenta',
+    () async {
+      final player = _FakePlayer();
+      final repository = _FailingRepository(failuresRemaining: 2);
+      var notifications = 0;
+      final coordinator = PlaybackPersistenceCoordinator(
+        player,
+        repository,
+        onQueueSaveFailure: () => notifications++,
+      );
+      await coordinator.start();
+
+      player.emitQueue([_track(1)]);
+      await coordinator.flush();
+      expect(repository.attempts, 1);
+      expect(notifications, 1);
+
+      await coordinator.flush();
+      expect(repository.attempts, 2);
+      expect(notifications, 1);
+
+      await coordinator.flush();
+      expect(repository.saved?.queue.single.id, 1);
+      expect(notifications, 1);
+
+      repository.failuresRemaining = 1;
+      player.emitQueue([_track(2)]);
+      await coordinator.flush();
+      expect(notifications, 2);
+      await coordinator.dispose();
+    },
+  );
+
+  testWidgets('muestra un aviso discreto si falla el guardado de la cola', (
+    tester,
+  ) async {
+    final messengerKey = GlobalKey<ScaffoldMessengerState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        scaffoldMessengerKey: messengerKey,
+        home: const Scaffold(body: SizedBox()),
+      ),
+    );
+    await tester.runAsync(() async {
+      final player = _FakePlayer();
+      final repository = _FailingRepository(failuresRemaining: 1);
+      final coordinator = PlaybackPersistenceCoordinator(
+        player,
+        repository,
+        onQueueSaveFailure: () => app.showQueueSaveFailure(messengerKey),
+      );
+      await coordinator.start();
+      player.emitQueue([_track(1)]);
+      await coordinator.flush();
+      await coordinator.dispose();
+    });
+    await tester.pump();
+
+    expect(
+      find.text('No se pudo guardar la cola de reproducción.'),
+      findsOneWidget,
+    );
   });
 
   test(
@@ -195,6 +262,30 @@ final class _IncrementalRecordingRepository
   @override
   Future<void> savePlaybackState(PlaybackStateSnapshot snapshot) async =>
       stateSaves.add(snapshot);
+}
+
+final class _FailingRepository implements PlaybackStateRepository {
+  _FailingRepository({required this.failuresRemaining});
+
+  int failuresRemaining;
+  int attempts = 0;
+  PlaybackStateSnapshot? saved;
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<PersistedPlaybackState?> load() async => null;
+
+  @override
+  Future<void> save(PlaybackStateSnapshot snapshot) async {
+    attempts++;
+    if (failuresRemaining > 0) {
+      failuresRemaining--;
+      throw StateError('falló el guardado');
+    }
+    saved = snapshot;
+  }
 }
 
 final class _FakePlayer implements AudioPlayerService {

@@ -22,6 +22,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+final _playbackMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 void main() {
   runZonedGuarded(() {
     PerformanceDiagnostics.instance.startStartup();
@@ -78,6 +80,7 @@ Future<StartupResources> initializeAstraMusic() async {
     persistence = PlaybackPersistenceCoordinator(
       playerService,
       DriftPlaybackStateRepository(database),
+      onQueueSaveFailure: () => showQueueSaveFailure(_playbackMessengerKey),
     );
     unawaited(
       persistence.start().catchError(
@@ -337,9 +340,18 @@ class AstraMusicApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'AstraMusic',
+    scaffoldMessengerKey: _playbackMessengerKey,
     theme: buildAstraTheme(),
     darkTheme: buildAstraTheme(),
     themeMode: ThemeMode.dark,
     home: const ResponsiveShell(),
+  );
+}
+
+void showQueueSaveFailure(GlobalKey<ScaffoldMessengerState> messengerKey) {
+  messengerKey.currentState?.showSnackBar(
+    const SnackBar(
+      content: Text('No se pudo guardar la cola de reproducción.'),
+    ),
   );
 }
