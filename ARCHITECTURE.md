@@ -115,7 +115,7 @@ lib/
     │   ├── domain/                   # reglas puras de cola/interrupciones
     │   └── presentation/             # controller, reproductor, cola y seek
     ├── playlists/                    # dominio, Drift y widgets/pantallas
-    └── settings/                     # reservado; UI actual vive en el shell
+    └── settings/                     # herramientas de portabilidad y controles de Ajustes
 ```
 
 ### Ensamblaje y arranque
@@ -353,6 +353,24 @@ pistas disponibles.
 - El diagnóstico mide el caché; borrar una canción elimina arte no compartido y
   vaciar la biblioteca limpia todo el caché de carátulas.
 - **No existe caché de audio**: la reproducción siempre usa archivos locales.
+
+### Portabilidad y recuperación local
+
+- `M3uService` analiza M3U/M3U8 UTF-8, resuelve rutas relativas al archivo
+  importado y enlaza únicamente URI presentes en la biblioteca. Exporta las
+  pistas en orden de playlist; el selector del sistema guarda URI absolutas
+  cuando la carpeta de destino no está disponible para calcular rutas relativas.
+- `LibraryBackupService` guarda las ocho tablas Drift en un archivo JSON gzip
+  local con versión de formato y esquema. Restaura en una transacción, valida
+  tablas, columnas y claves foráneas, y revierte si encuentra datos inválidos.
+  No incluye archivos de audio ni carátulas del dispositivo.
+- `MissingTracksService` verifica archivos `file:` y busca nombres normalizados
+  dentro de una carpeta elegida. Actualiza URI, carpeta y disponibilidad solo
+  ante una coincidencia única; conserva IDs y relaciones de playlists.
+- `PortableLibrarySection` presenta las acciones en Ajustes. Antes de restaurar
+  se pide confirmación; después de restaurar se invalidan explícitamente
+  repositorios, listas reactivas y estado del reproductor mediante
+  `reloadAfterRestore`. La conexión Drift sigue abierta.
 
 ### Ajustes y diagnóstico
 
