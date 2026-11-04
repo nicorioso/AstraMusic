@@ -10,6 +10,7 @@ import 'package:astramusic/core/platform/android_system_settings.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
+import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/application/artwork_backfill_service.dart';
@@ -40,6 +41,39 @@ void main() {
     await tester.tap(find.text('Historia'));
     await tester.pump();
     expect(fixture.player.playQueueCalls, 1);
+  });
+
+  testWidgets('lista inteligente vacía no declara vacía la biblioteca', (
+    tester,
+  ) async {
+    final fixture = _Fixture(trackCount: 1);
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(fixture.app());
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.drag(
+      find
+          .byWidgetPredicate(
+            (widget) =>
+                widget is ListView && widget.scrollDirection == Axis.horizontal,
+          )
+          .first,
+      const Offset(-350, 0),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('smart-playlist-neverPlayed')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const Key('smart-playlist-empty')), findsOneWidget);
+    expect(find.text('La biblioteca está vacía.'), findsNothing);
+    expect(
+      tester
+          .widget<PlayCircleButton>(
+            find.byKey(const Key('home-play-all-button')),
+          )
+          .onPressed,
+      isNull,
+    );
   });
 
   testWidgets('el logo declarado se puede cargar desde rootBundle', (
@@ -1056,12 +1090,16 @@ final class _FakeSmartPlaylistRepository implements SmartPlaylistRepository {
 
   @override
   Stream<List<Track>> watch(SmartPlaylist playlist, {int limit = 100}) =>
-      Stream.value([
-        Track(
-          id: 1,
-          uri: 'file:///historia.mp3',
-          title: 'Historia',
-          dateAdded: DateTime(2026, 1, 1),
-        ),
-      ]);
+      Stream.value(
+        playlist == SmartPlaylist.neverPlayed
+            ? []
+            : [
+                Track(
+                  id: 1,
+                  uri: 'file:///historia.mp3',
+                  title: 'Historia',
+                  dateAdded: DateTime(2026, 1, 1),
+                ),
+              ],
+      );
 }

@@ -44,7 +44,7 @@ void main() {
         (await repository.watch(SmartPlaylist.recentlyPlayed).first).map(
           (track) => track.id,
         ),
-        [2, 1],
+        [1, 2],
       );
       expect(
         (await repository.watch(SmartPlaylist.neverPlayed).first).map(

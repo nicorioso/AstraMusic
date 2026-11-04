@@ -15,7 +15,7 @@ final class DriftSmartPlaylistRepository implements SmartPlaylistRepository {
   Stream<List<Track>> watch(SmartPlaylist playlist, {int limit = 100}) {
     if (limit <= 0) throw ArgumentError.value(limit, 'limit');
     final order = switch (playlist) {
-      SmartPlaylist.recentlyPlayed => 'ORDER BY (SELECT MAX(played_at) FROM play_history WHERE track_id = tracks.id) DESC, tracks.id DESC',
+      SmartPlaylist.recentlyPlayed => 'ORDER BY (SELECT MAX(played_at) FROM play_history WHERE track_id = tracks.id) DESC, (SELECT MAX(id) FROM play_history WHERE track_id = tracks.id) DESC',
       SmartPlaylist.mostPlayed =>
         'ORDER BY play_count DESC, tracks.sort_title ASC, tracks.id ASC',
       SmartPlaylist.neverPlayed => 'ORDER BY date_added DESC, tracks.id DESC',

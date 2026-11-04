@@ -48,6 +48,22 @@ void main() {
     },
   );
 
+  test('cambiar la cola activa no cuenta la pista anterior', () async {
+    final controller = container.read(playerControllerProvider.notifier);
+    await controller.playQueue(_tracks(2));
+    await controller.playQueue(_tracks(3), startIndex: 2);
+    await Future<void>.delayed(Duration.zero);
+    expect(smart.recorded, [1, 3]);
+  });
+
+  test('reordenar la cola no cuenta otra reproducción', () async {
+    final controller = container.read(playerControllerProvider.notifier);
+    await controller.playQueue(_tracks(2), startIndex: 1);
+    await controller.moveInQueue(1, 0);
+    await Future<void>.delayed(Duration.zero);
+    expect(smart.recorded, [2]);
+  });
+
   test('playQueue conserva el índice inicial solicitado', () async {
     final tracks = _tracks(3);
 

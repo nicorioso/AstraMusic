@@ -41,7 +41,7 @@ final smartPlaylistRepositoryProvider = Provider<SmartPlaylistRepository>(
 );
 
 final smartPlaylistTracksProvider =
-    StreamProvider.family<List<Track>, SmartPlaylist>(
+    StreamProvider.autoDispose.family<List<Track>, SmartPlaylist>(
       (ref, playlist) =>
           ref.watch(smartPlaylistRepositoryProvider).watch(playlist),
     );

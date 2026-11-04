@@ -106,7 +106,9 @@ class PlayerController extends Notifier<PlayerViewState> {
   // ignore: cancel_subscriptions
   StreamSubscription<Duration>? _positionSubscription;
   bool _isListening = false;
-  String? _recordedTrackKey;
+  int? _recordedTrackId;
+  bool _replacingQueue = false;
+  bool _recordCheckScheduled = false;
 
   AudioPlayerService get _service => ref.read(audioPlayerServiceProvider);
 
@@ -177,7 +179,8 @@ class PlayerController extends Notifier<PlayerViewState> {
     }
 
     state = state.copyWith(errorMessage: null);
-    _recordedTrackKey = null;
+    _replacingQueue = true;
+    var started = false;
     try {
       await _service.playQueue(available, startIndex: availableStartIndex);
       try {
@@ -186,8 +189,12 @@ class PlayerController extends Notifier<PlayerViewState> {
         _setNonFatalError(error);
       }
       await _service.play();
+      started = true;
     } catch (error) {
       _setFatalError(error);
+    } finally {
+      _replacingQueue = false;
+      if (started) _recordCurrentTrackNow();
     }
   }
 
@@ -279,7 +286,7 @@ class PlayerController extends Notifier<PlayerViewState> {
         errorMessage: playbackState.errorMessage ?? state.errorMessage,
       );
       if (playbackState.status == AudioPlaybackStatus.idle) {
-        _recordedTrackKey = null;
+        _recordedTrackId = null;
       }
       _recordCurrentTrack();
     });
@@ -322,14 +329,22 @@ class PlayerController extends Notifier<PlayerViewState> {
   }
 
   void _recordCurrentTrack() {
-    if (!ref.mounted || !state.isPlaying) return;
+    if (_recordCheckScheduled || _replacingQueue) return;
+    _recordCheckScheduled = true;
+    scheduleMicrotask(() {
+      _recordCheckScheduled = false;
+      _recordCurrentTrackNow();
+    });
+  }
+
+  void _recordCurrentTrackNow() {
+    if (!ref.mounted || !state.isPlaying || _replacingQueue) return;
     final index = state.currentIndex;
     if (index == null || index < 0 || index >= state.queue.length) return;
     final track = state.queue[index];
     if (track.id == null) return;
-    final key = '$index:${track.id}';
-    if (_recordedTrackKey == key) return;
-    _recordedTrackKey = key;
+    if (_recordedTrackId == track.id) return;
+    _recordedTrackId = track.id;
     unawaited(_savePlay(track.id!));
   }
 

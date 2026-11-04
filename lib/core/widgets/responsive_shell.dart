@@ -619,7 +619,9 @@ class _HomeDestinationState extends ConsumerState<HomeDestination> {
                     PlayCircleButton(
                       key: const Key('home-play-all-button'),
                       size: 48,
-                      onPressed: state.actionsDisabled
+                      onPressed:
+                          state.actionsDisabled ||
+                              tracks.value?.isEmpty != false
                           ? null
                           : () => tracks.whenData(controller.playAll),
                       isPlaying: ref.watch(
@@ -631,7 +633,9 @@ class _HomeDestinationState extends ConsumerState<HomeDestination> {
                     IconButton(
                       key: const Key('home-shuffle-button'),
                       tooltip: 'Aleatorio',
-                      onPressed: state.actionsDisabled
+                      onPressed:
+                          state.actionsDisabled ||
+                              tracks.value?.isEmpty != false
                           ? null
                           : () => tracks.whenData(
                               (items) =>
@@ -646,7 +650,14 @@ class _HomeDestinationState extends ConsumerState<HomeDestination> {
                 child: tracks.when(
                   data: (items) {
                     return items.isEmpty
-                        ? _EmptyTracksState(desktop: desktop)
+                        ? _selected == SmartPlaylist.recentlyAdded
+                              ? _EmptyTracksState(desktop: desktop)
+                              : Center(
+                                  child: Text(
+                                    'No hay canciones en ${_smartPlaylistTitle(_selected).toLowerCase()}.',
+                                    key: const Key('smart-playlist-empty'),
+                                  ),
+                                )
                         : _ResponsiveTrackList(tracks: items, desktop: desktop);
                   },
                   loading: () =>
