@@ -106,6 +106,7 @@ class PlayerController extends Notifier<PlayerViewState> {
   // ignore: cancel_subscriptions
   StreamSubscription<Duration>? _positionSubscription;
   bool _isListening = false;
+  String? _recordedTrackKey;
 
   AudioPlayerService get _service => ref.read(audioPlayerServiceProvider);
 
@@ -176,6 +177,7 @@ class PlayerController extends Notifier<PlayerViewState> {
     }
 
     state = state.copyWith(errorMessage: null);
+    _recordedTrackKey = null;
     try {
       await _service.playQueue(available, startIndex: availableStartIndex);
       try {
@@ -276,6 +278,10 @@ class PlayerController extends Notifier<PlayerViewState> {
         status: playbackState.status,
         errorMessage: playbackState.errorMessage ?? state.errorMessage,
       );
+      if (playbackState.status == AudioPlaybackStatus.idle) {
+        _recordedTrackKey = null;
+      }
+      _recordCurrentTrack();
     });
     if (ref.read(appForegroundProvider)) _resumePositionUpdates();
     _subscribe(_service.durationStream, (duration) {
@@ -289,10 +295,16 @@ class PlayerController extends Notifier<PlayerViewState> {
       );
     });
     _subscribe(_service.queueStream, (queue) {
-      if (ref.mounted) state = state.copyWith(queue: queue);
+      if (ref.mounted) {
+        state = state.copyWith(queue: queue);
+        _recordCurrentTrack();
+      }
     });
     _subscribe(_service.currentIndexStream, (index) {
-      if (ref.mounted) state = state.copyWith(currentIndex: index);
+      if (ref.mounted) {
+        state = state.copyWith(currentIndex: index);
+        _recordCurrentTrack();
+      }
     });
     _subscribe(_service.shuffleEnabledStream, (enabled) {
       if (ref.mounted) state = state.copyWith(shuffleEnabled: enabled);
@@ -307,6 +319,26 @@ class PlayerController extends Notifier<PlayerViewState> {
       _service.failureStream,
       (failure) => unawaited(_handleFailure(failure)),
     );
+  }
+
+  void _recordCurrentTrack() {
+    if (!ref.mounted || !state.isPlaying) return;
+    final index = state.currentIndex;
+    if (index == null || index < 0 || index >= state.queue.length) return;
+    final track = state.queue[index];
+    if (track.id == null) return;
+    final key = '$index:${track.id}';
+    if (_recordedTrackKey == key) return;
+    _recordedTrackKey = key;
+    unawaited(_savePlay(track.id!));
+  }
+
+  Future<void> _savePlay(int id) async {
+    try {
+      await ref.read(smartPlaylistRepositoryProvider).recordPlay(id);
+    } catch (error) {
+      _setNonFatalError(error);
+    }
   }
 
   void _subscribe<T>(Stream<T> stream, void Function(T value) onData) {

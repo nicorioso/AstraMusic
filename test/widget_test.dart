@@ -4,6 +4,7 @@ import 'package:astramusic/core/platform/audio_file_picker.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/domain/smart_playlist_repository.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
@@ -565,6 +566,7 @@ Widget _testApp({
       audioPlayerServiceProvider.overrideWithValue(service),
       audioFilePickerProvider.overrideWithValue(picker),
       trackRepositoryProvider.overrideWithValue(repository),
+      smartPlaylistRepositoryProvider.overrideWithValue(_NoopSmartRepository()),
     ],
     child: MaterialApp(
       theme: buildAstraTheme(),
@@ -875,4 +877,12 @@ final class FakeAudioPlayerService implements AudioPlayerService {
       _volumeController.close(),
     ]);
   }
+}
+
+final class _NoopSmartRepository implements SmartPlaylistRepository {
+  @override
+  Future<void> recordPlay(int trackId) async {}
+  @override
+  Stream<List<Track>> watch(SmartPlaylist playlist, {int limit = 100}) =>
+      const Stream.empty();
 }

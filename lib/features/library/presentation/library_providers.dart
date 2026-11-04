@@ -13,6 +13,8 @@ import 'package:astramusic/core/platform/media_library_permission.dart';
 import 'package:astramusic/features/library/application/library_sync_service.dart';
 import 'package:astramusic/features/library/application/artwork_backfill_service.dart';
 import 'package:astramusic/features/library/data/drift_library_folders_repository.dart';
+import 'package:astramusic/features/library/data/drift_smart_playlist_repository.dart';
+import 'package:astramusic/features/library/domain/smart_playlist_repository.dart';
 import 'package:astramusic/features/library/data/drift_track_repository.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/library_group.dart';
@@ -33,6 +35,16 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 final trackRepositoryProvider = Provider<TrackRepository>((ref) {
   return DriftTrackRepository(ref.watch(appDatabaseProvider));
 });
+
+final smartPlaylistRepositoryProvider = Provider<SmartPlaylistRepository>(
+  (ref) => DriftSmartPlaylistRepository(ref.watch(appDatabaseProvider)),
+);
+
+final smartPlaylistTracksProvider =
+    StreamProvider.family<List<Track>, SmartPlaylist>(
+      (ref, playlist) =>
+          ref.watch(smartPlaylistRepositoryProvider).watch(playlist),
+    );
 
 final libraryFoldersRepositoryProvider = Provider<LibraryFoldersRepository>((
   ref,
@@ -128,21 +140,39 @@ class LibraryTrackFilterState {
   final bool availableOnly;
   final TrackSort sort;
   TrackListQuery toQuery({required String search}) => TrackListQuery(
-    search: search, favoritesOnly: favoritesOnly,
-    availableOnly: availableOnly, sort: sort,
+    search: search,
+    favoritesOnly: favoritesOnly,
+    availableOnly: availableOnly,
+    sort: sort,
   );
-  LibraryTrackFilterState copyWith({bool? favoritesOnly, bool? availableOnly, TrackSort? sort}) => LibraryTrackFilterState(
+  LibraryTrackFilterState copyWith({
+    bool? favoritesOnly,
+    bool? availableOnly,
+    TrackSort? sort,
+  }) => LibraryTrackFilterState(
     favoritesOnly: favoritesOnly ?? this.favoritesOnly,
-    availableOnly: availableOnly ?? this.availableOnly, sort: sort ?? this.sort,
+    availableOnly: availableOnly ?? this.availableOnly,
+    sort: sort ?? this.sort,
   );
 }
 
 class LibraryTrackFilters extends Notifier<LibraryTrackFilterState> {
   @override
   LibraryTrackFilterState build() => const LibraryTrackFilterState();
-  void toggleFavorites() { state = state.copyWith(favoritesOnly: !state.favoritesOnly); ref.read(libraryTrackLimitProvider.notifier).reset(); }
-  void toggleAvailable() { state = state.copyWith(availableOnly: !state.availableOnly); ref.read(libraryTrackLimitProvider.notifier).reset(); }
-  void setSort(TrackSort sort) { state = state.copyWith(sort: sort); ref.read(libraryTrackLimitProvider.notifier).reset(); }
+  void toggleFavorites() {
+    state = state.copyWith(favoritesOnly: !state.favoritesOnly);
+    ref.read(libraryTrackLimitProvider.notifier).reset();
+  }
+
+  void toggleAvailable() {
+    state = state.copyWith(availableOnly: !state.availableOnly);
+    ref.read(libraryTrackLimitProvider.notifier).reset();
+  }
+
+  void setSort(TrackSort sort) {
+    state = state.copyWith(sort: sort);
+    ref.read(libraryTrackLimitProvider.notifier).reset();
+  }
 }
 
 const homeRecentTrackLimit = 100;
@@ -169,22 +199,30 @@ final favoriteTracksProvider = StreamProvider<List<Track>>((ref) {
   return ref.watch(trackRepositoryProvider).watchFavorites();
 });
 
-final libraryGroupingRepositoryProvider = Provider<LibraryGroupingRepository>((ref) {
+final libraryGroupingRepositoryProvider = Provider<LibraryGroupingRepository>((
+  ref,
+) {
   final repository = ref.watch(trackRepositoryProvider);
   if (repository is! LibraryGroupingRepository) {
-    throw UnsupportedError('El repositorio no expone agrupaciones de biblioteca.');
+    throw UnsupportedError(
+      'El repositorio no expone agrupaciones de biblioteca.',
+    );
   }
   return repository as LibraryGroupingRepository;
 });
 
-final artistsProvider = StreamProvider<List<ArtistGroup>>((ref) =>
-    ref.watch(libraryGroupingRepositoryProvider).watchArtists());
-final albumsProvider = StreamProvider<List<AlbumGroup>>((ref) =>
-    ref.watch(libraryGroupingRepositoryProvider).watchAlbums());
-final genresProvider = StreamProvider<List<GenreGroup>>((ref) =>
-    ref.watch(libraryGroupingRepositoryProvider).watchGenres());
-final folderGroupsProvider = StreamProvider<List<FolderGroup>>((ref) =>
-    ref.watch(libraryGroupingRepositoryProvider).watchFolders());
+final artistsProvider = StreamProvider<List<ArtistGroup>>(
+  (ref) => ref.watch(libraryGroupingRepositoryProvider).watchArtists(),
+);
+final albumsProvider = StreamProvider<List<AlbumGroup>>(
+  (ref) => ref.watch(libraryGroupingRepositoryProvider).watchAlbums(),
+);
+final genresProvider = StreamProvider<List<GenreGroup>>(
+  (ref) => ref.watch(libraryGroupingRepositoryProvider).watchGenres(),
+);
+final folderGroupsProvider = StreamProvider<List<FolderGroup>>(
+  (ref) => ref.watch(libraryGroupingRepositoryProvider).watchFolders(),
+);
 
 final class LibrarySearchQuery extends Notifier<String> {
   Timer? _debounce;

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/domain/smart_playlist_repository.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/domain/queue_rules.dart';
@@ -13,14 +14,17 @@ void main() {
   late QueueFakeAudioPlayerService service;
   late FakeTrackRepository repository;
   late ProviderContainer container;
+  late _RecordingSmartRepository smart;
 
   setUp(() async {
     service = QueueFakeAudioPlayerService();
     repository = FakeTrackRepository();
+    smart = _RecordingSmartRepository();
     container = ProviderContainer(
       overrides: [
         audioPlayerServiceProvider.overrideWithValue(service),
         trackRepositoryProvider.overrideWithValue(repository),
+        smartPlaylistRepositoryProvider.overrideWithValue(smart),
       ],
     );
     container.read(playerControllerProvider);
@@ -31,6 +35,18 @@ void main() {
     container.dispose();
     await service.dispose();
   });
+
+  test(
+    'cuenta una vez al iniciar y al cambiar de pista, no al reanudar',
+    () async {
+      final controller = container.read(playerControllerProvider.notifier);
+      await controller.playQueue(_tracks(2));
+      await controller.togglePlayback();
+      await controller.togglePlayback();
+      await controller.next();
+      expect(smart.recorded, [1, 2]);
+    },
+  );
 
   test('playQueue conserva el índice inicial solicitado', () async {
     final tracks = _tracks(3);
@@ -409,4 +425,13 @@ final class FakeTrackRepository implements TrackRepository {
   Stream<List<Track>> watchAll() => const Stream.empty();
   @override
   Stream<List<Track>> watchSearch(String query) => const Stream.empty();
+}
+
+final class _RecordingSmartRepository implements SmartPlaylistRepository {
+  final recorded = <int>[];
+  @override
+  Future<void> recordPlay(int trackId) async => recorded.add(trackId);
+  @override
+  Stream<List<Track>> watch(SmartPlaylist playlist, {int limit = 100}) =>
+      const Stream.empty();
 }
