@@ -1,3 +1,5 @@
+import 'package:astramusic/features/library/domain/smart_playlist_repository.dart';
+
 import 'dart:async';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
@@ -23,6 +25,23 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Inicio muestra listas inteligentes y reproduce desde la fila', (
+    tester,
+  ) async {
+    final fixture = _Fixture(trackCount: 0);
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(fixture.app());
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.byKey(const Key('smart-playlist-recentlyPlayed')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Historia'), findsOneWidget);
+    await tester.tap(find.text('Historia'));
+    await tester.pump();
+    expect(fixture.player.playQueueCalls, 1);
+  });
+
   testWidgets('el logo declarado se puede cargar desde rootBundle', (
     tester,
   ) async {
@@ -687,6 +706,7 @@ final class _Fixture {
         ),
       );
 
+  final smart = _FakeSmartPlaylistRepository();
   final player = _FakePlayer();
   final cache = _FakeArtworkCache();
   final backfill = _RecordingArtworkBackfill();
@@ -700,6 +720,7 @@ final class _Fixture {
     overrides: [
       audioPlayerServiceProvider.overrideWithValue(player),
       trackRepositoryProvider.overrideWithValue(repository),
+      smartPlaylistRepositoryProvider.overrideWithValue(smart),
       isAndroidPlatformProvider.overrideWithValue(true),
       artworkCacheProvider.overrideWithValue(cache),
       artworkBackfillServiceProvider.overrideWithValue(backfill),
@@ -718,7 +739,9 @@ final class _Fixture {
     ),
   );
 
-  Future<void> dispose() => player.dispose();
+  Future<void> dispose() async {
+    await player.dispose();
+  }
 }
 
 final class _FakeAndroidSystemSettings implements AndroidSystemSettings {
@@ -1025,4 +1048,20 @@ final class _FakePlayer implements AudioPlayerService {
     _repeat.close(),
     _volume.close(),
   ]);
+}
+
+final class _FakeSmartPlaylistRepository implements SmartPlaylistRepository {
+  @override
+  Future<void> recordPlay(int trackId) async {}
+
+  @override
+  Stream<List<Track>> watch(SmartPlaylist playlist, {int limit = 100}) =>
+      Stream.value([
+        Track(
+          id: 1,
+          uri: 'file:///historia.mp3',
+          title: 'Historia',
+          dateAdded: DateTime(2026, 1, 1),
+        ),
+      ]);
 }

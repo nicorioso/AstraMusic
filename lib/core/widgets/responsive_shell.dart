@@ -14,6 +14,7 @@ import 'package:astramusic/core/widgets/section_title.dart';
 import 'package:astramusic/core/widgets/secondary_back_header.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
+import 'package:astramusic/features/library/domain/smart_playlist_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
@@ -536,14 +537,24 @@ class _DestinationBody extends StatelessWidget {
         );
 }
 
-class HomeDestination extends ConsumerWidget {
+class HomeDestination extends ConsumerStatefulWidget {
   const HomeDestination({required this.desktop, super.key});
 
   final bool desktop;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tracks = ref.watch(homeRecentTracksProvider);
+  ConsumerState<HomeDestination> createState() => _HomeDestinationState();
+}
+
+class _HomeDestinationState extends ConsumerState<HomeDestination> {
+  SmartPlaylist _selected = SmartPlaylist.recentlyAdded;
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = widget.desktop;
+    final tracks = _selected == SmartPlaylist.recentlyAdded
+        ? ref.watch(homeRecentTracksProvider)
+        : ref.watch(smartPlaylistTracksProvider(_selected));
     final shortcuts = ref.watch(homePlaylistShortcutsProvider);
     final state = ref.watch(libraryControllerProvider);
     final controller = ref.read(libraryControllerProvider.notifier);
@@ -575,13 +586,33 @@ class HomeDestination extends ConsumerWidget {
                     desktop: desktop,
                   ),
                 ),
+              SizedBox(
+                height: 52,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    for (final playlist in SmartPlaylist.values)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          key: ValueKey('smart-playlist-${playlist.name}'),
+                          label: Text(_smartPlaylistTitle(playlist)),
+                          selected: _selected == playlist,
+                          onSelected: (_) =>
+                              setState(() => _selected = playlist),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        'Canciones recientes',
+                        _smartPlaylistTitle(_selected),
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
@@ -632,6 +663,13 @@ class HomeDestination extends ConsumerWidget {
     );
   }
 }
+
+String _smartPlaylistTitle(SmartPlaylist playlist) => switch (playlist) {
+  SmartPlaylist.recentlyPlayed => 'Recientes',
+  SmartPlaylist.mostPlayed => 'Más escuchadas',
+  SmartPlaylist.neverPlayed => 'Nunca reproducidas',
+  SmartPlaylist.recentlyAdded => 'Añadidas recientemente',
+};
 
 class _HomeShortcutGrid extends StatelessWidget {
   const _HomeShortcutGrid({required this.shortcuts, required this.desktop});
