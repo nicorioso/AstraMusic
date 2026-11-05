@@ -37,6 +37,8 @@ keyAlias=astramusic
 keyPassword=CLAVE_DE_LA_LLAVE
 ```
 
+Escribe las contraseñas sin comillas: en un archivo `.properties`, las comillas
+se interpretan como parte del valor y la firma falla aunque la clave sea correcta.
 `storeFile` puede ser absoluto o relativo a `android/` o `android/app/`.
 Después de configurar la firma, ejecuta `flutter clean`, `flutter pub get` y
 compila con `flutter build apk --release` o `flutter build appbundle --release`.
