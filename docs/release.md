@@ -47,5 +47,9 @@ excluidos por Git. No uses la clave de depuración para publicar.
 La versión publicada se define en `pubspec.yaml` (`versionName+versionCode`)
 y el identificador Android es `com.nicorioso.astramusic`.
 
-Antes de distribuir a terceros, define y publica una licencia de software;
-el repositorio aún no incluye `LICENSE`.
+## Licencias en los paquetes
+
+`LICENSE` (MIT) y `assets/fonts/OFL.txt` (SIL OFL 1.1 de Inter) se incluyen
+como recursos de Flutter en Android y Linux. El bundle de Linux también coloca
+`LICENSE` en la raíz y `licenses/Inter-OFL.txt` junto al ejecutable. Distribuye
+el bundle completo y conserva ambos avisos al crear otro formato de paquete.

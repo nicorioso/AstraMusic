@@ -89,6 +89,8 @@ flutter:
 
   assets:
     - assets/branding/logo.png
+    - assets/fonts/OFL.txt
+    - LICENSE
 
   fonts:
     - family: Inter

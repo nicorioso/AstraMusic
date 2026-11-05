@@ -120,6 +120,6 @@ AstraMusic se desarrolla de forma abierta para que la comunidad pueda estudiar,
 mejorar y adaptar el reproductor. Las contribuciones que mantengan su propósito
 gratuito y sin ánimo de lucro son bienvenidas.
 
-El repositorio todavía no incluye un archivo `LICENSE`. Debe publicarse una
-licencia de código abierto antes de distribuir el proyecto a terceros, para
-dejar explícitos los permisos de uso, modificación y redistribución.
+AstraMusic se distribuye bajo la [licencia MIT](LICENSE). La fuente Inter
+conserva su [licencia SIL OFL 1.1](assets/fonts/OFL.txt). Al distribuir los
+binarios, incluye ambos avisos de licencia.
