@@ -17,6 +17,8 @@ import 'package:astramusic/features/library/presentation/library_providers.dart'
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/player_screen.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
+import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
@@ -264,24 +266,50 @@ class _LibraryFilterBar extends ConsumerWidget {
     final controller = ref.read(libraryTrackFiltersProvider.notifier);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        FilterChip(key: const Key('library-favorites-filter'), label: const Text('Favoritas'), selected: filters.favoritesOnly, onSelected: (_) => controller.toggleFavorites()),
-        FilterChip(key: const Key('library-available-filter'), label: const Text('Disponibles'), selected: filters.availableOnly, onSelected: (_) => controller.toggleAvailable()),
-        PopupMenuButton<TrackSort>(
-          key: const Key('library-sort-menu'),
-          tooltip: 'Ordenar',
-          onSelected: controller.setSort,
-          itemBuilder: (_) => TrackSort.values.map((sort) => PopupMenuItem(value: sort, child: Text(_sortLabel(sort)))).toList(),
-          child: Chip(avatar: const Icon(Icons.sort, size: 18), label: Text(_sortLabel(filters.sort))),
-        ),
-      ]),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          FilterChip(
+            key: const Key('library-favorites-filter'),
+            label: const Text('Favoritas'),
+            selected: filters.favoritesOnly,
+            onSelected: (_) => controller.toggleFavorites(),
+          ),
+          FilterChip(
+            key: const Key('library-available-filter'),
+            label: const Text('Disponibles'),
+            selected: filters.availableOnly,
+            onSelected: (_) => controller.toggleAvailable(),
+          ),
+          PopupMenuButton<TrackSort>(
+            key: const Key('library-sort-menu'),
+            tooltip: 'Ordenar',
+            onSelected: controller.setSort,
+            itemBuilder: (_) => TrackSort.values
+                .map(
+                  (sort) =>
+                      PopupMenuItem(value: sort, child: Text(_sortLabel(sort))),
+                )
+                .toList(),
+            child: Chip(
+              avatar: const Icon(Icons.sort, size: 18),
+              label: Text(_sortLabel(filters.sort)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 String _sortLabel(TrackSort sort) => switch (sort) {
-  TrackSort.title => 'Nombre', TrackSort.dateAdded => 'Fecha de adición',
-  TrackSort.artist => 'Artista', TrackSort.year => 'Año', TrackSort.duration => 'Duración',
+  TrackSort.title => 'Nombre',
+  TrackSort.dateAdded => 'Fecha de adición',
+  TrackSort.artist => 'Artista',
+  TrackSort.year => 'Año',
+  TrackSort.duration => 'Duración',
 };
 
 class _ScanProgressCard extends StatelessWidget {
@@ -473,7 +501,7 @@ class _FolderTile extends ConsumerWidget {
   }
 }
 
-class _TrackList extends StatelessWidget {
+class _TrackList extends ConsumerStatefulWidget {
   const _TrackList({
     required this.tracks,
     required this.hasMore,
@@ -501,92 +529,268 @@ class _TrackList extends StatelessWidget {
   final ValueChanged<Track> onDelete;
 
   @override
+  ConsumerState<_TrackList> createState() => _TrackListState();
+}
+
+class _TrackListState extends ConsumerState<_TrackList> {
+  final Set<String> _selected = {};
+  int? _anchor;
+
+  void _select(int index) {
+    final keys = HardwareKeyboard.instance;
+    setState(() {
+      if (keys.isShiftPressed && _anchor != null) {
+        final start = _anchor! < index ? _anchor! : index;
+        final end = _anchor! > index ? _anchor! : index;
+        for (var i = start; i <= end; i++) {
+          _selected.add(widget.tracks[i].uri);
+        }
+      } else if (keys.isControlPressed || keys.isMetaPressed) {
+        if (!_selected.add(widget.tracks[index].uri)) {
+          _selected.remove(widget.tracks[index].uri);
+        }
+        _anchor = index;
+      } else {
+        _selected
+          ..clear()
+          ..add(widget.tracks[index].uri);
+        _anchor = index;
+      }
+    });
+  }
+
+  void _toggle(int index) {
+    setState(() {
+      final uri = widget.tracks[index].uri;
+      if (!_selected.add(uri)) _selected.remove(uri);
+      _anchor = index;
+    });
+  }
+
+  List<Track> get _chosen =>
+      widget.tracks.where((track) => _selected.contains(track.uri)).toList();
+
+  Future<void> _bulk(_TrackAction action) async {
+    final chosen = _chosen;
+    switch (action) {
+      case _TrackAction.addToQueue:
+        for (final track in chosen.where((track) => track.isAvailable)) {
+          widget.onAddToQueue(track);
+        }
+      case _TrackAction.addToPlaylist:
+        final messenger = ScaffoldMessenger.of(context);
+        final repository = ref.read(playlistRepositoryProvider);
+        final playlist = await createPlaylist(context, ref);
+        if (playlist == null) return;
+        try {
+          await repository.addTracks(playlist.id, [
+            for (final track in chosen)
+              if (track.id != null) track.id!,
+          ]);
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(content: Text('Añadidas a ${playlist.name}')),
+            );
+          }
+        } catch (error) {
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('No se pudieron añadir canciones: $error'),
+              ),
+            );
+          }
+        }
+      case _TrackAction.delete:
+        for (final track in chosen) {
+          widget.onDelete(track);
+        }
+      case _TrackAction.playNext:
+        for (final track in chosen.reversed.where(
+          (track) => track.isAvailable,
+        )) {
+          widget.onPlayNext(track);
+        }
+      case _TrackAction.favorite:
+        for (final track in chosen) {
+          widget.onFavorite(track);
+        }
+    }
+    if (mounted) setState(_selected.clear);
+  }
+
+  Future<void> _contextMenu(TapDownDetails details, int index) async {
+    if (!_selected.contains(widget.tracks[index].uri)) _select(index);
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final action = await showMenu<_TrackAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        details.globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: _TrackAction.addToQueue,
+          child: Text('Añadir selección a la cola'),
+        ),
+        PopupMenuItem(
+          value: _TrackAction.addToPlaylist,
+          child: Text('Añadir selección a playlist'),
+        ),
+        PopupMenuItem(
+          value: _TrackAction.delete,
+          child: Text('Eliminar selección'),
+        ),
+      ],
+    );
+    if (action != null && mounted) await _bulk(action);
+  }
+
+  @override
   Widget build(BuildContext context) {
     PerformanceDiagnostics.instance.recordListBuild();
-    return ListView.builder(
-      key: const Key('library-track-list'),
-      padding: const EdgeInsets.only(bottom: 88),
-      itemExtent: 56,
-      scrollCacheExtent: const ScrollCacheExtent.pixels(280),
-      addAutomaticKeepAlives: false,
-      itemCount: tracks.length + (hasMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index == tracks.length) {
-          scheduleMicrotask(onLoadMore);
-          return const Center(
-            child: SizedBox.square(
-              dimension: 24,
-              child: CircularProgressIndicator(
-                key: Key('library-page-loading-indicator'),
-                strokeWidth: 2,
-              ),
+    final tracks = widget.tracks;
+    final hasMore = widget.hasMore;
+    final enabled = widget.enabled;
+    final onLoadMore = widget.onLoadMore;
+    final onTrackTap = widget.onTrackTap;
+    final onUnavailable = widget.onUnavailable;
+    final onPlayNext = widget.onPlayNext;
+    final onAddToQueue = widget.onAddToQueue;
+    final onAddToPlaylist = widget.onAddToPlaylist;
+    final onFavorite = widget.onFavorite;
+    final onDelete = widget.onDelete;
+    return Column(
+      children: [
+        if (_selected.isNotEmpty)
+          SizedBox(
+            height: 48,
+            child: Row(
+              children: [
+                Text('${_selected.length} seleccionadas'),
+                TextButton(
+                  onPressed: () => _bulk(_TrackAction.addToQueue),
+                  child: const Text('A la cola'),
+                ),
+                TextButton(
+                  onPressed: () => _bulk(_TrackAction.addToPlaylist),
+                  child: const Text('Playlist'),
+                ),
+                TextButton(
+                  onPressed: () => _bulk(_TrackAction.delete),
+                  child: const Text('Eliminar'),
+                ),
+                IconButton(
+                  onPressed: () => setState(_selected.clear),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
             ),
-          );
-        }
-        final track = tracks[index];
-        return TrackTile(
-          track: track,
-          enabled: enabled,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (track.duration case final duration?)
-                Text(_formatDuration(duration)),
-              PopupMenuButton<_TrackAction>(
-                tooltip: 'Acciones de ${track.title}',
-                enabled: enabled,
-                onSelected: (action) {
-                  switch (action) {
-                    case _TrackAction.playNext:
-                      onPlayNext(track);
-                    case _TrackAction.addToQueue:
-                      onAddToQueue(track);
-                    case _TrackAction.addToPlaylist:
-                      onAddToPlaylist(track);
-                    case _TrackAction.favorite:
-                      onFavorite(track);
-                    case _TrackAction.delete:
-                      onDelete(track);
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: _TrackAction.playNext,
-                    enabled: track.isAvailable,
-                    child: const Text('Reproducir a continuación'),
-                  ),
-                  PopupMenuItem(
-                    value: _TrackAction.addToQueue,
-                    enabled: track.isAvailable,
-                    child: const Text('Añadir a la cola'),
-                  ),
-                  const PopupMenuItem(
-                    value: _TrackAction.addToPlaylist,
-                    child: Text('Añadir a playlist'),
-                  ),
-                  PopupMenuItem(
-                    value: _TrackAction.favorite,
-                    child: Text(
-                      track.isFavorite
-                          ? 'Quitar de Me gusta'
-                          : 'Añadir a Me gusta',
+          ),
+        Expanded(
+          child: ListView.builder(
+            key: const Key('library-track-list'),
+            padding: const EdgeInsets.only(bottom: 88),
+            itemExtent: 56,
+            scrollCacheExtent: const ScrollCacheExtent.pixels(280),
+            addAutomaticKeepAlives: false,
+            itemCount: tracks.length + (hasMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index == tracks.length) {
+                scheduleMicrotask(onLoadMore);
+                return const Center(
+                  child: SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(
+                      key: Key('library-page-loading-indicator'),
+                      strokeWidth: 2,
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: _TrackAction.delete,
-                    child: Text('Eliminar de la biblioteca'),
-                  ),
-                ],
-              ),
-            ],
+                );
+              }
+              final track = tracks[index];
+              return TrackTile(
+                track: track,
+                enabled: enabled,
+                onSecondaryTapDown: (details) => _contextMenu(details, index),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (MediaQuery.sizeOf(context).width >= 840)
+                      Checkbox(
+                        value: _selected.contains(track.uri),
+                        onChanged: enabled ? (_) => _toggle(index) : null,
+                      ),
+                    if (track.duration case final duration?)
+                      Text(_formatDuration(duration)),
+                    PopupMenuButton<_TrackAction>(
+                      tooltip: 'Acciones de ${track.title}',
+                      enabled: enabled,
+                      onSelected: (action) {
+                        switch (action) {
+                          case _TrackAction.playNext:
+                            onPlayNext(track);
+                          case _TrackAction.addToQueue:
+                            onAddToQueue(track);
+                          case _TrackAction.addToPlaylist:
+                            onAddToPlaylist(track);
+                          case _TrackAction.favorite:
+                            onFavorite(track);
+                          case _TrackAction.delete:
+                            onDelete(track);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: _TrackAction.playNext,
+                          enabled: track.isAvailable,
+                          child: const Text('Reproducir a continuación'),
+                        ),
+                        PopupMenuItem(
+                          value: _TrackAction.addToQueue,
+                          enabled: track.isAvailable,
+                          child: const Text('Añadir a la cola'),
+                        ),
+                        const PopupMenuItem(
+                          value: _TrackAction.addToPlaylist,
+                          child: Text('Añadir a playlist'),
+                        ),
+                        PopupMenuItem(
+                          value: _TrackAction.favorite,
+                          child: Text(
+                            track.isFavorite
+                                ? 'Quitar de Me gusta'
+                                : 'Añadir a Me gusta',
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: _TrackAction.delete,
+                          child: Text('Eliminar de la biblioteca'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                onTap: !enabled
+                    ? null
+                    : track.isAvailable
+                    ? () {
+                        if (HardwareKeyboard.instance.isControlPressed ||
+                            HardwareKeyboard.instance.isMetaPressed ||
+                            HardwareKeyboard.instance.isShiftPressed ||
+                            _selected.isNotEmpty) {
+                          _select(index);
+                        } else {
+                          onTrackTap(index);
+                        }
+                      }
+                    : onUnavailable,
+              );
+            },
           ),
-          onTap: !enabled
-              ? null
-              : track.isAvailable
-              ? () => onTrackTap(index)
-              : onUnavailable,
-        );
-      },
+        ),
+      ],
     );
   }
 }

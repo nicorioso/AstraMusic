@@ -74,6 +74,39 @@ void main() {
     expect(repository.tracks.single.uri, 'content://document/audio/1');
   });
 
+  testWidgets('selección múltiple muestra acciones masivas en escritorio', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final tracks = [
+      Track(
+        id: 1,
+        uri: 'file:///uno.mp3',
+        title: 'Uno',
+        dateAdded: DateTime(2026),
+      ),
+      Track(
+        id: 2,
+        uri: 'file:///dos.mp3',
+        title: 'Dos',
+        dateAdded: DateTime(2026),
+      ),
+    ];
+    await tester.pumpWidget(_testApp(FakeTrackRepository(tracks)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pump();
+    await tester.tap(find.byType(Checkbox).last);
+    await tester.pump();
+    expect(find.text('2 seleccionadas'), findsOneWidget);
+    expect(find.text('A la cola'), findsOneWidget);
+    expect(find.text('Playlist'), findsOneWidget);
+    expect(find.text('Eliminar'), findsOneWidget);
+  });
+
   testWidgets('muestra el estado vacío de la biblioteca', (tester) async {
     await tester.pumpWidget(_testApp(const FakeTrackRepository([])));
     await tester.pumpAndSettle();
