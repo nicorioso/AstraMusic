@@ -36,6 +36,19 @@ void main() {
     await service.dispose();
   });
 
+  test('deshacer recupera la cola vaciada y el índice', () async {
+    final controller = container.read(playerControllerProvider.notifier);
+    await controller.playQueue(_tracks(3), startIndex: 1);
+    expect(container.read(playerControllerProvider).recentlyPlayed.first.id, 2);
+    await controller.clearQueue();
+    expect(container.read(playerControllerProvider).queue, isEmpty);
+    expect(container.read(playerControllerProvider).canUndoQueue, isTrue);
+    await controller.undoQueueChange();
+    expect(container.read(playerControllerProvider).queue.length, 3);
+    expect(container.read(playerControllerProvider).currentIndex, 1);
+    expect(container.read(playerControllerProvider).canUndoQueue, isFalse);
+  });
+
   test(
     'cuenta una vez al iniciar y al cambiar de pista, no al reanudar',
     () async {

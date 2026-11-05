@@ -38,6 +38,8 @@ class PlayerViewState {
     this.duration,
     this.currentItem,
     this.queue = const [],
+    this.recentlyPlayed = const [],
+    this.canUndoQueue = false,
     this.currentIndex,
     this.shuffleEnabled = false,
     this.repeatMode = RepeatMode.off,
@@ -51,6 +53,8 @@ class PlayerViewState {
   final Duration? duration;
   final AudioItem? currentItem;
   final List<Track> queue;
+  final List<Track> recentlyPlayed;
+  final bool canUndoQueue;
   final int? currentIndex;
   final bool shuffleEnabled;
   final RepeatMode repeatMode;
@@ -67,6 +71,8 @@ class PlayerViewState {
     Object? duration = _notProvided,
     Object? currentItem = _notProvided,
     List<Track>? queue,
+    List<Track>? recentlyPlayed,
+    bool? canUndoQueue,
     Object? currentIndex = _notProvided,
     bool? shuffleEnabled,
     RepeatMode? repeatMode,
@@ -84,6 +90,8 @@ class PlayerViewState {
           ? this.currentItem
           : currentItem as AudioItem?,
       queue: queue ?? this.queue,
+      recentlyPlayed: recentlyPlayed ?? this.recentlyPlayed,
+      canUndoQueue: canUndoQueue ?? this.canUndoQueue,
       currentIndex: currentIndex == _notProvided
           ? this.currentIndex
           : currentIndex as int?,
@@ -110,6 +118,9 @@ class PlayerController extends Notifier<PlayerViewState> {
   Duration? _lastPosition;
   bool _replacingQueue = false;
   bool _recordCheckScheduled = false;
+  List<Track>? _queueBeforeChange;
+  int? _indexBeforeChange;
+  String? _lastRecentUri;
 
   AudioPlayerService get _service => ref.read(audioPlayerServiceProvider);
 
@@ -240,13 +251,42 @@ class PlayerController extends Notifier<PlayerViewState> {
 
   Future<void> playNext(Track track) => _run(() => _service.playNext(track));
 
-  Future<void> removeFromQueue(int index) =>
-      _run(() => _service.removeFromQueue(index));
+  void _rememberQueue() {
+    _queueBeforeChange = List.of(state.queue);
+    _indexBeforeChange = state.currentIndex;
+    state = state.copyWith(canUndoQueue: true);
+  }
 
-  Future<void> moveInQueue(int oldIndex, int newIndex) =>
-      _run(() => _service.moveInQueue(oldIndex, newIndex));
+  Future<void> undoQueueChange() async {
+    final previous = _queueBeforeChange;
+    if (previous == null) return;
+    final index = _indexBeforeChange;
+    _queueBeforeChange = null;
+    state = state.copyWith(canUndoQueue: false);
+    if (previous.isEmpty) {
+      await _run(_service.clearQueue);
+    } else {
+      await playQueue(
+        previous,
+        startIndex: (index ?? 0).clamp(0, previous.length - 1),
+      );
+    }
+  }
 
-  Future<void> clearQueue() => _run(_service.clearQueue);
+  Future<void> removeFromQueue(int index) async {
+    _rememberQueue();
+    await _run(() => _service.removeFromQueue(index));
+  }
+
+  Future<void> moveInQueue(int oldIndex, int newIndex) async {
+    _rememberQueue();
+    await _run(() => _service.moveInQueue(oldIndex, newIndex));
+  }
+
+  Future<void> clearQueue() async {
+    _rememberQueue();
+    await _run(_service.clearQueue);
+  }
 
   Future<void> stopAndClearQueue() => _run(() async {
     await _service.stop();
@@ -267,6 +307,23 @@ class PlayerController extends Notifier<PlayerViewState> {
     if (state.errorMessage != null) {
       state = state.copyWith(errorMessage: null);
     }
+  }
+
+  void _recordRecentTrack() {
+    final item = state.currentItem;
+    final index = state.currentIndex;
+    if (item == null ||
+        index == null ||
+        index < 0 ||
+        index >= state.queue.length) {
+      return;
+    }
+    final track = state.queue[index];
+    if (track.uri != item.path || _lastRecentUri == track.uri) return;
+    _lastRecentUri = track.uri;
+    state = state.copyWith(
+      recentlyPlayed: [track, ...state.recentlyPlayed].take(10).toList(),
+    );
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -304,17 +361,20 @@ class PlayerController extends Notifier<PlayerViewState> {
         currentItem: item,
         duration: item?.duration ?? state.duration,
       );
+      _recordRecentTrack();
     });
     _subscribe(_service.queueStream, (queue) {
       if (ref.mounted) {
         state = state.copyWith(queue: queue);
         _recordCurrentTrack();
+        _recordRecentTrack();
       }
     });
     _subscribe(_service.currentIndexStream, (index) {
       if (ref.mounted) {
         state = state.copyWith(currentIndex: index);
         _recordCurrentTrack();
+        _recordRecentTrack();
       }
     });
     _subscribe(_service.shuffleEnabledStream, (enabled) {
