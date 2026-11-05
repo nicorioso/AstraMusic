@@ -1172,18 +1172,161 @@ class _TrackListTile extends ConsumerWidget {
   }
 }
 
-class _DesktopTrackTable extends StatelessWidget {
+class _DesktopTrackTable extends ConsumerStatefulWidget {
   const _DesktopTrackTable({required this.tracks, required this.showAlbum});
 
   final List<Track> tracks;
   final bool showAlbum;
 
   @override
+  ConsumerState<_DesktopTrackTable> createState() => _DesktopTrackTableState();
+}
+
+class _DesktopTrackTableState extends ConsumerState<_DesktopTrackTable> {
+  final Set<String> _selected = {};
+  int? _anchor;
+
+  void _select(int index, {bool toggle = false}) {
+    final tracks = widget.tracks;
+    final keyboard = HardwareKeyboard.instance;
+    setState(() {
+      if (!toggle && keyboard.isShiftPressed && _anchor != null) {
+        final start = _anchor! < index ? _anchor! : index;
+        final end = _anchor! > index ? _anchor! : index;
+        for (var i = start; i <= end; i++) {
+          _selected.add(tracks[i].uri);
+        }
+      } else if (toggle ||
+          keyboard.isControlPressed ||
+          keyboard.isMetaPressed) {
+        if (!_selected.add(tracks[index].uri)) {
+          _selected.remove(tracks[index].uri);
+        }
+        _anchor = index;
+      } else {
+        _selected
+          ..clear()
+          ..add(tracks[index].uri);
+        _anchor = index;
+      }
+    });
+  }
+
+  Future<void> _act(_ShellTrackAction action) async {
+    final chosen = widget.tracks
+        .where((track) => _selected.contains(track.uri))
+        .toList();
+    final library = ref.read(libraryControllerProvider.notifier);
+    switch (action) {
+      case _ShellTrackAction.addToQueue:
+        for (final track in chosen.where((track) => track.isAvailable)) {
+          await library.addToQueue(track);
+        }
+      case _ShellTrackAction.addToPlaylist:
+        final messenger = ScaffoldMessenger.of(context);
+        final repository = ref.read(playlistRepositoryProvider);
+        final playlist = await createPlaylist(context, ref);
+        if (playlist == null) return;
+        try {
+          await repository.addTracks(playlist.id, [
+            for (final track in chosen)
+              if (track.id != null) track.id!,
+          ]);
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(content: Text('Añadidas a ${playlist.name}')),
+            );
+          }
+        } catch (error) {
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('No se pudo guardar la selección: $error'),
+              ),
+            );
+          }
+        }
+      case _ShellTrackAction.delete:
+        for (final track in chosen) {
+          await library.deleteTrack(track);
+        }
+      case _ShellTrackAction.playNext:
+        for (final track in chosen.reversed.where(
+          (track) => track.isAvailable,
+        )) {
+          await library.playNext(track);
+        }
+      case _ShellTrackAction.favorite:
+        for (final track in chosen) {
+          if (track.id != null) {
+            await ref
+                .read(trackRepositoryProvider)
+                .setFavorite(track.id!, !track.isFavorite);
+          }
+        }
+    }
+    if (mounted) setState(_selected.clear);
+  }
+
+  Future<void> _contextMenu(TapDownDetails details, int index) async {
+    if (!_selected.contains(widget.tracks[index].uri)) _select(index);
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final action = await showMenu<_ShellTrackAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        details.globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: _ShellTrackAction.addToQueue,
+          child: Text('Añadir selección a la cola'),
+        ),
+        PopupMenuItem(
+          value: _ShellTrackAction.addToPlaylist,
+          child: Text('Añadir selección a playlist'),
+        ),
+        PopupMenuItem(
+          value: _ShellTrackAction.delete,
+          child: Text('Eliminar selección'),
+        ),
+      ],
+    );
+    if (action != null && mounted) await _act(action);
+  }
+
+  @override
   Widget build(BuildContext context) {
     PerformanceDiagnostics.instance.recordListBuild();
     return Column(
       children: [
-        _DesktopTrackHeader(showAlbum: showAlbum),
+        _DesktopTrackHeader(showAlbum: widget.showAlbum),
+        if (_selected.isNotEmpty)
+          SizedBox(
+            height: 48,
+            child: Row(
+              children: [
+                Text('${_selected.length} seleccionadas'),
+                TextButton(
+                  onPressed: () => _act(_ShellTrackAction.addToQueue),
+                  child: const Text('A la cola'),
+                ),
+                TextButton(
+                  onPressed: () => _act(_ShellTrackAction.addToPlaylist),
+                  child: const Text('Playlist'),
+                ),
+                TextButton(
+                  onPressed: () => _act(_ShellTrackAction.delete),
+                  child: const Text('Eliminar'),
+                ),
+                IconButton(
+                  onPressed: () => setState(_selected.clear),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
         const Divider(height: 1),
         Expanded(
           child: ListView.builder(
@@ -1191,12 +1334,16 @@ class _DesktopTrackTable extends StatelessWidget {
             itemExtent: 56,
             scrollCacheExtent: const ScrollCacheExtent.pixels(280),
             addAutomaticKeepAlives: false,
-            itemCount: tracks.length,
+            itemCount: widget.tracks.length,
             itemBuilder: (_, index) => _DesktopTrackRow(
-              track: tracks[index],
-              tracks: tracks,
+              track: widget.tracks[index],
+              tracks: widget.tracks,
               index: index,
-              showAlbum: showAlbum,
+              showAlbum: widget.showAlbum,
+              selected: _selected.contains(widget.tracks[index].uri),
+              onSelect: (toggle) => _select(index, toggle: toggle),
+              onContextMenu: (details) => _contextMenu(details, index),
+              selectionActive: _selected.isNotEmpty,
             ),
           ),
         ),
@@ -1236,8 +1383,16 @@ class _DesktopTrackRow extends ConsumerWidget {
     required this.tracks,
     required this.index,
     required this.showAlbum,
+    required this.selected,
+    required this.selectionActive,
+    required this.onSelect,
+    required this.onContextMenu,
   });
 
+  final bool selected;
+  final bool selectionActive;
+  final ValueChanged<bool> onSelect;
+  final GestureTapDownCallback onContextMenu;
   final Track track;
   final List<Track> tracks;
   final int index;
@@ -1259,15 +1414,27 @@ class _DesktopTrackRow extends ConsumerWidget {
             : context.astraColors.surface.withValues(alpha: 0),
         child: InkWell(
           hoverColor: context.astraColors.surfaceHover,
+          onSecondaryTapDown: onContextMenu,
           onTap: track.isAvailable
-              ? () => controller.playVisibleQueue(tracks, startIndex: index)
+              ? () {
+                  if (selectionActive ||
+                      HardwareKeyboard.instance.isControlPressed ||
+                      HardwareKeyboard.instance.isMetaPressed ||
+                      HardwareKeyboard.instance.isShiftPressed) {
+                    onSelect(false);
+                  } else {
+                    controller.playVisibleQueue(tracks, startIndex: index);
+                  }
+                }
               : controller.showUnavailableMessage,
           child: Row(
             children: [
               SizedBox(
                 width: 56,
                 child: Center(
-                  child: current
+                  child: selected
+                      ? Checkbox(value: true, onChanged: (_) => onSelect(true))
+                      : current
                       ? Icon(
                           Icons.graphic_eq,
                           key: ValueKey('current-track-indicator-${track.id}'),

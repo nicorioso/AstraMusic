@@ -74,6 +74,26 @@ void main() {
     expect(find.text('No se encontraron archivos de audio.'), findsOneWidget);
   });
 
+  testWidgets('la tabla principal permite selección múltiple con Ctrl clic', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(1200, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('desktop-track-table')), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.tap(find.text('Canción 29').first);
+    await tester.pump();
+    await tester.tap(find.text('Canción 28').first);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(find.text('2 seleccionadas'), findsOneWidget);
+    expect(find.text('A la cola'), findsOneWidget);
+  });
+
   testWidgets('Ajustes abre los flujos de portabilidad por el camino real', (
     tester,
   ) async {
