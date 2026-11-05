@@ -53,6 +53,20 @@ void main() {
     },
   );
 
+  test(
+    'deshacer vaciado no reinicia la pista que sigue reproduciéndose',
+    () async {
+      final controller = container.read(playerControllerProvider.notifier);
+      await controller.playQueue(_tracks(3), startIndex: 1);
+      service.retainPlaybackOnClear = true;
+      await controller.clearQueue();
+      await controller.undoQueueChange();
+      expect(service.playQueueCalls, 1);
+      expect(service.tracks.map((track) => track.id), [1, 2, 3]);
+      expect(container.read(playerControllerProvider).isPlaying, isTrue);
+    },
+  );
+
   test('deshacer recupera la cola vaciada y el índice', () async {
     final controller = container.read(playerControllerProvider.notifier);
     await controller.playQueue(_tracks(3), startIndex: 1);
@@ -242,6 +256,8 @@ final class QueueFakeAudioPlayerService
   int? currentIndex;
   RepeatMode repeatMode = RepeatMode.off;
   bool failShuffle = false;
+  bool retainPlaybackOnClear = false;
+  int playQueueCalls = 0;
   int positionSubscriptionCount = 0;
   Duration _currentPosition = Duration.zero;
 
@@ -280,6 +296,7 @@ final class QueueFakeAudioPlayerService
 
   @override
   Future<void> playQueue(List<Track> tracks, {int startIndex = 0}) async {
+    playQueueCalls++;
     this.tracks = List.of(tracks);
     currentIndex = startIndex;
     _emitQueue();
@@ -386,8 +403,10 @@ final class QueueFakeAudioPlayerService
     tracks.clear();
     currentIndex = null;
     _queue.add(const []);
-    _index.add(null);
-    _item.add(null);
+    if (!retainPlaybackOnClear) {
+      _index.add(null);
+      _item.add(null);
+    }
   }
 
   void failCurrent(String message) {

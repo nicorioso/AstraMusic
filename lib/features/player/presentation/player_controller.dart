@@ -303,6 +303,41 @@ class PlayerController extends Notifier<PlayerViewState> {
         });
       case QueueClear():
         if (previous.isEmpty) return;
+        final active = index == null || index < 0 || index >= previous.length
+            ? null
+            : previous[index];
+        if (active != null &&
+            state.isPlaying &&
+            state.currentItem?.path == active.uri) {
+          await _run(() async {
+            final restored = List<Track>.of(state.queue);
+            for (final track in previous) {
+              final requiredCount = previous
+                  .where((candidate) => candidate.uri == track.uri)
+                  .length;
+              final currentCount = restored
+                  .where((candidate) => candidate.uri == track.uri)
+                  .length;
+              if (currentCount >= requiredCount) continue;
+              await _service.addToQueue(track);
+              restored.add(track);
+            }
+            for (var target = 0; target < previous.length; target++) {
+              if (target < restored.length &&
+                  restored[target].uri == previous[target].uri) {
+                continue;
+              }
+              final source = restored.indexWhere(
+                (track) => track.uri == previous[target].uri,
+                target + 1,
+              );
+              if (source < 0) continue;
+              await _service.moveInQueue(source, target);
+              restored.insert(target, restored.removeAt(source));
+            }
+          });
+          return;
+        }
         final started = await playQueue(
           previous,
           startIndex: (index ?? 0).clamp(0, previous.length - 1),
