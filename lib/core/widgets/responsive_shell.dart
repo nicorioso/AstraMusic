@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/desktop_drop_import.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/platform/android_system_settings.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
@@ -194,42 +196,73 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
         },
         child: Focus(
           autofocus: true,
-          child: Scaffold(
-            body: SafeArea(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          key: const Key('desktop-sidebar'),
-                          width: _collapsed ? 72 : 300,
-                          child: _DesktopSidebar(
-                            collapsed: _collapsed,
-                            onToggle: () =>
-                                setState(() => _collapsed = !_collapsed),
-                          ),
-                        ),
-                        Expanded(
-                          child: Container(
-                            key: const Key('desktop-content-panel'),
-                            margin: const EdgeInsets.all(8),
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(
-                              color: context.astraColors.surface,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: _DesktopCenter(
-                              searchController: widget.searchController,
-                              searchFocusNode: _searchFocusNode,
-                            ),
-                          ),
-                        ),
-                      ],
+          child: DropTarget(
+            onDragDone: (details) async {
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                final files = await audioFilesFromDrop(details.files);
+                if (files.isEmpty) {
+                  if (messenger.mounted) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('No se encontraron archivos de audio.'),
+                      ),
+                    );
+                  }
+                  return;
+                }
+                await ref
+                    .read(libraryControllerProvider.notifier)
+                    .importDroppedFiles(files);
+              } catch (error) {
+                if (messenger.mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'No se pudieron importar los archivos: $error',
+                      ),
                     ),
-                  ),
-                  const DesktopPlayerBar(),
-                ],
+                  );
+                }
+              }
+            },
+            child: Scaffold(
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            key: const Key('desktop-sidebar'),
+                            width: _collapsed ? 72 : 300,
+                            child: _DesktopSidebar(
+                              collapsed: _collapsed,
+                              onToggle: () =>
+                                  setState(() => _collapsed = !_collapsed),
+                            ),
+                          ),
+                          Expanded(
+                            child: Container(
+                              key: const Key('desktop-content-panel'),
+                              margin: const EdgeInsets.all(8),
+                              clipBehavior: Clip.antiAlias,
+                              decoration: BoxDecoration(
+                                color: context.astraColors.surface,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: _DesktopCenter(
+                                searchController: widget.searchController,
+                                searchFocusNode: _searchFocusNode,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const DesktopPlayerBar(),
+                  ],
+                ),
               ),
             ),
           ),

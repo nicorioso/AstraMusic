@@ -2,6 +2,8 @@ import 'package:astramusic/features/library/domain/smart_playlist_repository.dar
 
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
+
 import 'package:astramusic/core/platform/audio_player_service.dart';
 import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/navigation/app_navigation.dart';
@@ -50,6 +52,26 @@ void main() {
           .hasFocus,
       isTrue,
     );
+  });
+
+  testWidgets('el shell recibe una entrega nativa y avisa si no hay audio', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(1200, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pump();
+    final target = tester.widget<DropTarget>(find.byType(DropTarget));
+    target.onDragDone!(
+      DropDoneDetails(
+        files: [DropItemFile('/tmp/nota.txt')],
+        localPosition: Offset.zero,
+        globalPosition: Offset.zero,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('No se encontraron archivos de audio.'), findsOneWidget);
   });
 
   testWidgets('Ajustes abre los flujos de portabilidad por el camino real', (

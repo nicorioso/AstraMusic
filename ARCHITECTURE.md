@@ -52,6 +52,7 @@ actualizarse como parte de cambios ordinarios.
 | `audio_service_mpris` | Integración MPRIS declarada para Linux; no hay configuración Dart explícita adicional |
 | `audio_metadata_reader` | Lectura de etiquetas y carátulas embebidas de archivos locales |
 | `file_picker` | Selección de carpetas y archivos |
+| `desktop_drop` 0.8.4 | Entrega nativa de archivos y carpetas en escritorio; adaptador en `core/platform/desktop_drop_import.dart` |
 | `permission_handler` 12.0.3 | Permisos de audio/notificaciones y apertura de ajustes |
 | `path` / `path_provider` | Rutas y directorios de datos/caché de la aplicación |
 | `diacritic` | Normalización de búsqueda sin diacríticos |

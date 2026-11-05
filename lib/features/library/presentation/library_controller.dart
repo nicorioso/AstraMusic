@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 
 import 'package:astramusic/core/platform/library_scanner.dart';
+import 'package:astramusic/core/platform/audio_file_picker.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
 import 'package:astramusic/core/platform/media_library_permission.dart';
 import 'package:astramusic/core/platform/tag_reader.dart';
@@ -215,69 +216,80 @@ final class LibraryController extends Notifier<LibraryViewState> {
 
     try {
       final files = await ref.read(audioFilePickerProvider).pickAudioFiles();
-      if (files.isEmpty || !ref.mounted) return;
-
-      final addedAt = DateTime.now();
-      final hasLocalFiles = files.any(
-        (file) => localFilePathFromLocation(file.path) != null,
-      );
-      final cacheDirectory = hasLocalFiles
-          ? await getApplicationCacheDirectory()
-          : null;
-      final tracks = <Track>[];
-      var tagErrors = 0;
-      for (final file in files) {
-        final localPath = localFilePathFromLocation(file.path);
-        LocalAudioFileInfo? info;
-        if (localPath != null) {
-          try {
-            final readInfo = await Isolate.run(
-              () => readLocalAudioFileWithArtwork(
-                localPath,
-                cacheDirectory!.path,
-              ),
-            );
-            info = readInfo;
-            if (readInfo.hadTagError) tagErrors++;
-          } catch (_) {
-            tagErrors++;
-          }
-        }
-        tracks.add(
-          Track(
-            uri: file.path,
-            title: info?.tags.title ?? file.title,
-            artist: info?.tags.artist,
-            album: info?.tags.album,
-            duration: switch (info?.tags.durationMs) {
-              final int milliseconds => Duration(milliseconds: milliseconds),
-              null => null,
-            },
-            trackNumber: info?.tags.trackNumber,
-            year: info?.tags.year,
-            fileSize: info?.fileSize,
-            dateAdded: addedAt,
-            dateModified: info?.dateModified,
-            artworkPath: info?.artworkPath,
-          ),
-        );
-      }
-      final repository = ref.read(trackRepositoryProvider);
-      await repository.restoreExcluded(
-        tracks.map((track) => track.uri).toSet(),
-      );
-      await repository.upsertAll(tracks);
-      if (tagErrors > 0 && ref.mounted) {
-        state = state.copyWith(
-          message:
-              '$tagErrors archivos se añadieron usando su nombre porque '
-              'no fue posible leer sus etiquetas.',
-        );
-      }
+      await _importPickedFiles(files);
     } catch (error) {
       if (ref.mounted) state = state.copyWith(message: _messageFor(error));
     } finally {
       if (ref.mounted) state = state.copyWith(isBusy: false);
+    }
+  }
+
+  Future<void> importDroppedFiles(List<PickedAudioFile> files) async {
+    if (state.actionsDisabled || files.isEmpty) return;
+    state = state.copyWith(isBusy: true, message: null, offerSettings: false);
+    try {
+      await _importPickedFiles(files);
+    } catch (error) {
+      if (ref.mounted) state = state.copyWith(message: _messageFor(error));
+    } finally {
+      if (ref.mounted) state = state.copyWith(isBusy: false);
+    }
+  }
+
+  Future<void> _importPickedFiles(List<PickedAudioFile> files) async {
+    if (files.isEmpty || !ref.mounted) return;
+    final addedAt = DateTime.now();
+    final hasLocalFiles = files.any(
+      (file) => localFilePathFromLocation(file.path) != null,
+    );
+    final cacheDirectory = hasLocalFiles
+        ? await getApplicationCacheDirectory()
+        : null;
+    final tracks = <Track>[];
+    var tagErrors = 0;
+    for (final file in files) {
+      final localPath = localFilePathFromLocation(file.path);
+      LocalAudioFileInfo? info;
+      if (localPath != null) {
+        try {
+          final readInfo = await Isolate.run(
+            () =>
+                readLocalAudioFileWithArtwork(localPath, cacheDirectory!.path),
+          );
+          info = readInfo;
+          if (readInfo.hadTagError) tagErrors++;
+        } catch (_) {
+          tagErrors++;
+        }
+      }
+      tracks.add(
+        Track(
+          uri: file.path,
+          title: info?.tags.title ?? file.title,
+          artist: info?.tags.artist,
+          album: info?.tags.album,
+          duration: switch (info?.tags.durationMs) {
+            final int milliseconds => Duration(milliseconds: milliseconds),
+            null => null,
+          },
+          trackNumber: info?.tags.trackNumber,
+          year: info?.tags.year,
+          fileSize: info?.fileSize,
+          dateAdded: addedAt,
+          dateModified: info?.dateModified,
+          artworkPath: info?.artworkPath,
+        ),
+      );
+    }
+    final repository = ref.read(trackRepositoryProvider);
+    await repository.restoreExcluded(tracks.map((track) => track.uri).toSet());
+    await repository.upsertAll(tracks);
+    if (tagErrors > 0 && ref.mounted) {
+      state = state.copyWith(
+        message:
+            '$tagErrors archivos se añadieron usando su nombre porque '
+            'no fue posible leer sus etiquetas.',
+      );
     }
   }
 
@@ -308,7 +320,9 @@ final class LibraryController extends Notifier<LibraryViewState> {
       startIndex: startIndex,
       shuffle: shuffle,
     );
-    if (started) await ref.read(playlistRepositoryProvider).markPlayed(playlistId);
+    if (started) {
+      await ref.read(playlistRepositoryProvider).markPlayed(playlistId);
+    }
   }
 
   Future<void> playNext(Track track) async {
