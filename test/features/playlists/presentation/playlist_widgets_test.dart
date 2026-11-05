@@ -224,6 +224,25 @@ void main() {
     expect(find.text('Añadida a Viaje'), findsOneWidget);
   });
 
+  testWidgets('detalle de playlist permite selección múltiple en escritorio', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    await _setSize(tester, const Size(1200, 800));
+    await tester.pumpWidget(fixture.detailApp());
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.tap(find.text('Canción 1'));
+    await tester.pump();
+    await tester.tap(find.text('Canción 3'));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(find.text('2 seleccionadas'), findsOneWidget);
+    expect(find.text('A la cola'), findsOneWidget);
+    expect(find.text('Playlist'), findsWidgets);
+    expect(find.text('Quitar'), findsOneWidget);
+  });
+
   testWidgets('el detalle reproduce la cola disponible desde la elegida', (
     tester,
   ) async {

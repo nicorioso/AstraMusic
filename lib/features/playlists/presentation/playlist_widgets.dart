@@ -17,6 +17,7 @@ import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -407,7 +408,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
   }
 }
 
-class _PlaylistDetailBody extends ConsumerWidget {
+class _PlaylistDetailBody extends ConsumerStatefulWidget {
   const _PlaylistDetailBody({
     required this.playlist,
     required this.tracks,
@@ -421,7 +422,130 @@ class _PlaylistDetailBody extends ConsumerWidget {
   final bool favorites;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PlaylistDetailBody> createState() =>
+      _PlaylistDetailBodyState();
+}
+
+class _PlaylistDetailBodyState extends ConsumerState<_PlaylistDetailBody> {
+  final Set<String> _selected = {};
+  int? _anchor;
+
+  void _select(int index) {
+    final tracks = widget.tracks;
+    final keyboard = HardwareKeyboard.instance;
+    setState(() {
+      if (keyboard.isShiftPressed && _anchor != null) {
+        final start = _anchor! < index ? _anchor! : index;
+        final end = _anchor! > index ? _anchor! : index;
+        for (var i = start; i <= end; i++) {
+          _selected.add(tracks[i].uri);
+        }
+      } else if (keyboard.isControlPressed || keyboard.isMetaPressed) {
+        if (!_selected.add(tracks[index].uri)) {
+          _selected.remove(tracks[index].uri);
+        }
+        _anchor = index;
+      } else {
+        _selected
+          ..clear()
+          ..add(tracks[index].uri);
+        _anchor = index;
+      }
+    });
+  }
+
+  Future<void> _bulk(_PlaylistBulkAction action) async {
+    final chosen = widget.tracks
+        .where((track) => _selected.contains(track.uri))
+        .toList();
+    switch (action) {
+      case _PlaylistBulkAction.queue:
+        final controller = ref.read(libraryControllerProvider.notifier);
+        for (final track in chosen.where((track) => track.isAvailable)) {
+          await controller.addToQueue(track);
+        }
+      case _PlaylistBulkAction.playlist:
+        final messenger = ScaffoldMessenger.of(context);
+        final repository = ref.read(playlistRepositoryProvider);
+        final playlist = await createPlaylist(context, ref);
+        if (playlist == null) return;
+        try {
+          await repository.addTracks(playlist.id, [
+            for (final track in chosen)
+              if (track.id != null) track.id!,
+          ]);
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(content: Text('Añadidas a ${playlist.name}')),
+            );
+          }
+        } catch (error) {
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('No se pudo guardar la selección: $error'),
+              ),
+            );
+          }
+        }
+      case _PlaylistBulkAction.remove:
+        if (widget.favorites) {
+          final repository = ref.read(trackRepositoryProvider);
+          for (final track in chosen) {
+            if (track.id != null) {
+              await repository.setFavorite(track.id!, false);
+            }
+          }
+        } else {
+          final repository = ref.read(playlistRepositoryProvider);
+          for (final track in chosen) {
+            if (track.id != null) {
+              await repository.removeTrack(widget.playlist.id, track.id!);
+            }
+          }
+        }
+    }
+    if (mounted) setState(_selected.clear);
+  }
+
+  Future<void> _contextMenu(int index, TapDownDetails details) async {
+    if (!_selected.contains(widget.tracks[index].uri)) _select(index);
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final action = await showMenu<_PlaylistBulkAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        details.globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        const PopupMenuItem(
+          value: _PlaylistBulkAction.queue,
+          child: Text('Añadir selección a la cola'),
+        ),
+        const PopupMenuItem(
+          value: _PlaylistBulkAction.playlist,
+          child: Text('Añadir selección a playlist'),
+        ),
+        PopupMenuItem(
+          value: _PlaylistBulkAction.remove,
+          child: Text(
+            widget.favorites
+                ? 'Quitar selección de Me gusta'
+                : 'Quitar selección de esta playlist',
+          ),
+        ),
+      ],
+    );
+    if (action != null && mounted) await _bulk(action);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final playlist = widget.playlist;
+    final tracks = widget.tracks;
+    final embedded = widget.embedded;
+    final favorites = widget.favorites;
     final isPlaying = ref.watch(
       playerControllerProvider.select((state) => state.isPlaying),
     );
@@ -641,6 +765,35 @@ class _PlaylistDetailBody extends ConsumerWidget {
               ),
             ),
           ),
+          if (_selected.any((uri) => tracks.any((track) => track.uri == uri)))
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 48,
+                child: Row(
+                  children: [
+                    Text(
+                      '${_selected.where((uri) => tracks.any((track) => track.uri == uri)).length} seleccionadas',
+                    ),
+                    TextButton(
+                      onPressed: () => _bulk(_PlaylistBulkAction.queue),
+                      child: const Text('A la cola'),
+                    ),
+                    TextButton(
+                      onPressed: () => _bulk(_PlaylistBulkAction.playlist),
+                      child: const Text('Playlist'),
+                    ),
+                    TextButton(
+                      onPressed: () => _bulk(_PlaylistBulkAction.remove),
+                      child: const Text('Quitar'),
+                    ),
+                    IconButton(
+                      onPressed: () => setState(_selected.clear),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           if (MediaQuery.sizeOf(context).width >= 840 && tracks.isNotEmpty)
             const SliverToBoxAdapter(child: _PlaylistTrackHeader()),
           if (tracks.isEmpty)
@@ -687,8 +840,20 @@ class _PlaylistDetailBody extends ConsumerWidget {
                     track: track,
                     index: index,
                     onTap: track.isAvailable
-                        ? playTrack
+                        ? () {
+                            if (_selected.isNotEmpty ||
+                                HardwareKeyboard.instance.isControlPressed ||
+                                HardwareKeyboard.instance.isMetaPressed ||
+                                HardwareKeyboard.instance.isShiftPressed) {
+                              _select(index);
+                            } else {
+                              playTrack();
+                            }
+                          }
                         : library.showUnavailableMessage,
+                    selected: _selected.contains(track.uri),
+                    onSelect: () => _select(index),
+                    onContextMenu: (details) => _contextMenu(index, details),
                     removeLabel: favorites
                         ? 'Quitar de Me gusta'
                         : 'Quitar de esta playlist',
@@ -709,11 +874,23 @@ class _PlaylistDetailBody extends ConsumerWidget {
                   track: track,
                   showDateAdded: true,
                   onTap: track.isAvailable
-                      ? playTrack
+                      ? () {
+                          if (_selected.isNotEmpty ||
+                              HardwareKeyboard.instance.isControlPressed ||
+                              HardwareKeyboard.instance.isMetaPressed ||
+                              HardwareKeyboard.instance.isShiftPressed) {
+                            _select(index);
+                          } else {
+                            playTrack();
+                          }
+                        }
                       : library.showUnavailableMessage,
+                  onSecondaryTapDown: (details) => _contextMenu(index, details),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (_selected.contains(track.uri))
+                        Checkbox(value: true, onChanged: (_) => _select(index)),
                       if (track.duration case final duration?)
                         Text(_trackDuration(duration)),
                       PopupMenuButton<bool>(
@@ -758,7 +935,7 @@ class _PlaylistDetailBody extends ConsumerWidget {
     try {
       final path = await picker.pickImage();
       if (path == null) return;
-      await repository.setCustomArtwork(playlist.id, path);
+      await repository.setCustomArtwork(widget.playlist.id, path);
     } catch (_) {
       if (!messenger.mounted) return;
       messenger
@@ -776,17 +953,17 @@ class _PlaylistDetailBody extends ConsumerWidget {
     if (!navigator.mounted) return;
     final name = await showPlaylistNameDialog(
       navigator.context,
-      initialName: playlist.name,
+      initialName: widget.playlist.name,
     );
     if (name != null) {
-      await repository.rename(playlist.id, name);
+      await repository.rename(widget.playlist.id, name);
     }
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
     final repository = ref.read(playlistRepositoryProvider);
-    final appNavigation = embedded
+    final appNavigation = widget.embedded
         ? ref.read(appDestinationProvider.notifier)
         : null;
     await Future<void>.delayed(Duration.zero);
@@ -796,7 +973,7 @@ class _PlaylistDetailBody extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('Eliminar playlist'),
         content: Text(
-          'Se eliminará la playlist ${playlist.name}. Tus canciones no se borran.',
+          'Se eliminará la playlist ${widget.playlist.name}. Tus canciones no se borran.',
         ),
         actions: [
           TextButton(
@@ -812,15 +989,17 @@ class _PlaylistDetailBody extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !navigator.mounted) return;
-    await repository.delete(playlist.id);
+    await repository.delete(widget.playlist.id);
     if (!navigator.mounted) return;
-    if (embedded) {
+    if (widget.embedded) {
       appNavigation!.back();
     } else {
       navigator.pop();
     }
   }
 }
+
+enum _PlaylistBulkAction { queue, playlist, remove }
 
 class _PlaylistTrackHeader extends StatelessWidget {
   const _PlaylistTrackHeader();
@@ -851,6 +1030,9 @@ class _PlaylistDesktopTrackRow extends ConsumerWidget {
     required this.track,
     required this.index,
     required this.onTap,
+    required this.selected,
+    required this.onSelect,
+    required this.onContextMenu,
     required this.removeLabel,
     required this.onRemove,
   });
@@ -858,6 +1040,9 @@ class _PlaylistDesktopTrackRow extends ConsumerWidget {
   final Track track;
   final int index;
   final VoidCallback onTap;
+  final bool selected;
+  final VoidCallback onSelect;
+  final GestureTapDownCallback onContextMenu;
   final String removeLabel;
   final VoidCallback onRemove;
 
@@ -875,12 +1060,15 @@ class _PlaylistDesktopTrackRow extends ConsumerWidget {
       child: InkWell(
         hoverColor: context.astraColors.surfaceHover,
         onTap: onTap,
+        onSecondaryTapDown: onContextMenu,
         child: Row(
           children: [
             SizedBox(
               width: 56,
               child: Center(
-                child: current
+                child: selected
+                    ? Checkbox(value: true, onChanged: (_) => onSelect())
+                    : current
                     ? Icon(Icons.graphic_eq, color: currentColor, size: 20)
                     : Text('${index + 1}'),
               ),
