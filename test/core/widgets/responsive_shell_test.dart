@@ -26,7 +26,35 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('Ajustes abre los flujos de portabilidad por el camino real', (tester) async {
+  testWidgets('atajos de escritorio ajustan volumen y enfocan búsqueda', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(1200, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pump();
+    fixture.player.emitVolume(0.5);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(fixture.player.volume, closeTo(0.55, 0.001));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('desktop-search-field')))
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+  });
+
+  testWidgets('Ajustes abre los flujos de portabilidad por el camino real', (
+    tester,
+  ) async {
     final fixture = _Fixture();
     addTearDown(fixture.dispose);
     await _setSize(tester, const Size(390, 844));
@@ -41,10 +69,17 @@ void main() {
     expect(find.text('Importar playlist M3U'), findsWidgets);
     await tester.tap(find.text('Cancelar').last);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('settings-restore-backup')));
+    await tester.ensureVisible(
+      find.byKey(const Key('settings-restore-backup')),
+    );
     await tester.tap(find.byKey(const Key('settings-restore-backup')));
     await tester.pumpAndSettle();
-    expect(find.text('Se reemplazarán la biblioteca, las playlists y los datos locales actuales.'), findsOneWidget);
+    expect(
+      find.text(
+        'Se reemplazarán la biblioteca, las playlists y los datos locales actuales.',
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Cancelar').last);
     await tester.pumpAndSettle();
   });

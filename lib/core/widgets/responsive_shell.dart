@@ -33,6 +33,49 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
+class DesktopPlaybackIntent extends Intent {
+  const DesktopPlaybackIntent(this.action);
+  final DesktopPlaybackAction action;
+}
+
+enum DesktopPlaybackAction {
+  toggle,
+  louder,
+  quieter,
+  previous,
+  next,
+  search,
+  back,
+}
+
+final desktopShortcutBindingsProvider =
+    Provider<Map<ShortcutActivator, Intent>>(
+      (ref) => const {
+        SingleActivator(LogicalKeyboardKey.escape): DesktopPlaybackIntent(
+          DesktopPlaybackAction.back,
+        ),
+        SingleActivator(LogicalKeyboardKey.space): DesktopPlaybackIntent(
+          DesktopPlaybackAction.toggle,
+        ),
+        SingleActivator(LogicalKeyboardKey.arrowUp): DesktopPlaybackIntent(
+          DesktopPlaybackAction.louder,
+        ),
+        SingleActivator(LogicalKeyboardKey.arrowDown): DesktopPlaybackIntent(
+          DesktopPlaybackAction.quieter,
+        ),
+        SingleActivator(LogicalKeyboardKey.arrowLeft): DesktopPlaybackIntent(
+          DesktopPlaybackAction.previous,
+        ),
+        SingleActivator(LogicalKeyboardKey.arrowRight): DesktopPlaybackIntent(
+          DesktopPlaybackAction.next,
+        ),
+        SingleActivator(LogicalKeyboardKey.keyF, control: true):
+            DesktopPlaybackIntent(DesktopPlaybackAction.search),
+        SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+            DesktopPlaybackIntent(DesktopPlaybackAction.search),
+      },
+    );
+
 const desktopBreakpoint = 840.0;
 
 final androidSystemSettingsProvider = Provider<AndroidSystemSettings>(
@@ -101,43 +144,95 @@ class DesktopShell extends ConsumerStatefulWidget {
 
 class _DesktopShellState extends ConsumerState<DesktopShell> {
   var _collapsed = false;
+  final _searchFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Row(
+    final controller = ref.read(playerControllerProvider.notifier);
+    return Shortcuts(
+      shortcuts: ref.watch(desktopShortcutBindingsProvider),
+      child: Actions(
+        actions: {
+          DesktopPlaybackIntent: CallbackAction<DesktopPlaybackIntent>(
+            onInvoke: (intent) {
+              switch (intent.action) {
+                case DesktopPlaybackAction.toggle:
+                  controller.togglePlayback();
+                case DesktopPlaybackAction.louder:
+                  controller.setVolume(
+                    (ref.read(playerControllerProvider).volume + 0.05).clamp(
+                      0.0,
+                      1.0,
+                    ),
+                  );
+                case DesktopPlaybackAction.quieter:
+                  controller.setVolume(
+                    (ref.read(playerControllerProvider).volume - 0.05).clamp(
+                      0.0,
+                      1.0,
+                    ),
+                  );
+                case DesktopPlaybackAction.previous:
+                  controller.previous();
+                case DesktopPlaybackAction.next:
+                  controller.next();
+                case DesktopPlaybackAction.search:
+                  _searchFocusNode.requestFocus();
+                case DesktopPlaybackAction.back:
+                  final navigation = ref.read(appDestinationProvider.notifier);
+                  if (navigation.canGoBack) navigation.back();
+              }
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Scaffold(
+            body: SafeArea(
+              child: Column(
                 children: [
-                  SizedBox(
-                    key: const Key('desktop-sidebar'),
-                    width: _collapsed ? 72 : 300,
-                    child: _DesktopSidebar(
-                      collapsed: _collapsed,
-                      onToggle: () => setState(() => _collapsed = !_collapsed),
-                    ),
-                  ),
                   Expanded(
-                    child: Container(
-                      key: const Key('desktop-content-panel'),
-                      margin: const EdgeInsets.all(8),
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        color: context.astraColors.surface,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: _DesktopCenter(
-                        searchController: widget.searchController,
-                      ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          key: const Key('desktop-sidebar'),
+                          width: _collapsed ? 72 : 300,
+                          child: _DesktopSidebar(
+                            collapsed: _collapsed,
+                            onToggle: () =>
+                                setState(() => _collapsed = !_collapsed),
+                          ),
+                        ),
+                        Expanded(
+                          child: Container(
+                            key: const Key('desktop-content-panel'),
+                            margin: const EdgeInsets.all(8),
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: context.astraColors.surface,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: _DesktopCenter(
+                              searchController: widget.searchController,
+                              searchFocusNode: _searchFocusNode,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  const DesktopPlayerBar(),
                 ],
               ),
             ),
-            const DesktopPlayerBar(),
-          ],
+          ),
         ),
       ),
     );
@@ -332,9 +427,13 @@ class _CollapsedSidebarButton extends StatelessWidget {
 }
 
 class _DesktopCenter extends ConsumerWidget {
-  const _DesktopCenter({required this.searchController});
+  const _DesktopCenter({
+    required this.searchController,
+    required this.searchFocusNode,
+  });
 
   final TextEditingController searchController;
+  final FocusNode searchFocusNode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -367,6 +466,7 @@ class _DesktopCenter extends ConsumerWidget {
                   child: TextField(
                     key: const Key('desktop-search-field'),
                     controller: searchController,
+                    focusNode: searchFocusNode,
                     onChanged: (query) {
                       ref
                           .read(librarySearchQueryProvider.notifier)
@@ -394,14 +494,7 @@ class _DesktopCenter extends ConsumerWidget {
         ],
       ),
     );
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): () {
-          if (navigation.canGoBack) navigation.back();
-        },
-      },
-      child: Focus(autofocus: true, child: content),
-    );
+    return content;
   }
 }
 
