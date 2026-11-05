@@ -108,6 +108,25 @@ class PlayerViewState {
   static const _notProvided = Object();
 }
 
+sealed class QueueChange {
+  const QueueChange();
+}
+
+final class QueueMove extends QueueChange {
+  const QueueMove(this.from, this.to);
+  final int from;
+  final int to;
+}
+
+final class QueueRemoval extends QueueChange {
+  const QueueRemoval(this.removedIndex);
+  final int removedIndex;
+}
+
+final class QueueClear extends QueueChange {
+  const QueueClear();
+}
+
 class PlayerController extends Notifier<PlayerViewState> {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   // Se cancela en _pausePositionUpdates al pausar lifecycle o disponer.
@@ -121,6 +140,10 @@ class PlayerController extends Notifier<PlayerViewState> {
   List<Track>? _queueBeforeChange;
   int? _indexBeforeChange;
   String? _lastRecentUri;
+  QueueChange? _lastQueueChange;
+  Duration _positionBeforeChange = Duration.zero;
+  bool _wasPlayingBeforeChange = false;
+  bool _shuffleBeforeChange = false;
 
   AudioPlayerService get _service => ref.read(audioPlayerServiceProvider);
 
@@ -251,7 +274,11 @@ class PlayerController extends Notifier<PlayerViewState> {
 
   Future<void> playNext(Track track) => _run(() => _service.playNext(track));
 
-  void _rememberQueue() {
+  void _rememberQueue(QueueChange change) {
+    _lastQueueChange = change;
+    _positionBeforeChange = state.position;
+    _wasPlayingBeforeChange = state.isPlaying;
+    _shuffleBeforeChange = state.shuffleEnabled;
     _queueBeforeChange = List.of(state.queue);
     _indexBeforeChange = state.currentIndex;
     state = state.copyWith(canUndoQueue: true);
@@ -259,32 +286,56 @@ class PlayerController extends Notifier<PlayerViewState> {
 
   Future<void> undoQueueChange() async {
     final previous = _queueBeforeChange;
-    if (previous == null) return;
+    final change = _lastQueueChange;
+    if (previous == null || change == null) return;
     final index = _indexBeforeChange;
     _queueBeforeChange = null;
+    _lastQueueChange = null;
     state = state.copyWith(canUndoQueue: false);
-    if (previous.isEmpty) {
-      await _run(_service.clearQueue);
-    } else {
-      await playQueue(
-        previous,
-        startIndex: (index ?? 0).clamp(0, previous.length - 1),
-      );
+    switch (change) {
+      case QueueMove(:final from, :final to):
+        await _run(() => _service.moveInQueue(to, from));
+      case QueueRemoval(:final removedIndex):
+        if (removedIndex >= previous.length) return;
+        await _run(() async {
+          await _service.addToQueue(previous[removedIndex]);
+          await _service.moveInQueue(previous.length - 1, removedIndex);
+        });
+      case QueueClear():
+        if (previous.isEmpty) return;
+        final started = await playQueue(
+          previous,
+          startIndex: (index ?? 0).clamp(0, previous.length - 1),
+          shuffle: _shuffleBeforeChange,
+        );
+        if (started) {
+          await seek(_positionBeforeChange);
+          if (!_wasPlayingBeforeChange) await _run(_service.pause);
+        }
     }
   }
 
   Future<void> removeFromQueue(int index) async {
-    _rememberQueue();
+    if (index < 0 || index >= state.queue.length) return;
+    _rememberQueue(QueueRemoval(index));
     await _run(() => _service.removeFromQueue(index));
   }
 
   Future<void> moveInQueue(int oldIndex, int newIndex) async {
-    _rememberQueue();
+    if (oldIndex < 0 ||
+        oldIndex >= state.queue.length ||
+        newIndex < 0 ||
+        newIndex >= state.queue.length ||
+        oldIndex == newIndex) {
+      return;
+    }
+    _rememberQueue(QueueMove(oldIndex, newIndex));
     await _run(() => _service.moveInQueue(oldIndex, newIndex));
   }
 
   Future<void> clearQueue() async {
-    _rememberQueue();
+    if (state.queue.isEmpty) return;
+    _rememberQueue(const QueueClear());
     await _run(_service.clearQueue);
   }
 

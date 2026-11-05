@@ -36,6 +36,23 @@ void main() {
     await service.dispose();
   });
 
+  test(
+    'deshacer reordenación y eliminación conserva la pista actual',
+    () async {
+      final controller = container.read(playerControllerProvider.notifier);
+      await controller.playQueue(_tracks(3), startIndex: 1);
+      await controller.moveInQueue(0, 2);
+      await controller.undoQueueChange();
+      expect(service.tracks.map((track) => track.id), [1, 2, 3]);
+      expect(service.currentIndex, 1);
+      await controller.removeFromQueue(0);
+      await controller.undoQueueChange();
+      expect(service.tracks.map((track) => track.id), [1, 2, 3]);
+      expect(service.currentIndex, 1);
+      expect(smart.recorded, [2]);
+    },
+  );
+
   test('deshacer recupera la cola vaciada y el índice', () async {
     final controller = container.read(playerControllerProvider.notifier);
     await controller.playQueue(_tracks(3), startIndex: 1);
