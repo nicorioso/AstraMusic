@@ -38,9 +38,16 @@ android {
     }
 
     signingConfigs {
-        if (releaseSigningFile.exists()) {
-            create("release") {
-                storeFile = rootProject.file(releaseSigning.getProperty("storeFile"))
+        create("release") {
+            if (releaseSigningFile.exists()) {
+                val configuredStoreFile = releaseSigning.getProperty("storeFile")
+                val rootStoreFile = rootProject.file(configuredStoreFile)
+                val appStoreFile = project.file(configuredStoreFile)
+                storeFile = when {
+                    rootStoreFile.isFile -> rootStoreFile
+                    appStoreFile.isFile -> appStoreFile
+                    else -> error("No existe el storeFile indicado en android/key.properties")
+                }
                 storePassword = releaseSigning.getProperty("storePassword")
                 keyAlias = releaseSigning.getProperty("keyAlias")
                 keyPassword = releaseSigning.getProperty("keyPassword")
@@ -50,9 +57,7 @@ android {
 
     buildTypes {
         release {
-            if (releaseSigningFile.exists()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

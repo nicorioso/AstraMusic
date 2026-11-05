@@ -26,10 +26,9 @@ de forma interactiva; guarda el archivo y sus credenciales en un lugar seguro.
 keytool -genkeypair -v -keystore /ruta/privada/astramusic-release.jks \
   -storetype PKCS12 -keyalg RSA -keysize 3072 -validity 10000 \
   -alias astramusic
-cp android/key.properties.example android/key.properties
 ```
 
-Edita `android/key.properties` con estos cuatro valores reales:
+Crea `android/key.properties` con estos cuatro valores reales:
 
 ```properties
 storeFile=/ruta/privada/astramusic-release.jks
@@ -38,14 +37,31 @@ keyAlias=astramusic
 keyPassword=CLAVE_DE_LA_LLAVE
 ```
 
-Compila con `flutter build apk --release` o `flutter build appbundle --release`.
-El AAB queda en `build/app/outputs/bundle/release/`.
-Sin `key.properties`, Gradle genera artefactos de release **sin firmar**,
-útiles para comprobar la compilación, pero no aptos para distribuir.
+`storeFile` puede ser absoluto o relativo a `android/` o `android/app/`.
+Después de configurar la firma, ejecuta `flutter clean`, `flutter pub get` y
+compila con `flutter build apk --release` o `flutter build appbundle --release`.
+El AAB queda en `build/app/outputs/bundle/release/`. Gradle exige una firma
+para `release`; sin un almacén válido, la compilación debe fallar.
+Si Gradle informa `keystore password was incorrect`, comprueba que
+`storePassword` corresponda al almacén indicado por `storeFile`; `keyPassword`
+corresponde a la llave de `keyAlias`. No publiques ni registres esas claves.
 Conserva el almacén y sus claves fuera del repositorio; ambos archivos están
 excluidos por Git. No uses la clave de depuración para publicar.
 La versión publicada se define en `pubspec.yaml` (`versionName+versionCode`)
 y el identificador Android es `com.nicorioso.astramusic`.
+
+Para instalación local, usa el APK y verifica su firma antes de instalar:
+
+```bash
+apksigner verify --verbose build/app/outputs/flutter-apk/app-release.apk
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+Un `.aab` no se instala con `adb install`: está destinado a una tienda o a la
+generación de APKs mediante `bundletool`. Si `adb install -r` informa
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`, la versión instalada usa otra clave.
+Conserva la misma clave para actualizarla o desinstala la versión anterior
+solo después de respaldar los datos de la aplicación.
 
 ## Licencias en los paquetes
 
