@@ -94,6 +94,30 @@ void main() {
     expect(find.text('A la cola'), findsOneWidget);
   });
 
+  testWidgets('Búsqueda conserva selección múltiple y acciones masivas', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(1200, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('desktop-search-field')),
+      'Canción',
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('search-results')), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.tap(find.text('Canción 0').first);
+    await tester.pump();
+    await tester.tap(find.text('Canción 1').first);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(find.text('2 seleccionadas'), findsOneWidget);
+    expect(find.text('A la cola'), findsOneWidget);
+  });
+
   testWidgets('Ajustes abre los flujos de portabilidad por el camino real', (
     tester,
   ) async {

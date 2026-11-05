@@ -928,7 +928,7 @@ class _HomeShortcutTileState extends ConsumerState<_HomeShortcutTile> {
   }
 }
 
-class SearchDestination extends ConsumerWidget {
+class SearchDestination extends ConsumerStatefulWidget {
   const SearchDestination({
     required this.desktop,
     required this.searchController,
@@ -939,7 +939,128 @@ class SearchDestination extends ConsumerWidget {
   final TextEditingController searchController;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SearchDestination> createState() => _SearchDestinationState();
+}
+
+class _SearchDestinationState extends ConsumerState<SearchDestination> {
+  final Set<String> _selected = {};
+  int? _anchor;
+
+  void _select(List<Track> tracks, int index) {
+    final keyboard = HardwareKeyboard.instance;
+    setState(() {
+      if (keyboard.isShiftPressed && _anchor != null) {
+        final start = _anchor! < index ? _anchor! : index;
+        final end = _anchor! > index ? _anchor! : index;
+        for (var i = start; i <= end; i++) {
+          _selected.add(tracks[i].uri);
+        }
+      } else if (keyboard.isControlPressed || keyboard.isMetaPressed) {
+        if (!_selected.add(tracks[index].uri)) {
+          _selected.remove(tracks[index].uri);
+        }
+        _anchor = index;
+      } else {
+        _selected
+          ..clear()
+          ..add(tracks[index].uri);
+        _anchor = index;
+      }
+    });
+  }
+
+  Future<void> _act(List<Track> tracks, _ShellTrackAction action) async {
+    final chosen = tracks
+        .where((track) => _selected.contains(track.uri))
+        .toList();
+    final library = ref.read(libraryControllerProvider.notifier);
+    switch (action) {
+      case _ShellTrackAction.addToQueue:
+        for (final track in chosen.where((track) => track.isAvailable)) {
+          await library.addToQueue(track);
+        }
+      case _ShellTrackAction.addToPlaylist:
+        final messenger = ScaffoldMessenger.of(context);
+        final repository = ref.read(playlistRepositoryProvider);
+        final playlist = await createPlaylist(context, ref);
+        if (playlist == null) return;
+        try {
+          await repository.addTracks(playlist.id, [
+            for (final track in chosen)
+              if (track.id != null) track.id!,
+          ]);
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(content: Text('Añadidas a ${playlist.name}')),
+            );
+          }
+        } catch (error) {
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('No se pudo guardar la selección: $error'),
+              ),
+            );
+          }
+        }
+      case _ShellTrackAction.delete:
+        for (final track in chosen) {
+          await library.deleteTrack(track);
+        }
+      case _ShellTrackAction.playNext:
+        for (final track in chosen.reversed.where(
+          (track) => track.isAvailable,
+        )) {
+          await library.playNext(track);
+        }
+      case _ShellTrackAction.favorite:
+        for (final track in chosen) {
+          if (track.id != null) {
+            await ref
+                .read(trackRepositoryProvider)
+                .setFavorite(track.id!, !track.isFavorite);
+          }
+        }
+    }
+    if (mounted) setState(_selected.clear);
+  }
+
+  Future<void> _contextMenu(
+    List<Track> tracks,
+    int index,
+    TapDownDetails details,
+  ) async {
+    if (!_selected.contains(tracks[index].uri)) _select(tracks, index);
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final action = await showMenu<_ShellTrackAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        details.globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: _ShellTrackAction.addToQueue,
+          child: Text('Añadir selección a la cola'),
+        ),
+        PopupMenuItem(
+          value: _ShellTrackAction.addToPlaylist,
+          child: Text('Añadir selección a playlist'),
+        ),
+        PopupMenuItem(
+          value: _ShellTrackAction.delete,
+          child: Text('Eliminar selección'),
+        ),
+      ],
+    );
+    if (action != null && mounted) await _act(tracks, action);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = widget.desktop;
+    final searchController = widget.searchController;
     final query = ref.watch(librarySearchQueryProvider).trim();
     final tracks = ref.watch(libraryTracksProvider);
     final playlists = ref.watch(playlistsProvider);
@@ -989,6 +1110,48 @@ class SearchDestination extends ConsumerWidget {
                         scrollCacheExtent: const ScrollCacheExtent.pixels(280),
                         slivers: [
                           if (trackItems.isNotEmpty) ...[
+                            if (_selected.any(
+                              (uri) =>
+                                  trackItems.any((track) => track.uri == uri),
+                            ))
+                              SliverToBoxAdapter(
+                                child: SizedBox(
+                                  height: 48,
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        '${_selected.where((uri) => trackItems.any((track) => track.uri == uri)).length} seleccionadas',
+                                      ),
+                                      TextButton(
+                                        onPressed: () => _act(
+                                          trackItems,
+                                          _ShellTrackAction.addToQueue,
+                                        ),
+                                        child: const Text('A la cola'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => _act(
+                                          trackItems,
+                                          _ShellTrackAction.addToPlaylist,
+                                        ),
+                                        child: const Text('Playlist'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => _act(
+                                          trackItems,
+                                          _ShellTrackAction.delete,
+                                        ),
+                                        child: const Text('Eliminar'),
+                                      ),
+                                      IconButton(
+                                        onPressed: () =>
+                                            setState(_selected.clear),
+                                        icon: const Icon(Icons.close),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             const SliverToBoxAdapter(
                               child: SectionTitle('Canciones'),
                             ),
@@ -1010,6 +1173,16 @@ class SearchDestination extends ConsumerWidget {
                                     track: trackItems[index],
                                     tracks: trackItems,
                                     index: index,
+                                    selected: _selected.contains(
+                                      trackItems[index].uri,
+                                    ),
+                                    selectionActive: _selected.isNotEmpty,
+                                    onSelect: () => _select(trackItems, index),
+                                    onContextMenu: (details) => _contextMenu(
+                                      trackItems,
+                                      index,
+                                      details,
+                                    ),
                                   );
                                 },
                                 childCount: trackItems.length,
@@ -1146,11 +1319,19 @@ class _TrackListTile extends ConsumerWidget {
     required this.track,
     required this.tracks,
     required this.index,
+    this.selected = false,
+    this.selectionActive = false,
+    this.onSelect,
+    this.onContextMenu,
   });
 
   final Track track;
   final List<Track> tracks;
   final int index;
+  final bool selected;
+  final bool selectionActive;
+  final VoidCallback? onSelect;
+  final GestureTapDownCallback? onContextMenu;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1158,15 +1339,28 @@ class _TrackListTile extends ConsumerWidget {
     return TrackTile(
       track: track,
       showDateAdded: true,
+      onSecondaryTapDown: onContextMenu,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (selected)
+            Checkbox(value: true, onChanged: (_) => onSelect?.call()),
           Text(_trackDuration(track.duration)),
           _TrackActionsMenu(track: track),
         ],
       ),
       onTap: track.isAvailable
-          ? () => controller.playVisibleQueue(tracks, startIndex: index)
+          ? () {
+              if (onSelect != null &&
+                  (selectionActive ||
+                      HardwareKeyboard.instance.isControlPressed ||
+                      HardwareKeyboard.instance.isMetaPressed ||
+                      HardwareKeyboard.instance.isShiftPressed)) {
+                onSelect!();
+              } else {
+                controller.playVisibleQueue(tracks, startIndex: index);
+              }
+            }
           : controller.showUnavailableMessage,
     );
   }
