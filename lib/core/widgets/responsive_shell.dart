@@ -945,6 +945,7 @@ class SearchDestination extends ConsumerStatefulWidget {
 class _SearchDestinationState extends ConsumerState<SearchDestination> {
   final Set<String> _selected = {};
   int? _anchor;
+  String? _lastQuery;
 
   void _select(List<Track> tracks, int index) {
     final keyboard = HardwareKeyboard.instance;
@@ -1062,6 +1063,11 @@ class _SearchDestinationState extends ConsumerState<SearchDestination> {
     final desktop = widget.desktop;
     final searchController = widget.searchController;
     final query = ref.watch(librarySearchQueryProvider).trim();
+    if (_lastQuery != query) {
+      _selected.clear();
+      _anchor = null;
+      _lastQuery = query;
+    }
     final tracks = ref.watch(libraryTracksProvider);
     final playlists = ref.watch(playlistsProvider);
     final normalized = normalizeForSearch(query);

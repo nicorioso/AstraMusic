@@ -430,6 +430,16 @@ class _PlaylistDetailBodyState extends ConsumerState<_PlaylistDetailBody> {
   final Set<String> _selected = {};
   int? _anchor;
 
+  @override
+  void didUpdateWidget(covariant _PlaylistDetailBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.playlist.id != widget.playlist.id ||
+        oldWidget.favorites != widget.favorites) {
+      _selected.clear();
+      _anchor = null;
+    }
+  }
+
   void _select(int index) {
     final tracks = widget.tracks;
     final keyboard = HardwareKeyboard.instance;
