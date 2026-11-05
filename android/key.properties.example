@@ -1,0 +1,6 @@
+# Copia este archivo a android/key.properties y reemplaza todos los valores.
+# storeFile puede ser una ruta absoluta o relativa a android/.
+storeFile=/ruta/privada/astramusic-release.jks
+storePassword=REEMPLAZAR
+keyAlias=astramusic
+keyPassword=REEMPLAZAR

@@ -19,8 +19,17 @@ paquete y ejecuta `./astramusic` desde esa carpeta.
 
 ## Firma de Android
 
-Para distribuir el APK, crea un almacén de claves privado y el archivo
-`android/key.properties` con estos cuatro valores:
+Genera una clave de publicación privada. `keytool` solicitará las contraseñas
+de forma interactiva; guarda el archivo y sus credenciales en un lugar seguro.
+
+```bash
+keytool -genkeypair -v -keystore /ruta/privada/astramusic-release.jks \
+  -storetype PKCS12 -keyalg RSA -keysize 3072 -validity 10000 \
+  -alias astramusic
+cp android/key.properties.example android/key.properties
+```
+
+Edita `android/key.properties` con estos cuatro valores reales:
 
 ```properties
 storeFile=/ruta/privada/astramusic-release.jks
@@ -29,10 +38,12 @@ keyAlias=astramusic
 keyPassword=CLAVE_DE_LA_LLAVE
 ```
 
-Vuelve a compilar con `flutter build apk --release`. Sin `key.properties`,
-Gradle genera un APK de release **sin firmar**, útil para comprobar la
-compilación, pero no apto para instalar o distribuir. Conserva el almacén y
-sus claves fuera del repositorio; ambos archivos están excluidos por Git.
+Compila con `flutter build apk --release` o `flutter build appbundle --release`.
+El AAB queda en `build/app/outputs/bundle/release/`.
+Sin `key.properties`, Gradle genera artefactos de release **sin firmar**,
+útiles para comprobar la compilación, pero no aptos para distribuir.
+Conserva el almacén y sus claves fuera del repositorio; ambos archivos están
+excluidos por Git. No uses la clave de depuración para publicar.
 La versión publicada se define en `pubspec.yaml` (`versionName+versionCode`)
 y el identificador Android es `com.nicorioso.astramusic`.
 
