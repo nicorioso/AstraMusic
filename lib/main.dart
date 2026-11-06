@@ -304,7 +304,7 @@ class _PlaybackLifecycleState extends ConsumerState<PlaybackLifecycle> {
       },
       onDetach: () {
         ref.read(appForegroundProvider.notifier).setForeground(false);
-        unawaited(widget.resources.dispose());
+        unawaited(widget.resources.persistence.flush());
       },
     );
   }

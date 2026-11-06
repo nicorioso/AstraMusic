@@ -66,15 +66,20 @@ void main() {
     },
   );
 
-  test('onTaskRemoved libera el reproductor una sola vez', () async {
+  test('onTaskRemoved detiene audio y conserva el handler utilizable', () async {
     final player = _RecordingAudioPlayer();
     final handler = AstraAudioHandler(player: player);
-    addTearDown(player.closeTestStreams);
+    addTearDown(() async {
+      await handler.dispose();
+      await player.closeTestStreams();
+    });
 
-    await Future.wait([handler.onTaskRemoved(), handler.dispose()]);
+    await handler.onTaskRemoved();
 
     expect(player.stopCalls, 1);
-    expect(player.disposeCalls, 1);
+    expect(player.disposeCalls, 0);
+    await handler.pause();
+    expect(player.pauseCalls, 1);
   });
 
   test('el servicio cancela carátulas pendientes al desmontarse', () async {

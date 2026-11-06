@@ -223,7 +223,7 @@ class AstraAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> onTaskRemoved() => dispose();
+  Future<void> onTaskRemoved() => stop();
 
   Future<void> dispose() => _commands.close(_disposeResources);
 
