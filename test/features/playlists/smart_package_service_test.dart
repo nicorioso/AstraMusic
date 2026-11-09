@@ -197,6 +197,75 @@ void main() {
     expect(await lists.watchAll().first, isEmpty);
   });
 
+  for (final invalidAudio in ['playlist.json', 'images/track_00000.png']) {
+    test('rechaza $invalidAudio como archivo de audio', () async {
+      final staging = Directory(path.join(root.path, 'invalid-audio'));
+      await Directory(path.join(staging.path, 'images'))
+          .create(recursive: true);
+      await File(path.join(staging.path, 'images', 'track_00000.png'))
+          .writeAsBytes(image.encodePng(image.Image(width: 1, height: 1)));
+      await File(path.join(staging.path, 'playlist.json')).writeAsString(
+        jsonEncode({
+          'version': 1,
+          'name': 'Inválida',
+          'description': '',
+          'tracks': [
+            {'title': 'Falsa', 'file': invalidAudio},
+          ],
+        }),
+      );
+      final package = File(path.join(root.path, 'invalid-audio.amplaylist'));
+      await ZipFileEncoder().zipDirectory(staging, filename: package.path);
+      final lists = DriftPlaylistRepository(targetDb);
+      final library = Directory(path.join(root.path, 'library'));
+      await expectLater(
+        SmartPackageService(
+          lists,
+          DriftTrackRepository(targetDb),
+          library,
+        ).import(package),
+        throwsFormatException,
+      );
+      expect(await lists.watchAll().first, isEmpty);
+      expect(await library.exists(), isFalse);
+    });
+  }
+
+  test('dos importaciones usan carpetas distintas', () async {
+    final staging = Directory(path.join(root.path, 'repeated'));
+    await Directory(path.join(staging.path, 'audio')).create(recursive: true);
+    await File(path.join(staging.path, 'audio', '00000.mp3'))
+        .writeAsBytes([1, 2, 3]);
+    await File(path.join(staging.path, 'playlist.json')).writeAsString(
+      jsonEncode({
+        'version': 1,
+        'name': 'Repetida',
+        'description': '',
+        'tracks': [
+          {'title': 'Pista', 'file': 'audio/00000.mp3'},
+        ],
+      }),
+    );
+    final package = File(path.join(root.path, 'repeated.amplaylist'));
+    await ZipFileEncoder().zipDirectory(staging, filename: package.path);
+    final lists = DriftPlaylistRepository(targetDb);
+    final service = SmartPackageService(
+      lists,
+      DriftTrackRepository(targetDb),
+      Directory(path.join(root.path, 'library')),
+    );
+    final imports = await Future.wait([
+      service.import(package),
+      service.import(package),
+    ]);
+    final first = (await lists.watchTracks(imports[0].playlistId).first).single;
+    final second =
+        (await lists.watchTracks(imports[1].playlistId).first).single;
+    expect(first.uri, isNot(second.uri));
+    expect(await File.fromUri(Uri.parse(first.uri)).exists(), isTrue);
+    expect(await File.fromUri(Uri.parse(second.uri)).exists(), isTrue);
+  });
+
   test('importa paquetes anteriores sin imágenes', () async {
     final staging = Directory(path.join(root.path, 'legacy'));
     await Directory(path.join(staging.path, 'audio')).create(recursive: true);

@@ -152,6 +152,7 @@ final class SmartPackageService {
             row['durationMs'] != null &&
                 (row['durationMs'] is! int || (row['durationMs'] as int) < 0) ||
             row['file'] is! String ||
+            !_isAudioFile(row['file'] as String) ||
             !names.add(row['file'] as String) ||
             !files.containsKey(row['file']) ||
             (row['artUri'] != null &&
@@ -161,13 +162,8 @@ final class SmartPackageService {
           );
         }
       }
-      destination = Directory(
-        path.join(
-          _libraryDirectory.path,
-          'package-${DateTime.now().microsecondsSinceEpoch}',
-        ),
-      );
-      await destination.create(recursive: true);
+      await _libraryDirectory.create(recursive: true);
+      destination = await _libraryDirectory.createTemp('package-');
       String? importedCover;
       if (manifest['coverImage'] case final String coverName) {
         importedCover = await _extractArtwork(
@@ -241,8 +237,11 @@ final class SmartPackageService {
     }
   }
 
+  bool _isAudioFile(String name) =>
+      RegExp(r'^audio/[0-9]{5}\.[a-zA-Z0-9]+$').hasMatch(name);
+
   bool _isPackageFile(String name) =>
-      RegExp(r'^audio/[0-9]{5}\.[a-zA-Z0-9]+$').hasMatch(name) ||
+      _isAudioFile(name) ||
       RegExp(r'^images/(playlist_cover|track_[0-9]{5})\.[a-zA-Z0-9]+$')
           .hasMatch(name);
 
