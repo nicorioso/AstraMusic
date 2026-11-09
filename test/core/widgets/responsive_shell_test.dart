@@ -9,6 +9,7 @@ import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/artwork_cache.dart';
 import 'package:astramusic/core/platform/android_system_settings.dart';
+import 'package:astramusic/core/platform/portable_file_picker.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
@@ -22,6 +23,7 @@ import 'package:astramusic/features/playlists/domain/playlist.dart';
 import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_providers.dart';
 import 'package:astramusic/features/playlists/presentation/playlist_widgets.dart';
+import 'package:astramusic/features/settings/portable_library_tools.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -128,13 +130,14 @@ void main() {
     await tester.pumpAndSettle();
     _selectDestination(tester, AppDestination.settings);
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('settings-export-m3u')), findsOneWidget);
-    await tester.ensureVisible(find.byKey(const Key('settings-import-m3u')));
-    await tester.tap(find.byKey(const Key('settings-import-m3u')));
+    expect(find.byKey(const Key('settings-export-package')), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const Key('settings-import-package')),
+    );
+    expect(find.text('Importar playlist .amplaylist'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('settings-import-package')));
     await tester.pumpAndSettle();
-    expect(find.text('Importar playlist M3U'), findsWidgets);
-    await tester.tap(find.text('Cancelar').last);
-    await tester.pumpAndSettle();
+    expect(fixture.picker.requestedExtensions, ['amplaylist']);
     await tester.ensureVisible(
       find.byKey(const Key('settings-restore-backup')),
     );
@@ -868,6 +871,7 @@ final class _Fixture {
   final cache = _FakeArtworkCache();
   final backfill = _RecordingArtworkBackfill();
   final systemSettings = _FakeAndroidSystemSettings();
+  final picker = _CancelPortablePicker();
   final _FakeTrackRepository repository;
   late final _FakePlaylistRepository playlists = _FakePlaylistRepository(
     repository.tracks,
@@ -886,6 +890,7 @@ final class _Fixture {
         notificationPermissionGranted,
       ),
       androidSystemSettingsProvider.overrideWithValue(systemSettings),
+      portableFilePickerProvider.overrideWithValue(picker),
     ],
     child: MaterialApp(
       theme: buildAstraTheme(),
@@ -899,6 +904,22 @@ final class _Fixture {
   Future<void> dispose() async {
     await player.dispose();
   }
+}
+
+final class _CancelPortablePicker implements PortableFilePicker {
+  List<String>? requestedExtensions;
+
+  @override
+  Future<String?> pickFile(List<String> extensions) async {
+    requestedExtensions = extensions;
+    return null;
+  }
+
+  @override
+  Future<String?> pickFolder() async => null;
+
+  @override
+  Future<bool> save(String name, Uint8List bytes, String mimeType) async => false;
 }
 
 final class _FakeAndroidSystemSettings implements AndroidSystemSettings {
