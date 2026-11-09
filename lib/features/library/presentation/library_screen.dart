@@ -11,6 +11,8 @@ import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/application/metadata_editor_service.dart';
+import 'package:astramusic/features/library/presentation/metadata_editor_dialog.dart';
 import 'package:astramusic/features/library/domain/track_list_query.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
@@ -208,6 +210,8 @@ class LibraryScreen extends ConsumerWidget {
                                 onAddToQueue: libraryController.addToQueue,
                                 onAddToPlaylist: (track) =>
                                     showAddTrackToPlaylist(context, ref, track),
+                                onEdit: (track) =>
+                                    showMetadataEditor(context, track),
                                 onFavorite: (track) => ref
                                     .read(trackRepositoryProvider)
                                     .setFavorite(track.id!, !track.isFavorite),
@@ -513,6 +517,7 @@ class _TrackList extends ConsumerStatefulWidget {
     required this.onAddToQueue,
     required this.onAddToPlaylist,
     required this.onFavorite,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -526,6 +531,7 @@ class _TrackList extends ConsumerStatefulWidget {
   final ValueChanged<Track> onAddToQueue;
   final ValueChanged<Track> onAddToPlaylist;
   final ValueChanged<Track> onFavorite;
+  final ValueChanged<Track> onEdit;
   final ValueChanged<Track> onDelete;
 
   @override
@@ -573,6 +579,8 @@ class _TrackListState extends ConsumerState<_TrackList> {
   Future<void> _bulk(_TrackAction action) async {
     final chosen = _chosen;
     switch (action) {
+      case _TrackAction.edit:
+        if (chosen.length == 1) widget.onEdit(chosen.single);
       case _TrackAction.addToQueue:
         for (final track in chosen.where((track) => track.isAvailable)) {
           widget.onAddToQueue(track);
@@ -660,6 +668,7 @@ class _TrackListState extends ConsumerState<_TrackList> {
     final onAddToQueue = widget.onAddToQueue;
     final onAddToPlaylist = widget.onAddToPlaylist;
     final onFavorite = widget.onFavorite;
+    final onEdit = widget.onEdit;
     final onDelete = widget.onDelete;
     return Column(
       children: [
@@ -735,6 +744,8 @@ class _TrackListState extends ConsumerState<_TrackList> {
                             onAddToQueue(track);
                           case _TrackAction.addToPlaylist:
                             onAddToPlaylist(track);
+                          case _TrackAction.edit:
+                            onEdit(track);
                           case _TrackAction.favorite:
                             onFavorite(track);
                           case _TrackAction.delete:
@@ -763,6 +774,11 @@ class _TrackListState extends ConsumerState<_TrackList> {
                                 ? 'Quitar de Me gusta'
                                 : 'Añadir a Me gusta',
                           ),
+                        ),
+                        PopupMenuItem(
+                          value: _TrackAction.edit,
+                          enabled: canEditTrackMetadata(track),
+                          child: const Text('Editar metadatos'),
                         ),
                         const PopupMenuItem(
                           value: _TrackAction.delete,
@@ -921,4 +937,11 @@ String _formatDuration(Duration duration) {
 
 enum _LibraryAction { update, addFiles, loadDebugTracks }
 
-enum _TrackAction { playNext, addToQueue, addToPlaylist, favorite, delete }
+enum _TrackAction {
+  edit,
+  playNext,
+  addToQueue,
+  addToPlaylist,
+  favorite,
+  delete,
+}

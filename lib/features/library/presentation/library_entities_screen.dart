@@ -4,6 +4,8 @@ import 'package:astramusic/core/widgets/secondary_back_header.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/domain/library_group.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/application/metadata_editor_service.dart';
+import 'package:astramusic/features/library/presentation/metadata_editor_dialog.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:flutter/material.dart';
@@ -350,6 +352,10 @@ class _TrackDetail extends ConsumerWidget {
                         trailing: PopupMenuButton<_TrackAction>(
                           tooltip: 'Acciones de ${track.title}',
                           onSelected: (action) => switch (action) {
+                            _TrackAction.edit => showMetadataEditor(
+                              context,
+                              track,
+                            ),
                             _TrackAction.addToQueue => controller.addToQueue(
                               track,
                             ),
@@ -360,6 +366,11 @@ class _TrackDetail extends ConsumerWidget {
                             _ => null,
                           },
                           itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: _TrackAction.edit,
+                              enabled: canEditTrackMetadata(track),
+                              child: const Text('Editar metadatos'),
+                            ),
                             const PopupMenuItem(
                               value: _TrackAction.addToQueue,
                               child: Text('Añadir a la cola'),
@@ -388,4 +399,4 @@ class _TrackDetail extends ConsumerWidget {
   );
 }
 
-enum _TrackAction { addToQueue, toggleFavorite }
+enum _TrackAction { edit, addToQueue, toggleFavorite }

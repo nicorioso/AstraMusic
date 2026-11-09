@@ -1,4 +1,14 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
+import 'package:astramusic/core/db/app_database.dart';
+import 'package:astramusic/core/platform/image_file_picker.dart';
+import 'package:astramusic/features/library/application/metadata_editor_service.dart';
+import 'package:astramusic/features/library/data/drift_track_repository.dart';
+import 'package:astramusic/features/library/presentation/metadata_editor_dialog.dart';
+import 'package:drift/native.dart';
+import 'package:image/image.dart' as image;
 
 import 'package:astramusic/core/platform/audio_file_picker.dart';
 import 'package:astramusic/core/platform/audio_player_service.dart';
@@ -72,6 +82,90 @@ void main() {
 
     expect(repository.restoredUris, {'content://document/audio/1'});
     expect(repository.tracks.single.uri, 'content://document/audio/1');
+  });
+
+  testWidgets('edita tags y carátula desde el menú real de biblioteca', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync('ui_tags_');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final audio = File('${directory.path}/tema.mp3');
+    audio.writeAsBytesSync([
+      ...'ID3'.codeUnits,
+      4,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0xff,
+      0xfb,
+      0x90,
+      0x64,
+      ...List<int>.filled(413, 0),
+    ]);
+    final cover = File('${directory.path}/cover.png');
+    cover.writeAsBytesSync(image.encodePng(image.Image(width: 16, height: 16)));
+    final database = AppDatabase(NativeDatabase.memory());
+
+    final repository = DriftTrackRepository(database);
+    await tester.runAsync(
+      () => repository.upsertAll([
+        Track(
+          uri: audio.uri.toString(),
+          title: 'Viejo',
+          dateAdded: DateTime.utc(2026),
+        ),
+      ]),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          trackRepositoryProvider.overrideWithValue(repository),
+          metadataEditorServiceProvider.overrideWithValue(
+            LocalMetadataEditorService(
+              repository,
+              cacheDirectory: () async => directory,
+            ),
+          ),
+          metadataImagePickerProvider.overrideWithValue(
+            _SelectedImage(cover.path),
+          ),
+          isAndroidPlatformProvider.overrideWithValue(false),
+          libraryScannerProvider.overrideWithValue(ControlledLibraryScanner()),
+          mediaLibraryPermissionProvider.overrideWithValue(
+            const FakeMediaLibraryPermission(),
+          ),
+          audioPlayerServiceProvider.overrideWithValue(
+            const FakeAudioPlayerService(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildAstraTheme(),
+          home: const LibraryScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Acciones de Viejo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editar metadatos'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('metadata-title')), 'Nuevo');
+    await tester.tap(find.byKey(const Key('metadata-select-cover')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('metadata-save')));
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pumpAndSettle();
+    final updated = await tester.runAsync(() => repository.watchAll().first);
+    expect(updated!.single.title, 'Nuevo');
+    expect(readMetadata(audio, getImage: true).pictures, isNotEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.runAsync(database.close);
   });
 
   testWidgets('selección múltiple muestra acciones masivas en escritorio', (
@@ -689,4 +783,11 @@ final class FakeAudioPlayerService implements AudioPlayerService {
 
   @override
   Future<void> stop() async {}
+}
+
+final class _SelectedImage implements ImageFilePicker {
+  const _SelectedImage(this.path);
+  final String path;
+  @override
+  Future<String?> pickImage() async => path;
 }
