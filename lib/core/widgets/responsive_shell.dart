@@ -18,6 +18,8 @@ import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/smart_playlist_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/application/metadata_editor_service.dart';
+import 'package:astramusic/features/library/presentation/metadata_editor_dialog.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/library/presentation/library_entities_screen.dart';
@@ -976,6 +978,10 @@ class _SearchDestinationState extends ConsumerState<SearchDestination> {
         .toList();
     final library = ref.read(libraryControllerProvider.notifier);
     switch (action) {
+      case _ShellTrackAction.edit:
+        if (chosen.length == 1) {
+          await showMetadataEditor(context, chosen.single);
+        }
       case _ShellTrackAction.addToQueue:
         for (final track in chosen.where((track) => track.isAvailable)) {
           await library.addToQueue(track);
@@ -1418,6 +1424,10 @@ class _DesktopTrackTableState extends ConsumerState<_DesktopTrackTable> {
         .toList();
     final library = ref.read(libraryControllerProvider.notifier);
     switch (action) {
+      case _ShellTrackAction.edit:
+        if (chosen.length == 1) {
+          await showMetadataEditor(context, chosen.single);
+        }
       case _ShellTrackAction.addToQueue:
         for (final track in chosen.where((track) => track.isAvailable)) {
           await library.addToQueue(track);
@@ -1716,6 +1726,8 @@ class _TrackActionsMenu extends ConsumerWidget {
       tooltip: 'Acciones de ${track.title}',
       onSelected: (action) {
         switch (action) {
+          case _ShellTrackAction.edit:
+            showMetadataEditor(context, track);
           case _ShellTrackAction.playNext:
             controller.playNext(track);
           case _ShellTrackAction.addToQueue:
@@ -1731,6 +1743,11 @@ class _TrackActionsMenu extends ConsumerWidget {
         }
       },
       itemBuilder: (_) => [
+        PopupMenuItem(
+          value: _ShellTrackAction.edit,
+          enabled: canEditTrackMetadata(track),
+          child: const Text('Editar metadatos'),
+        ),
         PopupMenuItem(
           value: _ShellTrackAction.playNext,
           enabled: track.isAvailable,
@@ -1760,7 +1777,14 @@ class _TrackActionsMenu extends ConsumerWidget {
   }
 }
 
-enum _ShellTrackAction { playNext, addToQueue, addToPlaylist, favorite, delete }
+enum _ShellTrackAction {
+  edit,
+  playNext,
+  addToQueue,
+  addToPlaylist,
+  favorite,
+  delete,
+}
 
 class PlaylistsDestination extends ConsumerWidget {
   const PlaylistsDestination({super.key});

@@ -1,4 +1,6 @@
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/application/metadata_editor_service.dart';
+import 'package:astramusic/features/library/presentation/metadata_editor_dialog.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:astramusic/core/theme/queue_colors.dart';
 import 'package:astramusic/core/widgets/astra_background.dart';
@@ -206,18 +208,25 @@ class PlayerQueueView extends ConsumerWidget {
                       children: [
                         PopupMenuButton<String>(
                           tooltip: 'Acciones de ${track.title}',
-                          itemBuilder: (_) => const [
+                          itemBuilder: (_) => [
                             PopupMenuItem(
+                              value: 'edit',
+                              enabled: canEditTrackMetadata(track),
+                              child: const Text('Editar metadatos'),
+                            ),
+                            const PopupMenuItem(
                               value: 'playlist',
                               child: Text('Añadir a playlist'),
                             ),
-                            PopupMenuItem(
+                            const PopupMenuItem(
                               value: 'next',
                               child: Text('Reproducir después de esta'),
                             ),
                           ],
                           onSelected: (action) {
-                            if (action == 'playlist') {
+                            if (action == 'edit') {
+                              showMetadataEditor(context, track);
+                            } else if (action == 'playlist') {
                               showAddTrackToPlaylist(context, ref, track);
                             } else {
                               final current = ref

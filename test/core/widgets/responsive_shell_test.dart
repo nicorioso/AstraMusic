@@ -30,6 +30,29 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final size in const [Size(360, 800), Size(1200, 800)]) {
+    testWidgets(
+      'los tres puntos de Inicio abren el editor a ${size.width.toInt()} dp',
+      (tester) async {
+        final fixture = _Fixture();
+        addTearDown(fixture.dispose);
+        await _setSize(tester, size);
+        await tester.pumpWidget(fixture.app());
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Acciones de Canción 29').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Editar metadatos').last);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('metadata-title')), findsOneWidget);
+        expect(find.byKey(const Key('metadata-select-cover')), findsOneWidget);
+        await tester.enterText(find.byKey(const Key('metadata-title')), '');
+        await tester.tap(find.byKey(const Key('metadata-save')));
+        await tester.pump();
+        expect(find.text('El título es obligatorio'), findsOneWidget);
+      },
+    );
+  }
+
   testWidgets('atajos de escritorio ajustan volumen y enfocan búsqueda', (
     tester,
   ) async {
@@ -919,7 +942,8 @@ final class _CancelPortablePicker implements PortableFilePicker {
   Future<String?> pickFolder() async => null;
 
   @override
-  Future<bool> save(String name, Uint8List bytes, String mimeType) async => false;
+  Future<bool> save(String name, Uint8List bytes, String mimeType) async =>
+      false;
 }
 
 final class _FakeAndroidSystemSettings implements AndroidSystemSettings {

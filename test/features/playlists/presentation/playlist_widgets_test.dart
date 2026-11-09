@@ -20,6 +20,37 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final size in const [Size(360, 800), Size(1200, 800)]) {
+    testWidgets(
+      'la canción de playlist abre el editor desde sus tres puntos a ${size.width.toInt()} dp',
+      (tester) async {
+        final fixture = _Fixture();
+        await _setSize(tester, size);
+        await tester.pumpWidget(fixture.detailApp());
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Acciones de Canción 1'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Editar metadatos'));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('metadata-title')), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets('la canción en cola abre el editor desde sus tres puntos', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.queueApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Acciones de Canción 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editar metadatos'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('metadata-title')), findsOneWidget);
+  });
+
   for (final size in const [Size(360, 800), Size(937, 1029)]) {
     for (final count in const [0, 1, 30]) {
       testWidgets(

@@ -10,6 +10,8 @@ import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/library/application/metadata_editor_service.dart';
+import 'package:astramusic/features/library/presentation/metadata_editor_dialog.dart';
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
@@ -903,11 +905,16 @@ class _PlaylistDetailBodyState extends ConsumerState<_PlaylistDetailBody> {
                         Checkbox(value: true, onChanged: (_) => _select(index)),
                       if (track.duration case final duration?)
                         Text(_trackDuration(duration)),
-                      PopupMenuButton<bool>(
+                      PopupMenuButton<String>(
                         tooltip: 'Acciones de ${track.title}',
                         itemBuilder: (_) => [
                           PopupMenuItem(
-                            value: true,
+                            value: 'edit',
+                            enabled: canEditTrackMetadata(track),
+                            child: const Text('Editar metadatos'),
+                          ),
+                          PopupMenuItem(
+                            value: 'remove',
                             child: Text(
                               favorites
                                   ? 'Quitar de Me gusta'
@@ -915,7 +922,9 @@ class _PlaylistDetailBodyState extends ConsumerState<_PlaylistDetailBody> {
                             ),
                           ),
                         ],
-                        onSelected: (_) => removeTrack(),
+                        onSelected: (action) => action == 'edit'
+                            ? showMetadataEditor(context, track)
+                            : removeTrack(),
                       ),
                     ],
                   ),
@@ -1129,12 +1138,19 @@ class _PlaylistDesktopTrackRow extends ConsumerWidget {
             ),
             SizedBox(
               width: 48,
-              child: PopupMenuButton<bool>(
+              child: PopupMenuButton<String>(
                 tooltip: 'Acciones de ${track.title}',
                 itemBuilder: (_) => [
-                  PopupMenuItem(value: true, child: Text(removeLabel)),
+                  PopupMenuItem(
+                    value: 'edit',
+                    enabled: canEditTrackMetadata(track),
+                    child: const Text('Editar metadatos'),
+                  ),
+                  PopupMenuItem(value: 'remove', child: Text(removeLabel)),
                 ],
-                onSelected: (_) => onRemove(),
+                onSelected: (action) => action == 'edit'
+                    ? showMetadataEditor(context, track)
+                    : onRemove(),
               ),
             ),
           ],
