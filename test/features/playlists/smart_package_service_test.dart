@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:astramusic/core/db/app_database.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/core/platform/package_audio_exporter.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/features/library/data/drift_track_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
@@ -266,6 +267,43 @@ void main() {
     expect(await File.fromUri(Uri.parse(second.uri)).exists(), isTrue);
   });
 
+  test('exporta audio content y su carátula desde MediaStore', () async {
+    final uri = 'content://media/external/audio/media/1';
+    final artwork = File(path.join(root.path, 'media-art.png'));
+    await artwork.writeAsBytes(
+      image.encodePng(image.Image(width: 2, height: 2)),
+    );
+    final tracks = DriftTrackRepository(sourceDb);
+    final lists = DriftPlaylistRepository(sourceDb);
+    await tracks.upsertAll([
+      Track(uri: uri, title: 'MediaStore', dateAdded: DateTime.utc(2026)),
+    ]);
+    final track = (await tracks.findByUris({uri})).single;
+    final playlist = await lists.create('Android');
+    await lists.addTracks(playlist.id, [track.id!]);
+    final package = File(path.join(root.path, 'android.amplaylist'));
+
+    await SmartPackageService(
+      lists,
+      tracks,
+      root,
+      audioExporter: const _ContentAudioExporter(),
+      artworkProvider: _FixedArtworkProvider(artwork.path),
+    ).export(playlist.id, package);
+
+    final archive = ZipDecoder().decodeBytes(await package.readAsBytes());
+    final manifest = jsonDecode(
+      utf8.decode(archive.findFile('playlist.json')!.content),
+    );
+    expect((manifest['tracks'] as List).single['file'], 'audio/00000.mp3');
+    expect(
+      (manifest['tracks'] as List).single['artUri'],
+      'images/track_00000.png',
+    );
+    expect(archive.findFile('audio/00000.mp3')!.content, [1, 2, 3]);
+    expect(archive.findFile('images/track_00000.png'), isNotNull);
+  });
+
   test('importa paquetes anteriores sin imágenes', () async {
     final staging = Directory(path.join(root.path, 'legacy'));
     await Directory(path.join(staging.path, 'audio')).create(recursive: true);
@@ -299,4 +337,28 @@ void main() {
       isNull,
     );
   });
+}
+
+final class _ContentAudioExporter implements PackageAudioExporter {
+  const _ContentAudioExporter();
+
+  @override
+  Future<String> copy(String uri, Directory destination, String stem) async {
+    expect(uri, 'content://media/external/audio/media/1');
+    final filename = '$stem.mp3';
+    await File(path.join(destination.path, filename)).writeAsBytes([1, 2, 3]);
+    return filename;
+  }
+}
+
+final class _FixedArtworkProvider implements ArtworkProvider {
+  const _FixedArtworkProvider(this.artworkPath);
+
+  final String artworkPath;
+
+  @override
+  Future<String?> artworkFor(Track track, {required int size}) async {
+    expect(size, 512);
+    return artworkPath;
+  }
 }

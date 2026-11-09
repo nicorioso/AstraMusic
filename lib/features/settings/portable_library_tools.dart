@@ -21,6 +21,7 @@ final smartPackageServiceProvider = FutureProvider<SmartPackageService>(
     Directory(
       '${(await getApplicationSupportDirectory()).path}/imported_audio',
     ),
+    artworkProvider: ref.watch(artworkProviderProvider),
   ),
 );
 final backupServiceProvider = Provider<LibraryBackupService>(

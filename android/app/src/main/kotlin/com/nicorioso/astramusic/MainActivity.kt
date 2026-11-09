@@ -9,6 +9,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : AudioServiceActivity() {
     private var mediaStoreScanner: MediaStoreLibraryScanner? = null
     private var artworkChannel: ArtworkChannel? = null
+    private var packageAudioChannel: PackageAudioChannel? = null
     private var systemSettingsChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -19,6 +20,10 @@ class MainActivity : AudioServiceActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
         )
         artworkChannel = ArtworkChannel(
+            applicationContext,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
+        packageAudioChannel = PackageAudioChannel(
             applicationContext,
             flutterEngine.dartExecutor.binaryMessenger,
         )
@@ -43,6 +48,8 @@ class MainActivity : AudioServiceActivity() {
         mediaStoreScanner = null
         artworkChannel?.dispose()
         artworkChannel = null
+        packageAudioChannel?.dispose()
+        packageAudioChannel = null
         systemSettingsChannel?.setMethodCallHandler(null)
         systemSettingsChannel = null
         super.cleanUpFlutterEngine(flutterEngine)

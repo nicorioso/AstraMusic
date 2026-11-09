@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:astramusic/core/platform/tag_reader.dart';
+import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/core/platform/package_audio_exporter.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
@@ -10,11 +12,19 @@ import 'package:path/path.dart' as path;
 
 /// Formato 1: playlist.json, audios en audio/ e imágenes opcionales en images/.
 final class SmartPackageService {
-  SmartPackageService(this._playlists, this._tracks, this._libraryDirectory);
+  SmartPackageService(
+    this._playlists,
+    this._tracks,
+    this._libraryDirectory, {
+    PackageAudioExporter? audioExporter,
+    this.artworkProvider,
+  }) : _audioExporter = audioExporter ?? const SystemPackageAudioExporter();
 
   final PlaylistRepository _playlists;
   final SyncTrackRepository _tracks;
   final Directory _libraryDirectory;
+  final PackageAudioExporter _audioExporter;
+  final ArtworkProvider? artworkProvider;
 
   Future<void> export(int playlistId, File target) async {
     final playlist = await _playlists.watchById(playlistId).first;
@@ -35,22 +45,17 @@ final class SmartPackageService {
       final entries = <Map<String, Object?>>[];
       for (var index = 0; index < tracks.length; index++) {
         final track = tracks[index];
-        final localPath = localFilePathFromLocation(track.uri);
-        if (localPath == null) {
-          throw FileSystemException(
-            'La canción no es un archivo local exportable',
-            track.uri,
-          );
-        }
-        final source = File(localPath);
-        if (!await source.exists()) {
-          throw FileSystemException('Falta el audio', source.path);
-        }
-        final filename =
-            '${index.toString().padLeft(5, '0')}${path.extension(source.path)}';
-        await source.copy(path.join(audio.path, filename));
+        final filename = await _audioExporter.copy(
+          track.uri,
+          audio,
+          index.toString().padLeft(5, '0'),
+        );
         String? artUri;
-        final artworkPath = track.artworkPath?.trim();
+        var artworkPath = track.artworkPath?.trim();
+        if ((artworkPath == null || artworkPath.isEmpty) &&
+            localFilePathFromLocation(track.uri) == null) {
+          artworkPath = await artworkProvider?.artworkFor(track, size: 512);
+        }
         if (artworkPath != null && artworkPath.isNotEmpty) {
           artUri = await _copyArtwork(
             artworkPath,
