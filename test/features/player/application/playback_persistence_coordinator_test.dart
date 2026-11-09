@@ -65,6 +65,29 @@ void main() {
   });
 
   test(
+    'dispose no acepta cambios de cola mientras termina el guardado',
+    () async {
+      final player = _FakePlayer();
+      final repository = _RecordingRepository();
+      final coordinator = PlaybackPersistenceCoordinator(
+        player,
+        repository,
+        debounceDuration: const Duration(milliseconds: 1),
+      );
+      await coordinator.start();
+      player.emitQueue([_track(1)]);
+
+      final disposal = coordinator.dispose();
+      player.emitQueue([_track(2)]);
+      await disposal;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(repository.saves, hasLength(1));
+      expect(repository.saves.single.queue.single.id, 1);
+    },
+  );
+
+  test(
     'reporta el fallo de cola, evita avisos repetidos y reintenta',
     () async {
       final player = _FakePlayer();

@@ -255,11 +255,11 @@ final class PlaybackPersistenceCoordinator {
   }
 
   Future<void> dispose() async {
-    await flush();
     _positionTimer?.cancel();
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
     _subscriptions.clear();
+    await flush();
   }
 }
