@@ -13,6 +13,7 @@ import 'package:astramusic/core/platform/portable_file_picker.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/core/utils/search_normalization.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
+import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
@@ -197,6 +198,32 @@ void main() {
     await tester.tap(find.byTooltip('Salir del modo selector'));
     await tester.pump();
     expect(find.text('2 seleccionadas'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Inicio móvil desplaza cabecera y canciones en un solo scroll', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+
+    final scroll = find.byKey(const Key('shell-track-list'));
+    expect(scroll, findsOneWidget);
+    final header = find.descendant(of: scroll, matching: find.text('Inicio'));
+    expect(header.hitTestable(), findsOneWidget);
+    await tester.drag(scroll, const Offset(0, -700));
+    await tester.pumpAndSettle();
+
+    expect(header.hitTestable(), findsNothing);
+    expect(
+      find.byKey(const Key('home-shortcut-grid')).hitTestable(),
+      findsNothing,
+    );
+    expect(find.byType(TrackArtwork).first, findsOneWidget);
+    expect(tester.getSize(find.byType(TrackArtwork).first), const Size(48, 48));
     expect(tester.takeException(), isNull);
   });
 
@@ -815,7 +842,10 @@ void main() {
 
     final titles = tester.widgetList<Text>(
       find.descendant(
-        of: find.byKey(const Key('shell-track-list')),
+        of: find.descendant(
+          of: find.byKey(const Key('shell-track-list')),
+          matching: find.byType(SliverFixedExtentList),
+        ),
         matching: find.byType(Text),
       ),
     );

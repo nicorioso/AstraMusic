@@ -698,113 +698,110 @@ class _HomeDestinationState extends ConsumerState<HomeDestination> {
         controller.clearMessage();
       },
     );
+    final header = <Widget>[
+      const SectionTitle('Inicio'),
+      if (shortcuts.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: _HomeShortcutGrid(shortcuts: shortcuts, desktop: desktop),
+        ),
+      SizedBox(
+        height: 52,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            for (final playlist in SmartPlaylist.values)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  key: ValueKey('smart-playlist-${playlist.name}'),
+                  label: Text(_smartPlaylistTitle(playlist)),
+                  selected: _selected == playlist,
+                  onSelected: (_) => setState(() => _selected = playlist),
+                ),
+              ),
+          ],
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _smartPlaylistTitle(_selected),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            PlayCircleButton(
+              key: const Key('home-play-all-button'),
+              size: 48,
+              onPressed: state.actionsDisabled || tracks.value?.isEmpty != false
+                  ? null
+                  : () => tracks.whenData(controller.playAll),
+              isPlaying: ref.watch(
+                playerControllerProvider.select((state) => state.isPlaying),
+              ),
+            ),
+            IconButton(
+              key: const Key('home-shuffle-button'),
+              tooltip: 'Aleatorio',
+              onPressed: state.actionsDisabled || tracks.value?.isEmpty != false
+                  ? null
+                  : () => tracks.whenData(
+                      (items) => controller.playAll(items, shuffle: true),
+                    ),
+              icon: const Icon(Icons.shuffle),
+            ),
+          ],
+        ),
+      ),
+    ];
+    Widget emptyState() => _selected == SmartPlaylist.recentlyAdded
+        ? _EmptyTracksState(desktop: desktop)
+        : Center(
+            child: Text(
+              'No hay canciones en ${_smartPlaylistTitle(_selected).toLowerCase()}.',
+              key: const Key('smart-playlist-empty'),
+            ),
+          );
+    final body = tracks.when(
+      data: (items) => items.isEmpty
+          ? desktop
+                ? emptyState()
+                : _MobileTrackList(
+                    key: ValueKey(_selected),
+                    tracks: items,
+                    header: header,
+                    empty: emptyState(),
+                  )
+          : KeyedSubtree(
+              key: ValueKey(_selected),
+              child: desktop
+                  ? _ResponsiveTrackList(tracks: items, desktop: true)
+                  : _MobileTrackList(tracks: items, header: header),
+            ),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stackTrace) =>
+          Center(child: Text('No fue posible cargar la biblioteca: $error')),
+    );
     return Column(
       key: const Key('home-destination'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SectionTitle('Inicio'),
+        if (desktop) header.first,
         Expanded(
           key: const Key('destination-content'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (shortcuts.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: _HomeShortcutGrid(
-                    shortcuts: shortcuts,
-                    desktop: desktop,
-                  ),
-                ),
-              SizedBox(
-                height: 52,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: desktop
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final playlist in SmartPlaylist.values)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          key: ValueKey('smart-playlist-${playlist.name}'),
-                          label: Text(_smartPlaylistTitle(playlist)),
-                          selected: _selected == playlist,
-                          onSelected: (_) =>
-                              setState(() => _selected = playlist),
-                        ),
-                      ),
+                    ...header.skip(1),
+                    Expanded(child: body),
                   ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _smartPlaylistTitle(_selected),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    PlayCircleButton(
-                      key: const Key('home-play-all-button'),
-                      size: 48,
-                      onPressed:
-                          state.actionsDisabled ||
-                              tracks.value?.isEmpty != false
-                          ? null
-                          : () => tracks.whenData(controller.playAll),
-                      isPlaying: ref.watch(
-                        playerControllerProvider.select(
-                          (state) => state.isPlaying,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      key: const Key('home-shuffle-button'),
-                      tooltip: 'Aleatorio',
-                      onPressed:
-                          state.actionsDisabled ||
-                              tracks.value?.isEmpty != false
-                          ? null
-                          : () => tracks.whenData(
-                              (items) =>
-                                  controller.playAll(items, shuffle: true),
-                            ),
-                      icon: const Icon(Icons.shuffle),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: tracks.when(
-                  data: (items) {
-                    return items.isEmpty
-                        ? _selected == SmartPlaylist.recentlyAdded
-                              ? _EmptyTracksState(desktop: desktop)
-                              : Center(
-                                  child: Text(
-                                    'No hay canciones en ${_smartPlaylistTitle(_selected).toLowerCase()}.',
-                                    key: const Key('smart-playlist-empty'),
-                                  ),
-                                )
-                        : KeyedSubtree(
-                            key: ValueKey(_selected),
-                            child: _ResponsiveTrackList(
-                              tracks: items,
-                              desktop: desktop,
-                            ),
-                          );
-                  },
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (error, stackTrace) => Center(
-                    child: Text('No fue posible cargar la biblioteca: $error'),
-                  ),
-                ),
-              ),
-            ],
-          ),
+                )
+              : body,
         ),
       ],
     );
@@ -1334,9 +1331,16 @@ class _ResponsiveTrackList extends StatelessWidget {
 }
 
 class _MobileTrackList extends ConsumerStatefulWidget {
-  const _MobileTrackList({required this.tracks});
+  const _MobileTrackList({
+    required this.tracks,
+    this.header = const [],
+    this.empty,
+    super.key,
+  });
 
   final List<Track> tracks;
+  final List<Widget> header;
+  final Widget? empty;
 
   @override
   ConsumerState<_MobileTrackList> createState() => _MobileTrackListState();
@@ -1448,23 +1452,35 @@ class _MobileTrackListState extends ConsumerState<_MobileTrackList> {
             controller: _scrollController,
             thumbVisibility:
                 MediaQuery.sizeOf(context).width >= desktopBreakpoint,
-            child: ListView.builder(
+            child: CustomScrollView(
               key: const Key('shell-track-list'),
               controller: _scrollController,
-              itemExtent: 56,
               scrollCacheExtent: const ScrollCacheExtent.pixels(280),
-              addAutomaticKeepAlives: false,
-              itemCount: widget.tracks.length,
-              itemBuilder: (context, index) {
-                return _TrackListTile(
-                  track: widget.tracks[index],
-                  tracks: widget.tracks,
-                  index: index,
-                  selected: _selected.contains(widget.tracks[index].uri),
-                  selectionActive: _selected.isNotEmpty,
-                  onSelect: () => _toggle(index),
-                );
-              },
+              slivers: [
+                for (final item in widget.header)
+                  SliverToBoxAdapter(child: item),
+                if (widget.tracks.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: widget.empty ?? const SizedBox.shrink(),
+                  )
+                else
+                  SliverFixedExtentList(
+                    itemExtent: 56,
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _TrackListTile(
+                        track: widget.tracks[index],
+                        tracks: widget.tracks,
+                        index: index,
+                        selected: _selected.contains(widget.tracks[index].uri),
+                        selectionActive: _selected.isNotEmpty,
+                        onSelect: () => _toggle(index),
+                      ),
+                      childCount: widget.tracks.length,
+                      addAutomaticKeepAlives: false,
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

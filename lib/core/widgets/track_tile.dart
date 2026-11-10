@@ -84,7 +84,13 @@ class _TrackTileState extends ConsumerState<TrackTile> {
                   minVerticalPadding: 0,
                   enabled: widget.enabled,
                   hoverColor: Colors.transparent,
-                  leading: TrackArtwork(track: widget.track, size: 48),
+                  leading: SizedBox.square(
+                    dimension: 48,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: TrackArtwork(track: widget.track, size: 48),
+                    ),
+                  ),
                   title: Text(
                     widget.track.title,
                     maxLines: 1,
