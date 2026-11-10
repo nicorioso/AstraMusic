@@ -87,6 +87,23 @@ flutter run -d windows
 
 El último comando compila y ejecuta la versión de desarrollo para Windows.
 
+### Crear el instalador de Windows
+
+En Windows, instala Inno Setup 6.3 o posterior y usa PowerShell desde la raíz del proyecto.
+El script detiene el empaquetado si falla alguna verificación o faltan archivos
+de la compilación. El instalador incluye toda la distribución de Flutter,
+crea un acceso directo en el Menú Inicio y permite elegir uno en el Escritorio.
+Inno Setup registra el desinstalador automáticamente.
+
+```powershell
+.\windows\build-installer.ps1
+```
+
+El instalador queda en `build/windows/installer/AstraMusic-Setup-1.1.0.exe`.
+Si `ISCC.exe` no está en el `PATH`, pasa su ruta con `-Iscc`. Para compilar
+solo el instalador después de construir Windows, usa
+`ISCC.exe windows/installer.iss`.
+
 ## Ejecutar en Android
 
 Se necesita Android Studio o el Android SDK configurado, además de un emulador
