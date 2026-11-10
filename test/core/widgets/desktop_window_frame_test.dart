@@ -40,13 +40,13 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: buildAstraTheme(),
-        home: const DesktopWindowFrame(
-          window: window,
-          child: Scaffold(body: Text('Contenido')),
-        ),
+        builder: (_, child) =>
+            DesktopWindowFrame(window: window, child: child!),
+        home: const Scaffold(body: Text('Contenido')),
       ),
     );
 
+    expect(tester.takeException(), isNull);
     expect(find.text('AstraMusic'), findsOneWidget);
     expect(find.text('Contenido'), findsOneWidget);
 
@@ -72,6 +72,17 @@ void main() {
     await tester.tap(find.byKey(const Key('window-close')));
     await tester.pump();
     expect(calls, contains('close'));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAstraTheme(),
+        builder: (_, child) =>
+            DesktopWindowFrame(window: window, child: child!),
+        home: const Scaffold(body: Text('Contenido actualizado')),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Contenido actualizado'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 400));
   });
 }

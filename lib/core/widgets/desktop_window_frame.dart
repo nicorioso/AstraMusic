@@ -4,7 +4,7 @@ import 'package:astramusic/core/platform/desktop_window.dart';
 import 'package:astramusic/core/theme/astra_colors.dart';
 import 'package:flutter/material.dart';
 
-class DesktopWindowFrame extends StatelessWidget {
+class DesktopWindowFrame extends StatefulWidget {
   const DesktopWindowFrame({
     required this.child,
     required this.window,
@@ -15,12 +15,34 @@ class DesktopWindowFrame extends StatelessWidget {
   final DesktopWindowController window;
 
   @override
-  Widget build(BuildContext context) => Column(
+  State<DesktopWindowFrame> createState() => _DesktopWindowFrameState();
+}
+
+class _DesktopWindowFrameState extends State<DesktopWindowFrame> {
+  late final OverlayEntry _entry = OverlayEntry(builder: _buildContent);
+
+  @override
+  void didUpdateWidget(DesktopWindowFrame oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _entry.markNeedsBuild();
+  }
+
+  @override
+  void dispose() {
+    _entry.remove();
+    _entry.dispose();
+    super.dispose();
+  }
+
+  Widget _buildContent(BuildContext context) => Column(
     children: [
-      DesktopTitleBar(window: window),
-      Expanded(child: child),
+      DesktopTitleBar(window: widget.window),
+      Expanded(child: widget.child),
     ],
   );
+
+  @override
+  Widget build(BuildContext context) => Overlay(initialEntries: [_entry]);
 }
 
 class DesktopTitleBar extends StatelessWidget {
