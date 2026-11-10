@@ -161,6 +161,14 @@ void main() {
       await tester.longPress(find.text('Canción 0').first);
       await tester.pump();
       expect(find.text('1 seleccionadas'), findsOneWidget);
+      expect(find.byType(Checkbox), findsWidgets);
+      expect(
+        find.ancestor(
+          of: find.byTooltip('Salir del modo selector'),
+          matching: find.byType(CustomScrollView),
+        ),
+        findsNothing,
+      );
       await tester.tap(find.text('Canción 1').first);
       await tester.pump();
       expect(find.text('2 seleccionadas'), findsOneWidget);
@@ -170,6 +178,27 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('Inicio móvil activa selección con pulsación larga', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    await _setSize(tester, const Size(360, 800));
+    await tester.pumpWidget(fixture.app());
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Canción 29').first);
+    await tester.pump();
+    expect(find.text('1 seleccionadas'), findsOneWidget);
+    expect(find.byTooltip('Reproducir selección'), findsOneWidget);
+    await tester.tap(find.text('Canción 28').first);
+    await tester.pump();
+    expect(find.text('2 seleccionadas'), findsOneWidget);
+    await tester.tap(find.byTooltip('Salir del modo selector'));
+    await tester.pump();
+    expect(find.text('2 seleccionadas'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Ajustes abre los flujos de portabilidad por el camino real', (
     tester,

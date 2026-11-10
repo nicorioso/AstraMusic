@@ -788,7 +788,13 @@ class _HomeDestinationState extends ConsumerState<HomeDestination> {
                                     key: const Key('smart-playlist-empty'),
                                   ),
                                 )
-                        : _ResponsiveTrackList(tracks: items, desktop: desktop);
+                        : KeyedSubtree(
+                            key: ValueKey(_selected),
+                            child: _ResponsiveTrackList(
+                              tracks: items,
+                              desktop: desktop,
+                            ),
+                          );
                   },
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
@@ -1121,58 +1127,51 @@ class _SearchDestinationState extends ConsumerState<SearchDestination> {
                       if (trackItems.isEmpty && matches.isEmpty) {
                         return const Center(child: Text('No hay resultados.'));
                       }
-                      return CustomScrollView(
-                        key: const Key('search-results'),
-                        scrollCacheExtent: const ScrollCacheExtent.pixels(280),
-                        slivers: [
-                          if (trackItems.isNotEmpty) ...[
-                            if (_selected.any(
-                              (uri) =>
-                                  trackItems.any((track) => track.uri == uri),
-                            ))
-                              SliverToBoxAdapter(
-                                child: !desktop
-                                    ? TrackSelectionBar(
-                                        count: _selected
-                                            .where(
-                                              (uri) => trackItems.any(
-                                                (track) => track.uri == uri,
-                                              ),
-                                            )
-                                            .length,
-                                        onPlay: () {
-                                          ref
-                                              .read(
-                                                libraryControllerProvider
-                                                    .notifier,
-                                              )
-                                              .playAll(
-                                                trackItems
-                                                    .where(
-                                                      (track) => _selected
-                                                          .contains(track.uri),
-                                                    )
-                                                    .toList(),
-                                              );
-                                          setState(_selected.clear);
-                                        },
-                                        onQueue: () => _act(
-                                          trackItems,
-                                          _ShellTrackAction.addToQueue,
-                                        ),
-                                        onPlaylist: () => _act(
-                                          trackItems,
-                                          _ShellTrackAction.addToPlaylist,
-                                        ),
-                                        onRemove: () => _act(
-                                          trackItems,
-                                          _ShellTrackAction.delete,
-                                        ),
-                                        removeLabel: 'Eliminar selección',
-                                        onClose: () =>
-                                            setState(_selected.clear),
-                                      )
-                                    : SizedBox(
+                      final selectedCount = trackItems
+                          .where((track) => _selected.contains(track.uri))
+                          .length;
+                      return Column(
+                        children: [
+                          if (!desktop && selectedCount > 0)
+                            TrackSelectionBar(
+                              count: selectedCount,
+                              onPlay: () {
+                                ref
+                                    .read(libraryControllerProvider.notifier)
+                                    .playAll(
+                                      trackItems
+                                          .where(
+                                            (track) =>
+                                                _selected.contains(track.uri),
+                                          )
+                                          .toList(),
+                                    );
+                                setState(_selected.clear);
+                              },
+                              onQueue: () => _act(
+                                trackItems,
+                                _ShellTrackAction.addToQueue,
+                              ),
+                              onPlaylist: () => _act(
+                                trackItems,
+                                _ShellTrackAction.addToPlaylist,
+                              ),
+                              onRemove: () =>
+                                  _act(trackItems, _ShellTrackAction.delete),
+                              removeLabel: 'Eliminar selección',
+                              onClose: () => setState(_selected.clear),
+                            ),
+                          Expanded(
+                            child: CustomScrollView(
+                              key: const Key('search-results'),
+                              scrollCacheExtent: const ScrollCacheExtent.pixels(
+                                280,
+                              ),
+                              slivers: [
+                                if (trackItems.isNotEmpty) ...[
+                                  if (desktop && selectedCount > 0)
+                                    SliverToBoxAdapter(
+                                      child: SizedBox(
                                         height: 48,
                                         child: Row(
                                           children: [
@@ -1208,64 +1207,70 @@ class _SearchDestinationState extends ConsumerState<SearchDestination> {
                                           ],
                                         ),
                                       ),
-                              ),
-                            const SliverToBoxAdapter(
-                              child: SectionTitle('Canciones'),
-                            ),
-                            SliverFixedExtentList(
-                              itemExtent: 56,
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                                  if (trackWindow.hasMore &&
-                                      index == trackItems.length - 1) {
-                                    scheduleMicrotask(
-                                      ref
-                                          .read(
-                                            libraryTrackLimitProvider.notifier,
-                                          )
-                                          .loadMore,
-                                    );
-                                  }
-                                  return _TrackListTile(
-                                    track: trackItems[index],
-                                    tracks: trackItems,
-                                    index: index,
-                                    selected: _selected.contains(
-                                      trackItems[index].uri,
                                     ),
-                                    selectionActive: _selected.isNotEmpty,
-                                    onSelect: () => _select(trackItems, index),
-                                    onContextMenu: (details) => _contextMenu(
-                                      trackItems,
-                                      index,
-                                      details,
-                                    ),
-                                  );
-                                },
-                                childCount: trackItems.length,
-                                addAutomaticKeepAlives: false,
-                              ),
-                            ),
-                          ],
-                          if (matches.isNotEmpty) ...[
-                            const SliverToBoxAdapter(
-                              child: SectionTitle('Playlists'),
-                            ),
-                            SliverList(
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) => _PlaylistTile(
-                                  playlist: matches[index],
-                                  onTap: () => _openPlaylist(
-                                    context,
-                                    ref,
-                                    matches[index].id,
+                                  const SliverToBoxAdapter(
+                                    child: SectionTitle('Canciones'),
                                   ),
-                                ),
-                                childCount: matches.length,
-                                addAutomaticKeepAlives: false,
-                              ),
+                                  SliverFixedExtentList(
+                                    itemExtent: 56,
+                                    delegate: SliverChildBuilderDelegate(
+                                      (context, index) {
+                                        if (trackWindow.hasMore &&
+                                            index == trackItems.length - 1) {
+                                          scheduleMicrotask(
+                                            ref
+                                                .read(
+                                                  libraryTrackLimitProvider
+                                                      .notifier,
+                                                )
+                                                .loadMore,
+                                          );
+                                        }
+                                        return _TrackListTile(
+                                          track: trackItems[index],
+                                          tracks: trackItems,
+                                          index: index,
+                                          selected: _selected.contains(
+                                            trackItems[index].uri,
+                                          ),
+                                          selectionActive: _selected.isNotEmpty,
+                                          onSelect: () =>
+                                              _select(trackItems, index),
+                                          onContextMenu: (details) =>
+                                              _contextMenu(
+                                                trackItems,
+                                                index,
+                                                details,
+                                              ),
+                                        );
+                                      },
+                                      childCount: trackItems.length,
+                                      addAutomaticKeepAlives: false,
+                                    ),
+                                  ),
+                                ],
+                                if (matches.isNotEmpty) ...[
+                                  const SliverToBoxAdapter(
+                                    child: SectionTitle('Playlists'),
+                                  ),
+                                  SliverList(
+                                    delegate: SliverChildBuilderDelegate(
+                                      (context, index) => _PlaylistTile(
+                                        playlist: matches[index],
+                                        onTap: () => _openPlaylist(
+                                          context,
+                                          ref,
+                                          matches[index].id,
+                                        ),
+                                      ),
+                                      childCount: matches.length,
+                                      addAutomaticKeepAlives: false,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
-                          ],
+                          ),
                         ],
                       );
                     },
@@ -1339,6 +1344,74 @@ class _MobileTrackList extends ConsumerStatefulWidget {
 
 class _MobileTrackListState extends ConsumerState<_MobileTrackList> {
   final _scrollController = ScrollController();
+  final Set<String> _selected = {};
+
+  void _toggle(int index) {
+    setState(() {
+      final uri = widget.tracks[index].uri;
+      if (!_selected.add(uri)) _selected.remove(uri);
+    });
+  }
+
+  Future<void> _act(_ShellTrackAction action) async {
+    final chosen = widget.tracks
+        .where((track) => _selected.contains(track.uri))
+        .toList();
+    final library = ref.read(libraryControllerProvider.notifier);
+    switch (action) {
+      case _ShellTrackAction.addToQueue:
+        for (final track in chosen.where((track) => track.isAvailable)) {
+          await library.addToQueue(track);
+        }
+      case _ShellTrackAction.addToPlaylist:
+        final messenger = ScaffoldMessenger.of(context);
+        final repository = ref.read(playlistRepositoryProvider);
+        final playlist = await createPlaylist(context, ref);
+        if (playlist == null) return;
+        try {
+          await repository.addTracks(playlist.id, [
+            for (final track in chosen)
+              if (track.id != null) track.id!,
+          ]);
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(content: Text('Añadidas a ${playlist.name}')),
+            );
+          }
+        } catch (error) {
+          if (messenger.mounted) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('No se pudo guardar la selección: $error'),
+              ),
+            );
+          }
+        }
+      case _ShellTrackAction.delete:
+        for (final track in chosen) {
+          await library.deleteTrack(track);
+        }
+      case _ShellTrackAction.edit:
+        if (chosen.length == 1 && mounted) {
+          await showMetadataEditor(context, chosen.single);
+        }
+      case _ShellTrackAction.playNext:
+        for (final track in chosen.reversed.where(
+          (track) => track.isAvailable,
+        )) {
+          await library.playNext(track);
+        }
+      case _ShellTrackAction.favorite:
+        for (final track in chosen) {
+          if (track.id != null) {
+            await ref
+                .read(trackRepositoryProvider)
+                .setFavorite(track.id!, !track.isFavorite);
+          }
+        }
+    }
+    if (mounted) setState(_selected.clear);
+  }
 
   @override
   void dispose() {
@@ -1349,24 +1422,53 @@ class _MobileTrackListState extends ConsumerState<_MobileTrackList> {
   @override
   Widget build(BuildContext context) {
     PerformanceDiagnostics.instance.recordListBuild();
-    return Scrollbar(
-      controller: _scrollController,
-      thumbVisibility: MediaQuery.sizeOf(context).width >= desktopBreakpoint,
-      child: ListView.builder(
-        key: const Key('shell-track-list'),
-        controller: _scrollController,
-        itemExtent: 56,
-        scrollCacheExtent: const ScrollCacheExtent.pixels(280),
-        addAutomaticKeepAlives: false,
-        itemCount: widget.tracks.length,
-        itemBuilder: (context, index) {
-          return _TrackListTile(
-            track: widget.tracks[index],
-            tracks: widget.tracks,
-            index: index,
-          );
-        },
-      ),
+    return Column(
+      children: [
+        if (_selected.isNotEmpty)
+          TrackSelectionBar(
+            count: _selected.length,
+            onPlay: () {
+              ref
+                  .read(libraryControllerProvider.notifier)
+                  .playAll(
+                    widget.tracks
+                        .where((track) => _selected.contains(track.uri))
+                        .toList(),
+                  );
+              setState(_selected.clear);
+            },
+            onQueue: () => _act(_ShellTrackAction.addToQueue),
+            onPlaylist: () => _act(_ShellTrackAction.addToPlaylist),
+            onRemove: () => _act(_ShellTrackAction.delete),
+            removeLabel: 'Eliminar selección',
+            onClose: () => setState(_selected.clear),
+          ),
+        Expanded(
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility:
+                MediaQuery.sizeOf(context).width >= desktopBreakpoint,
+            child: ListView.builder(
+              key: const Key('shell-track-list'),
+              controller: _scrollController,
+              itemExtent: 56,
+              scrollCacheExtent: const ScrollCacheExtent.pixels(280),
+              addAutomaticKeepAlives: false,
+              itemCount: widget.tracks.length,
+              itemBuilder: (context, index) {
+                return _TrackListTile(
+                  track: widget.tracks[index],
+                  tracks: widget.tracks,
+                  index: index,
+                  selected: _selected.contains(widget.tracks[index].uri),
+                  selectionActive: _selected.isNotEmpty,
+                  onSelect: () => _toggle(index),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
