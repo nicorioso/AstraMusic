@@ -5,9 +5,11 @@ import 'dart:ui';
 import 'package:astramusic/core/db/app_database.dart';
 import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/platform/artwork_provider.dart';
+import 'package:astramusic/core/platform/desktop_window.dart';
 import 'package:astramusic/core/platform/track_availability.dart';
 import 'package:astramusic/core/theme/astra_theme.dart';
 import 'package:astramusic/core/widgets/responsive_shell.dart';
+import 'package:astramusic/core/widgets/desktop_window_frame.dart';
 import 'package:astramusic/features/library/data/drift_track_repository.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/application/playback_persistence_coordinator.dart';
@@ -23,9 +25,11 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 final _playbackMessengerKey = GlobalKey<ScaffoldMessengerState>();
+const _desktopWindow = SystemDesktopWindowController();
+bool _desktopWindowConfigured = false;
 
 void main() {
-  runZonedGuarded(() {
+  runZonedGuarded(() async {
     PerformanceDiagnostics.instance.startStartup();
     WidgetsFlutterBinding.ensureInitialized();
     if (Platform.isAndroid) {
@@ -39,6 +43,14 @@ void main() {
       _logStartupError(error, stack);
       return true;
     };
+    if (Platform.isLinux || Platform.isWindows) {
+      try {
+        await _desktopWindow.initialize();
+        _desktopWindowConfigured = true;
+      } catch (error, stack) {
+        _logStartupError(error, stack);
+      }
+    }
     runApp(const StartupGate(initializer: initializeAstraMusic));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       PerformanceDiagnostics.instance.recordFirstFrame();
@@ -227,6 +239,7 @@ class _StartupGateState extends State<StartupGate> {
       theme: buildAstraTheme(),
       darkTheme: buildAstraTheme(),
       themeMode: ThemeMode.dark,
+      builder: _buildDesktopWindowFrame,
       home: _error == null
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : StartupErrorScreen(error: _error!, onRetry: _initialize),
@@ -344,7 +357,16 @@ class AstraMusicApp extends StatelessWidget {
     theme: buildAstraTheme(),
     darkTheme: buildAstraTheme(),
     themeMode: ThemeMode.dark,
+    builder: _buildDesktopWindowFrame,
     home: const ResponsiveShell(),
+  );
+}
+
+Widget _buildDesktopWindowFrame(BuildContext context, Widget? child) {
+  if (!_desktopWindowConfigured) return child ?? const SizedBox.shrink();
+  return DesktopWindowFrame(
+    window: _desktopWindow,
+    child: child ?? const SizedBox.shrink(),
   );
 }
 
