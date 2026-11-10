@@ -201,6 +201,46 @@ void main() {
     expect(find.text('Eliminar'), findsOneWidget);
   });
 
+  testWidgets(
+    'pulsación larga activa selección móvil y los toques alternan canciones',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final tracks = [
+        Track(
+          id: 1,
+          uri: 'file:///uno.mp3',
+          title: 'Uno',
+          dateAdded: DateTime(2026),
+        ),
+        Track(
+          id: 2,
+          uri: 'file:///dos.mp3',
+          title: 'Dos',
+          dateAdded: DateTime(2026),
+        ),
+      ];
+      await tester.pumpWidget(_testApp(FakeTrackRepository(tracks)));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('Uno'));
+      await tester.pump();
+      expect(find.text('1 seleccionadas'), findsOneWidget);
+      expect(find.byTooltip('Añadir selección a playlist'), findsOneWidget);
+      await tester.tap(find.text('Dos'));
+      await tester.pump();
+      expect(find.text('2 seleccionadas'), findsOneWidget);
+      await tester.tap(find.text('Uno'));
+      await tester.pump();
+      expect(find.text('1 seleccionadas'), findsOneWidget);
+      await tester.tap(find.byTooltip('Salir del modo selector'));
+      await tester.pump();
+      expect(find.text('1 seleccionadas'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('muestra el estado vacío de la biblioteca', (tester) async {
     await tester.pumpWidget(_testApp(const FakeTrackRepository([])));
     await tester.pumpAndSettle();

@@ -143,6 +143,34 @@ void main() {
     expect(find.text('A la cola'), findsOneWidget);
   });
 
+  testWidgets(
+    'Búsqueda móvil selecciona con pulsación larga y toques sucesivos',
+    (tester) async {
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+      await _setSize(tester, const Size(360, 800));
+      await tester.pumpWidget(fixture.app());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Buscar'));
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const Key('mobile-search-field')),
+        'Canción',
+      );
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('Canción 0').first);
+      await tester.pump();
+      expect(find.text('1 seleccionadas'), findsOneWidget);
+      await tester.tap(find.text('Canción 1').first);
+      await tester.pump();
+      expect(find.text('2 seleccionadas'), findsOneWidget);
+      await tester.tap(find.byTooltip('Salir del modo selector'));
+      await tester.pump();
+      expect(find.text('2 seleccionadas'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Ajustes abre los flujos de portabilidad por el camino real', (
     tester,
   ) async {

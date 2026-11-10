@@ -16,6 +16,7 @@ import 'package:astramusic/core/widgets/section_title.dart';
 import 'package:astramusic/core/widgets/secondary_back_header.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
+import 'package:astramusic/core/widgets/track_selection_bar.dart';
 import 'package:astramusic/features/library/domain/smart_playlist_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/application/metadata_editor_service.dart';
@@ -951,14 +952,17 @@ class _SearchDestinationState extends ConsumerState<SearchDestination> {
 
   void _select(List<Track> tracks, int index) {
     final keyboard = HardwareKeyboard.instance;
+    final mobile = MediaQuery.sizeOf(context).width < 840;
     setState(() {
-      if (keyboard.isShiftPressed && _anchor != null) {
+      if (!mobile && keyboard.isShiftPressed && _anchor != null) {
         final start = _anchor! < index ? _anchor! : index;
         final end = _anchor! > index ? _anchor! : index;
         for (var i = start; i <= end; i++) {
           _selected.add(tracks[i].uri);
         }
-      } else if (keyboard.isControlPressed || keyboard.isMetaPressed) {
+      } else if (mobile ||
+          keyboard.isControlPressed ||
+          keyboard.isMetaPressed) {
         if (!_selected.add(tracks[index].uri)) {
           _selected.remove(tracks[index].uri);
         }
@@ -1127,42 +1131,83 @@ class _SearchDestinationState extends ConsumerState<SearchDestination> {
                                   trackItems.any((track) => track.uri == uri),
                             ))
                               SliverToBoxAdapter(
-                                child: SizedBox(
-                                  height: 48,
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        '${_selected.where((uri) => trackItems.any((track) => track.uri == uri)).length} seleccionadas',
-                                      ),
-                                      TextButton(
-                                        onPressed: () => _act(
+                                child: !desktop
+                                    ? TrackSelectionBar(
+                                        count: _selected
+                                            .where(
+                                              (uri) => trackItems.any(
+                                                (track) => track.uri == uri,
+                                              ),
+                                            )
+                                            .length,
+                                        onPlay: () {
+                                          ref
+                                              .read(
+                                                libraryControllerProvider
+                                                    .notifier,
+                                              )
+                                              .playAll(
+                                                trackItems
+                                                    .where(
+                                                      (track) => _selected
+                                                          .contains(track.uri),
+                                                    )
+                                                    .toList(),
+                                              );
+                                          setState(_selected.clear);
+                                        },
+                                        onQueue: () => _act(
                                           trackItems,
                                           _ShellTrackAction.addToQueue,
                                         ),
-                                        child: const Text('A la cola'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () => _act(
+                                        onPlaylist: () => _act(
                                           trackItems,
                                           _ShellTrackAction.addToPlaylist,
                                         ),
-                                        child: const Text('Playlist'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () => _act(
+                                        onRemove: () => _act(
                                           trackItems,
                                           _ShellTrackAction.delete,
                                         ),
-                                        child: const Text('Eliminar'),
-                                      ),
-                                      IconButton(
-                                        onPressed: () =>
+                                        removeLabel: 'Eliminar selección',
+                                        onClose: () =>
                                             setState(_selected.clear),
-                                        icon: const Icon(Icons.close),
+                                      )
+                                    : SizedBox(
+                                        height: 48,
+                                        child: Row(
+                                          children: [
+                                            Text(
+                                              '${_selected.where((uri) => trackItems.any((track) => track.uri == uri)).length} seleccionadas',
+                                            ),
+                                            TextButton(
+                                              onPressed: () => _act(
+                                                trackItems,
+                                                _ShellTrackAction.addToQueue,
+                                              ),
+                                              child: const Text('A la cola'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => _act(
+                                                trackItems,
+                                                _ShellTrackAction.addToPlaylist,
+                                              ),
+                                              child: const Text('Playlist'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => _act(
+                                                trackItems,
+                                                _ShellTrackAction.delete,
+                                              ),
+                                              child: const Text('Eliminar'),
+                                            ),
+                                            IconButton(
+                                              onPressed: () =>
+                                                  setState(_selected.clear),
+                                              icon: const Icon(Icons.close),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ],
-                                  ),
-                                ),
                               ),
                             const SliverToBoxAdapter(
                               child: SectionTitle('Canciones'),
@@ -1351,17 +1396,19 @@ class _TrackListTile extends ConsumerWidget {
     return TrackTile(
       track: track,
       showDateAdded: true,
+      selected: selected,
+      onLongPress: onSelect,
       onSecondaryTapDown: onContextMenu,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (selected)
-            Checkbox(value: true, onChanged: (_) => onSelect?.call()),
+          if (selectionActive)
+            Checkbox(value: selected, onChanged: (_) => onSelect?.call()),
           Text(_trackDuration(track.duration)),
           _TrackActionsMenu(track: track),
         ],
       ),
-      onTap: track.isAvailable
+      onTap: track.isAvailable || selectionActive
           ? () {
               if (onSelect != null &&
                   (selectionActive ||

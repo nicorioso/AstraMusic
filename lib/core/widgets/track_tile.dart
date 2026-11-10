@@ -11,7 +11,9 @@ class TrackTile extends ConsumerStatefulWidget {
   const TrackTile({
     required this.track,
     this.onTap,
+    this.onLongPress,
     this.onSecondaryTapDown,
+    this.selected = false,
     this.trailing,
     this.enabled = true,
     this.currentKey,
@@ -23,7 +25,9 @@ class TrackTile extends ConsumerStatefulWidget {
 
   final Track track;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final GestureTapDownCallback? onSecondaryTapDown;
+  final bool selected;
   final Widget? trailing;
   final bool enabled;
   final Key? currentKey;
@@ -49,7 +53,9 @@ class _TrackTileState extends ConsumerState<TrackTile> {
     final isCurrent = widget.track.id != null && widget.track.id == playback.$1;
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     final desktop = MediaQuery.sizeOf(context).width >= 840;
-    final baseColor = isCurrent
+    final baseColor = widget.selected
+        ? context.astraColors.surfaceHover
+        : isCurrent
         ? widget.currentColor ?? context.astraColors.surfaceHover
         : context.astraColors.surface.withValues(alpha: 0);
     final hoveredColor = widget.hoverColor ?? context.astraColors.surfaceHover;
@@ -99,6 +105,7 @@ class _TrackTileState extends ConsumerState<TrackTile> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   onTap: widget.enabled ? widget.onTap : null,
+                  onLongPress: widget.enabled ? widget.onLongPress : null,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

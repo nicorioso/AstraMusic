@@ -9,6 +9,7 @@ import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/section_title.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
+import 'package:astramusic/core/widgets/track_selection_bar.dart';
 import 'package:astramusic/features/library/domain/library_folder.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/application/metadata_editor_service.dart';
@@ -544,14 +545,15 @@ class _TrackListState extends ConsumerState<_TrackList> {
 
   void _select(int index) {
     final keys = HardwareKeyboard.instance;
+    final mobile = MediaQuery.sizeOf(context).width < 840;
     setState(() {
-      if (keys.isShiftPressed && _anchor != null) {
+      if (!mobile && keys.isShiftPressed && _anchor != null) {
         final start = _anchor! < index ? _anchor! : index;
         final end = _anchor! > index ? _anchor! : index;
         for (var i = start; i <= end; i++) {
           _selected.add(widget.tracks[i].uri);
         }
-      } else if (keys.isControlPressed || keys.isMetaPressed) {
+      } else if (mobile || keys.isControlPressed || keys.isMetaPressed) {
         if (!_selected.add(widget.tracks[index].uri)) {
           _selected.remove(widget.tracks[index].uri);
         }
@@ -672,7 +674,20 @@ class _TrackListState extends ConsumerState<_TrackList> {
     final onDelete = widget.onDelete;
     return Column(
       children: [
-        if (_selected.isNotEmpty)
+        if (_selected.isNotEmpty && MediaQuery.sizeOf(context).width < 840)
+          TrackSelectionBar(
+            count: _selected.length,
+            onPlay: () {
+              ref.read(libraryControllerProvider.notifier).playAll(_chosen);
+              setState(_selected.clear);
+            },
+            onQueue: () => _bulk(_TrackAction.addToQueue),
+            onPlaylist: () => _bulk(_TrackAction.addToPlaylist),
+            onRemove: () => _bulk(_TrackAction.delete),
+            removeLabel: 'Eliminar selección',
+            onClose: () => setState(_selected.clear),
+          ),
+        if (_selected.isNotEmpty && MediaQuery.sizeOf(context).width >= 840)
           SizedBox(
             height: 48,
             child: Row(
@@ -722,11 +737,14 @@ class _TrackListState extends ConsumerState<_TrackList> {
               return TrackTile(
                 track: track,
                 enabled: enabled,
+                selected: _selected.contains(track.uri),
+                onLongPress: enabled ? () => _toggle(index) : null,
                 onSecondaryTapDown: (details) => _contextMenu(details, index),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (MediaQuery.sizeOf(context).width >= 840)
+                    if (MediaQuery.sizeOf(context).width >= 840 ||
+                        _selected.isNotEmpty)
                       Checkbox(
                         value: _selected.contains(track.uri),
                         onChanged: enabled ? (_) => _toggle(index) : null,
@@ -790,7 +808,7 @@ class _TrackListState extends ConsumerState<_TrackList> {
                 ),
                 onTap: !enabled
                     ? null
-                    : track.isAvailable
+                    : track.isAvailable || _selected.isNotEmpty
                     ? () {
                         if (HardwareKeyboard.instance.isControlPressed ||
                             HardwareKeyboard.instance.isMetaPressed ||

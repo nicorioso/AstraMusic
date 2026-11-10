@@ -9,6 +9,7 @@ import 'package:astramusic/core/theme/dynamic_artwork_color.dart';
 import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/core/widgets/track_artwork.dart';
 import 'package:astramusic/core/widgets/track_tile.dart';
+import 'package:astramusic/core/widgets/track_selection_bar.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/application/metadata_editor_service.dart';
 import 'package:astramusic/features/library/presentation/metadata_editor_dialog.dart';
@@ -445,14 +446,17 @@ class _PlaylistDetailBodyState extends ConsumerState<_PlaylistDetailBody> {
   void _select(int index) {
     final tracks = widget.tracks;
     final keyboard = HardwareKeyboard.instance;
+    final mobile = MediaQuery.sizeOf(context).width < 840;
     setState(() {
-      if (keyboard.isShiftPressed && _anchor != null) {
+      if (!mobile && keyboard.isShiftPressed && _anchor != null) {
         final start = _anchor! < index ? _anchor! : index;
         final end = _anchor! > index ? _anchor! : index;
         for (var i = start; i <= end; i++) {
           _selected.add(tracks[i].uri);
         }
-      } else if (keyboard.isControlPressed || keyboard.isMetaPressed) {
+      } else if (mobile ||
+          keyboard.isControlPressed ||
+          keyboard.isMetaPressed) {
         if (!_selected.add(tracks[index].uri)) {
           _selected.remove(tracks[index].uri);
         }
@@ -779,32 +783,57 @@ class _PlaylistDetailBodyState extends ConsumerState<_PlaylistDetailBody> {
           ),
           if (_selected.any((uri) => tracks.any((track) => track.uri == uri)))
             SliverToBoxAdapter(
-              child: SizedBox(
-                height: 48,
-                child: Row(
-                  children: [
-                    Text(
-                      '${_selected.where((uri) => tracks.any((track) => track.uri == uri)).length} seleccionadas',
+              child: MediaQuery.sizeOf(context).width < 840
+                  ? TrackSelectionBar(
+                      count: _selected
+                          .where(
+                            (uri) => tracks.any((track) => track.uri == uri),
+                          )
+                          .length,
+                      onPlay: () {
+                        library.playPlaylist(
+                          playlist.id,
+                          tracks
+                              .where((track) => _selected.contains(track.uri))
+                              .toList(),
+                        );
+                        setState(_selected.clear);
+                      },
+                      onQueue: () => _bulk(_PlaylistBulkAction.queue),
+                      onPlaylist: () => _bulk(_PlaylistBulkAction.playlist),
+                      onRemove: () => _bulk(_PlaylistBulkAction.remove),
+                      removeLabel: favorites
+                          ? 'Quitar selección de Me gusta'
+                          : 'Quitar selección de playlist',
+                      onClose: () => setState(_selected.clear),
+                    )
+                  : SizedBox(
+                      height: 48,
+                      child: Row(
+                        children: [
+                          Text(
+                            '${_selected.where((uri) => tracks.any((track) => track.uri == uri)).length} seleccionadas',
+                          ),
+                          TextButton(
+                            onPressed: () => _bulk(_PlaylistBulkAction.queue),
+                            child: const Text('A la cola'),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                _bulk(_PlaylistBulkAction.playlist),
+                            child: const Text('Playlist'),
+                          ),
+                          TextButton(
+                            onPressed: () => _bulk(_PlaylistBulkAction.remove),
+                            child: const Text('Quitar'),
+                          ),
+                          IconButton(
+                            onPressed: () => setState(_selected.clear),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
                     ),
-                    TextButton(
-                      onPressed: () => _bulk(_PlaylistBulkAction.queue),
-                      child: const Text('A la cola'),
-                    ),
-                    TextButton(
-                      onPressed: () => _bulk(_PlaylistBulkAction.playlist),
-                      child: const Text('Playlist'),
-                    ),
-                    TextButton(
-                      onPressed: () => _bulk(_PlaylistBulkAction.remove),
-                      child: const Text('Quitar'),
-                    ),
-                    IconButton(
-                      onPressed: () => setState(_selected.clear),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
             ),
           if (MediaQuery.sizeOf(context).width >= 840 && tracks.isNotEmpty)
             const SliverToBoxAdapter(child: _PlaylistTrackHeader()),
@@ -885,7 +914,9 @@ class _PlaylistDetailBodyState extends ConsumerState<_PlaylistDetailBody> {
                 final tile = TrackTile(
                   track: track,
                   showDateAdded: true,
-                  onTap: track.isAvailable
+                  selected: _selected.contains(track.uri),
+                  onLongPress: () => _select(index),
+                  onTap: track.isAvailable || _selected.isNotEmpty
                       ? () {
                           if (_selected.isNotEmpty ||
                               HardwareKeyboard.instance.isControlPressed ||
@@ -901,8 +932,11 @@ class _PlaylistDetailBodyState extends ConsumerState<_PlaylistDetailBody> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_selected.contains(track.uri))
-                        Checkbox(value: true, onChanged: (_) => _select(index)),
+                      if (_selected.isNotEmpty)
+                        Checkbox(
+                          value: _selected.contains(track.uri),
+                          onChanged: (_) => _select(index),
+                        ),
                       if (track.duration case final duration?)
                         Text(_trackDuration(duration)),
                       PopupMenuButton<String>(

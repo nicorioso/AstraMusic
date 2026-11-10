@@ -260,6 +260,10 @@ void main() {
   ) async {
     final fixture = _Fixture();
     await _setSize(tester, const Size(1200, 800));
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(fixture.detailApp());
     await tester.pumpAndSettle();
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
@@ -273,6 +277,34 @@ void main() {
     expect(find.text('Playlist'), findsWidgets);
     expect(find.text('Quitar'), findsOneWidget);
   });
+
+  testWidgets(
+    'playlist móvil selecciona con pulsación larga y alterna canciones',
+    (tester) async {
+      final fixture = _Fixture();
+      await _setSize(tester, const Size(360, 800));
+      await tester.pumpWidget(fixture.detailApp());
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('Canción 1'));
+      await tester.pump();
+      expect(find.text('1 seleccionadas'), findsOneWidget);
+      await tester.tap(find.text('Canción 3'));
+      await tester.pump();
+      expect(find.text('2 seleccionadas'), findsOneWidget);
+      await tester.tap(find.text('Canción 1'));
+      await tester.pump();
+      expect(find.text('1 seleccionadas'), findsOneWidget);
+      await tester.tap(find.byTooltip('Salir del modo selector'));
+      await tester.pump();
+      expect(find.text('1 seleccionadas'), findsNothing);
+      await tester.longPress(find.text('Canción 3'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Reproducir selección'));
+      await tester.pump();
+      expect(fixture.player.loaded.map((track) => track.id), [3]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('el detalle reproduce la cola disponible desde la elegida', (
     tester,
