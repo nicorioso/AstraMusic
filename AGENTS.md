@@ -1,5 +1,5 @@
 # AstraMusic
-Reproductor de música LOCAL, gratuito. Android, Linux, Windows. Flutter 3.47.x / Dart 3.13.x (no actualizar SDK).
+Reproductor de música LOCAL, gratuito. Versión 1.1.0; Android, Linux, Windows. Flutter 3.47.x / Dart 3.13.x (no actualizar SDK).
 Detalle histórico por fase: docs/historial-agents.md (leer solo si es necesario).
 
 ## Respuesta
@@ -10,6 +10,9 @@ Detalle histórico por fase: docs/historial-agents.md (leer solo si es necesario
 - Busca con rg y lee solo los archivos necesarios. No audites todo lib/.
 - Salida silenciosa: `flutter analyze --no-pub`, `flutter test --reporter failures-only`, y `| tail -n 30` en comandos largos.
 - Por tarea ejecuta SOLO analyze y test. Builds (linux/apk) solo si la tarea lo pide.
+- Publicación: APK release firmado con `android/key.properties` (nunca commitearlo);
+  instalador Windows con Inno Setup y `windows/build-installer.ps1` solo en Windows
+  y cuando se solicite compilación. Binarios oficiales: Discord del README.
 
 ## Reglas
 - el arranque nunca depende de archivos del usuario; restauraciones y verificaciones corren tras el primer frame y con try/catch.
@@ -22,12 +25,19 @@ Detalle histórico por fase: docs/historial-agents.md (leer solo si es necesario
 ## Arquitectura
 lib/core (platform, db, utils) y lib/features (library, player, playlists, settings). Riverpod 3.x, drift, just_audio + audio_service.
 - Playlists usa modelos/repositorios de dominio; la UI nunca recibe filas de drift.
+- `SmartPackageService` mantiene `.amplaylist` como ZIP con `playlist.json`
+  versión 1, `audio/` e imágenes opcionales en `images/`; validar rutas y
+  referencias al importar y preservar el rollback ante errores.
 - La navegación admite destinos de playlist y conserva una pila simple en escritorio.
 - pantallas secundarias en móvil viven dentro del shell (pila del provider); solo el reproductor completo es ruta aparte.
 - UI no usa tipos de drift. Lo específico de plataforma va detrás de interfaces en core/platform.
 - El tema Gargantua vive en `core/theme`; usa `AstraColors` y no colores fijos en widgets.
 - Los fondos decorativos van en Stack, nunca envolviendo el contenido con altura fija.
 - La raíz responsive usa `DesktopShell` y `MobileShell` con navegación Riverpod.
+- Selección múltiple: pulsación prolongada y toque en móvil; Ctrl/Cmd y Shift en
+  escritorio. Atajos del shell mediante `Shortcuts`/`Actions`.
+- Ventana de Linux/Windows sin marco mediante `DesktopWindowController` y
+  `DesktopWindowFrame`; probar arrastre, doble clic y controles con el puerto.
 - Breakpoint único: escritorio desde 840 dp; móvil por debajo de 840 dp.
 - La rejilla de Inicio muestra hasta 8 playlists: recientes primero; si faltan,
   favoritos y luego las más nuevas por creación, sin duplicados.

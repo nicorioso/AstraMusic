@@ -20,7 +20,7 @@ Su propuesta de valor actual combina:
 - funcionamiento local: el código no implementa cuentas, sincronización en la
   nube, streaming de catálogo ni telemetría remota.
 
-La aplicación tiene la versión `1.0.0+1` en `pubspec.yaml` y usa el identificador
+La aplicación tiene la versión `1.1.0+2` en `pubspec.yaml` y usa el identificador
 `com.nicorioso.astramusic` en Android y Linux.
 
 ## 2. Stack tecnológico
@@ -54,6 +54,8 @@ actualizarse como parte de cambios ordinarios.
 | `file_picker` | Selección de carpetas y archivos |
 | `desktop_drop` 0.8.4 | Entrega nativa de archivos y carpetas en escritorio; adaptador en `core/platform/desktop_drop_import.dart` |
 | `permission_handler` 12.0.3 | Permisos de audio/notificaciones y apertura de ajustes |
+| `archive` | Creación y lectura de paquetes ZIP `.amplaylist` |
+| `window_manager` | Ventana de escritorio sin marco y controles de la barra de título |
 | `path` / `path_provider` | Rutas y directorios de datos/caché de la aplicación |
 | `diacritic` | Normalización de búsqueda sin diacríticos |
 
@@ -65,6 +67,8 @@ actualizarse como parte de cambios ordinarios.
 - `flutter_launcher_icons` para regenerar iconos desde
   `assets/branding/logo.png`.
 - Gradle/Kotlin para Android y CMake para Linux/Windows.
+- Inno Setup 6.3 o posterior para el instalador `.exe` de Windows;
+  `windows/build-installer.ps1` comprueba análisis, pruebas y archivos antes de empaquetar.
 
 ## 3. Arquitectura del software
 
@@ -179,7 +183,7 @@ inyecta la base, el servicio de audio y el proveedor de carátulas compartidos;
 | Tabla | Contenido |
 |---|---|
 | `tracks` | URI, metadatos, claves de búsqueda/orden, disponibilidad, favorito, carátula y `play_count` (entero, 0 por defecto) |
-| `playlists` | Nombre, creación, actualización y última reproducción |
+| `playlists` | Nombre, ruta de carátula personalizada, creación, actualización y última reproducción |
 | `playlist_tracks` | Relación ordenada playlist–canción, sin duplicados |
 | `play_history` | Un evento por inicio de pista: `track_id`, `played_at` e ID de evento; FK con borrado en cascada |
 | `library_folders` | Carpetas de escritorio y última fecha de escaneo |
@@ -307,12 +311,57 @@ pistas disponibles.
 - Añadir canciones sin duplicarlas, quitar canciones y reordenarlas.
 - Reproducir en orden o aleatorio; el inicio registra `lastPlayedAt`.
 - Portada tipo mosaico 2×2 con hasta cuatro carátulas distintas y fallback
-  visual cuando no existen.
+  visual cuando no existen; se puede elegir una carátula personalizada.
 - Inicio presenta hasta ocho accesos a playlists manuales: reproducidas
   recientemente, luego Favoritos y finalmente las más nuevas, sin duplicados.
 - Debajo, cuatro selecciones de canciones inteligentes reutilizan la lista
   responsive y sus acciones de reproducción. Una selección sin resultados
   muestra su propio estado vacío, sin declarar vacía toda la biblioteca.
+
+### Paquetes autónomos `.amplaylist`
+
+`SmartPackageService` exporta una playlist manual como archivo ZIP con esta
+estructura (formato `version: 1`):
+
+```text
+playlist.json
+audio/00000.mp3
+audio/00001.flac
+images/playlist_cover.png       # opcional
+images/track_00000.jpg          # opcional
+```
+
+El manifiesto JSON conserva el orden de `tracks`; `description` es obligatorio
+en el formato, aunque el exportador actual lo escribe como cadena vacía:
+
+```json
+{
+  "version": 1,
+  "name": "Viaje",
+  "description": "",
+  "coverImage": "images/playlist_cover.png",
+  "tracks": [
+    {
+      "title": "Canción",
+      "artist": "Artista",
+      "album": "Álbum",
+      "durationMs": 180000,
+      "file": "audio/00000.mp3",
+      "artUri": "images/track_00000.jpg"
+    }
+  ]
+}
+```
+
+`coverImage` y `artUri` se omiten si no hay imagen; `artist`, `album` y
+`durationMs` aceptan `null`. El exportador copia los audios mediante
+`PackageAudioExporter` (incluye URI `content://` de Android) y guarda imágenes
+referenciadas por rutas relativas. La importación verifica el ZIP y el manifiesto,
+rechaza entradas ajenas, duplicadas, enlaces simbólicos y referencias faltantes;
+extrae cada paquete en una carpeta propia de la biblioteca, registra canciones y
+playlist en Drift y revierte esos cambios si falla. Los paquetes de versión 1
+sin imágenes siguen siendo válidos. No se incluyen rutas originales del usuario
+ni se requiere que los archivos fuente sigan presentes después de importar.
 
 ### Límites observados en la auditoría
 
@@ -433,6 +482,18 @@ El único breakpoint es **840 dp**:
   mini-reproductor flotante de 64 dp y pantallas secundarias dentro del shell.
   Tocar el mini-reproductor abre la vista completa; también puede cerrarse por
   botón o gesto vertical.
+
+En listas de Biblioteca y playlists, una pulsación prolongada inicia la selección
+múltiple táctil; los siguientes toques alternan pistas y muestran acciones en
+lote. En escritorio, Ctrl/Cmd alterna una pista y Shift selecciona un rango
+desde el ancla; el shell usa `Shortcuts` y `Actions` para Escape, espacio,
+flechas y Ctrl/Cmd+F. Las acciones de selección operan sobre modelos de dominio.
+
+En Linux y Windows, `SystemDesktopWindowController` usa `window_manager` para
+quitar el marco nativo. `DesktopWindowFrame` inserta una barra de 48 dp sobre
+el shell: el área de título arrastra la ventana, doble clic alterna maximización
+y los botones minimizan, maximizan/restauran o cierran. El controlador de
+plataforma permite probar estos flujos sin acoplar los widgets al plugin.
 
 Inicio usa una rejilla de dos columnas en móvil y hasta cuatro en escritorio.
 Las listas muestran carátula, metadatos, disponibilidad, estado actual y menú de

@@ -1,4 +1,4 @@
-# AstraMusic
+# AstraMusic 1.1.0
 
 AstraMusic es un reproductor de música local, gratuito, 100 % open source y
 sin ánimo de lucro. El proyecto nace para que cualquier persona pueda disfrutar
@@ -16,9 +16,14 @@ con los permisos necesarios sobre ellos.
 - Linux.
 - Windows.
 
-AstraMusic está construido con Flutter 3.47.x y Dart 3.13.x. Por ahora no se
-publican APK, instaladores ni paquetes de escritorio; la aplicación debe
-ejecutarse directamente desde el código fuente.
+AstraMusic está construido con Flutter 3.47.x y Dart 3.13.x.
+
+## Descargas oficiales
+
+Los binarios compilados se distribuyen directamente en el servidor oficial
+**[AstraMusic Discord](https://discord.gg/pRpghjs34)**: APK para Android e
+instalador `.exe` para Windows. Linux se puede ejecutar desde el código fuente;
+las instrucciones de compilación están en [la guía de publicación](docs/release.md).
 
 ## Funciones principales
 
@@ -26,8 +31,13 @@ ejecutarse directamente desde el código fuente.
 - Reproducción en segundo plano y controles multimedia del sistema.
 - Cola de reproducción, modo aleatorio y repetición.
 - Búsqueda, favoritos y playlists.
+- Selección múltiple de canciones: pulsación prolongada y toques en Android;
+  Ctrl/Cmd y Shift en escritorio para seleccionar y aplicar acciones en lote.
+- Importación y exportación de playlists autónomas `.amplaylist`, con audios y
+  carátulas opcionales; listas inteligentes basadas en historial y biblioteca.
 - Lectura de metadatos y carátulas incrustadas.
-- Interfaz adaptable para dispositivos móviles y computadores.
+- Interfaz adaptable para dispositivos móviles y computadores, con atajos de
+  teclado y barra de título propia en escritorio.
 
 ## Requisitos generales
 
@@ -43,7 +53,8 @@ flutter doctor -v
 ```
 
 No se deben actualizar Flutter, Dart ni las dependencias del proyecto sin
-verificar antes su compatibilidad.
+verificar antes su compatibilidad. Para compilar un APK release firmado, consulta
+[la guía de publicación](docs/release.md).
 
 ## Obtener el proyecto
 
