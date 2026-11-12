@@ -10,6 +10,18 @@ catálogo de música, no descarga canciones y no incluye contenido protegido. La
 persona usuaria conserva el control de sus archivos y es responsable de contar
 con los permisos necesarios sobre ellos.
 
+## Vista previa de la aplicación
+
+Capturas de la interfaz de escritorio de AstraMusic.
+
+![Pantalla de inicio de AstraMusic con playlists y canciones recientes](screenshots/inincio.png)
+
+| Biblioteca | Playlist |
+| --- | --- |
+| ![Biblioteca con playlists y accesos a artistas, álbumes, géneros y carpetas](screenshots/biblioteca.png) | ![Detalle de una playlist con carátula y lista de canciones](screenshots/playlist.png) |
+| **Reproductor y cola** | **Configuración** |
+| ![Reproductor ampliado con la cola de reproducción](screenshots/vista%20grande%20cancion%20y%20cola.png) | ![Configuración con opciones de biblioteca y respaldo](screenshots/menu%20configuracion.png) |
+
 ## Plataformas compatibles
 
 - Android.
