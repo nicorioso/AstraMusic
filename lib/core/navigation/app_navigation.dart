@@ -13,6 +13,7 @@ enum AppDestinationType {
   folders,
   settings,
   diagnostics,
+  audioDownload,
 }
 
 @immutable
@@ -29,6 +30,9 @@ class AppDestination {
   static const folders = AppDestination._(AppDestinationType.folders);
   static const settings = AppDestination._(AppDestinationType.settings);
   static const diagnostics = AppDestination._(AppDestinationType.diagnostics);
+  static const audioDownload = AppDestination._(
+    AppDestinationType.audioDownload,
+  );
 
   factory AppDestination.playlist(int id) =>
       AppDestination._(AppDestinationType.playlist, id);
@@ -57,14 +61,16 @@ class AppDestination {
     AppDestinationType.queue ||
     AppDestinationType.folders ||
     AppDestinationType.settings => 2,
-    AppDestinationType.diagnostics => 2,
+    AppDestinationType.diagnostics || AppDestinationType.audioDownload => 2,
   };
 
   @override
   bool operator ==(Object other) =>
       other is AppDestination &&
       other.type == type &&
-      other.playlistId == playlistId && other.name == name && other.artist == artist;
+      other.playlistId == playlistId &&
+      other.name == name &&
+      other.artist == artist;
 
   @override
   int get hashCode => Object.hash(type, playlistId, name, artist);
@@ -85,14 +91,19 @@ class AppNavigation extends Notifier<AppDestination> {
   void select(AppDestination destination) {
     if (destination == state) return;
     if (destination.type == AppDestinationType.playlist ||
-        (destination.type == AppDestinationType.artists && destination.name != null) ||
-        (destination.type == AppDestinationType.albums && destination.name != null) ||
-        (destination.type == AppDestinationType.genres && destination.name != null) ||
-        (destination.type == AppDestinationType.folders && destination.name != null) ||
+        (destination.type == AppDestinationType.artists &&
+            destination.name != null) ||
+        (destination.type == AppDestinationType.albums &&
+            destination.name != null) ||
+        (destination.type == AppDestinationType.genres &&
+            destination.name != null) ||
+        (destination.type == AppDestinationType.folders &&
+            destination.name != null) ||
         destination.type == AppDestinationType.queue ||
         destination.type == AppDestinationType.folders ||
         destination.type == AppDestinationType.settings ||
-        destination.type == AppDestinationType.diagnostics) {
+        destination.type == AppDestinationType.diagnostics ||
+        destination.type == AppDestinationType.audioDownload) {
       _history.add(state);
     } else {
       _history.clear();

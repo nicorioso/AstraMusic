@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:astramusic/core/platform/audio_download_backend.dart';
 import 'package:astramusic/core/platform/desktop_yt_dlp_backend.dart';
+import 'package:astramusic/core/platform/youtube_download_utils.dart';
 import 'package:astramusic/features/library/application/audio_download_service.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
@@ -101,7 +102,7 @@ class AudioDownloadController extends Notifier<AudioDownloadState> {
         state = AudioDownloadState(
           availability: state.availability,
           status: DownloadStatus.failed,
-          error: '$error',
+          error: friendlyDownloadError('$error'),
         );
       }
     }
@@ -152,7 +153,7 @@ class AudioDownloadController extends Notifier<AudioDownloadState> {
           availability: state.availability,
           preview: state.preview,
           status: DownloadStatus.failed,
-          error: '$error',
+          error: friendlyDownloadError('$error'),
         );
       }
       return null;

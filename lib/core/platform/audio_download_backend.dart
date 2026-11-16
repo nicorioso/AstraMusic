@@ -55,6 +55,7 @@ enum DownloadStatus {
   analyzing,
   downloading,
   processing,
+  registering,
   completed,
   failed,
   canceled,

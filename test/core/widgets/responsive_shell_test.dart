@@ -1,10 +1,12 @@
 import 'package:astramusic/features/library/domain/smart_playlist_repository.dart';
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 
 import 'package:astramusic/core/platform/audio_player_service.dart';
+import 'package:astramusic/core/platform/audio_download_backend.dart';
 import 'package:astramusic/core/diagnostics/performance_diagnostics.dart';
 import 'package:astramusic/core/navigation/app_navigation.dart';
 import 'package:astramusic/core/platform/artwork_cache.dart';
@@ -18,6 +20,8 @@ import 'package:astramusic/core/widgets/play_circle_button.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
 import 'package:astramusic/features/library/application/artwork_backfill_service.dart';
+import 'package:astramusic/features/library/application/audio_download_controller.dart';
+import 'package:astramusic/features/library/application/audio_download_service.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/playlists/domain/playlist.dart';
@@ -946,6 +950,177 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+  testWidgets('Biblioteca móvil analiza, descarga y reproduce la pista', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    final backend = _WidgetDownloadBackend();
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(
+      fixture.app(downloadService: fixture.downloadService(backend)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-download-audio')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('mobile-shell')), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => call.method == 'Clipboard.getData'
+          ? {'text': 'https://youtu.be/abc123?list=PL123'}
+          : null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('download-paste-button')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('download-url-field')))
+          .controller!
+          .text,
+      'https://youtu.be/abc123?list=PL123',
+    );
+    await tester.tap(find.byKey(const Key('download-clear-button')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('download-url-field')))
+          .controller!
+          .text,
+      isEmpty,
+    );
+    await tester.enterText(
+      find.byKey(const Key('download-url-field')),
+      'https://youtu.be/abc123?list=PL123',
+    );
+    await tester.tap(find.byKey(const Key('download-analyze-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('download-preview')), findsOneWidget);
+    expect(find.text('Título de YouTube'), findsOneWidget);
+    expect(find.text('Canal'), findsOneWidget);
+    expect(find.text('1:12'), findsOneWidget);
+    expect(find.byKey(const Key('download-playlist-notice')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('download-start-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Terminado'), findsOneWidget);
+    expect(find.text('La pista se añadió a tu biblioteca.'), findsOneWidget);
+    expect(
+      fixture.repository.tracks.any(
+        (track) => track.title == 'Título de YouTube',
+      ),
+      true,
+    );
+    await tester.tap(find.byKey(const Key('download-play-button')));
+    await tester.pump();
+    expect(fixture.player.playQueueCalls, 1);
+    await tester.tap(find.byKey(const Key('download-start-button')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Esta pista ya está en tu biblioteca. Se conservaron tus cambios.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('escritorio cancela y vuelve con Escape', (tester) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    final backend = _WidgetDownloadBackend(waitForCancel: true);
+    await _setSize(tester, const Size(1200, 800));
+    await tester.pumpWidget(
+      fixture.app(downloadService: fixture.downloadService(backend)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tu biblioteca').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-download-audio')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('download-back-button')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('download-url-field')),
+      'https://youtu.be/abc123',
+    );
+    await tester.tap(find.byKey(const Key('download-analyze-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('download-start-button')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('download-progress')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('download-cancel-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancelado'), findsOneWidget);
+    expect(backend.canceled, true);
+    expect(
+      fixture.repository.tracks.any(
+        (track) => track.uri == 'file:///abc123.mp3',
+      ),
+      false,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('library-destination')), findsOneWidget);
+  });
+
+  testWidgets('avisa motor ausente y errores de URL y red', (tester) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    final backend = _WidgetDownloadBackend(available: false);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(
+      fixture.app(downloadService: fixture.downloadService(backend)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-download-audio')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('download-unavailable')), findsOneWidget);
+    expect(
+      find.text('Descargas no disponibles en este dispositivo.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('download-analyze-button')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    backend.available = true;
+    backend.failAnalyze = true;
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('audio-download-screen'))),
+    );
+    await container
+        .read(audioDownloadControllerProvider.notifier)
+        .refreshAvailability();
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('download-url-field')),
+      'invalid',
+    );
+    await tester.tap(find.byKey(const Key('download-analyze-button')));
+    await tester.pump();
+    expect(find.text('Ingresa una URL válida de YouTube.'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('download-url-field')),
+      'https://youtu.be/abc123',
+    );
+    await tester.tap(find.byKey(const Key('download-analyze-button')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Sin conexión a internet'), findsOneWidget);
+  });
 }
 
 void _selectDestination(WidgetTester tester, AppDestination destination) {
@@ -957,6 +1132,122 @@ void _selectDestination(WidgetTester tester, AppDestination destination) {
 Future<void> _setSize(WidgetTester tester, Size size) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
+class _WidgetDownloadBackend implements AudioDownloadBackend {
+  _WidgetDownloadBackend({this.available = true, this.waitForCancel = false});
+
+  bool available;
+  bool failAnalyze = false;
+  final bool waitForCancel;
+  final _stopped = Completer<void>();
+  bool canceled = false;
+
+  @override
+  Future<DownloadAvailability> checkAvailability() async =>
+      DownloadAvailability(
+        available: available,
+        error: available
+            ? null
+            : 'Descargas no disponibles en este dispositivo.',
+      );
+
+  @override
+  Future<SourcePreview> analyzeUrl(String url) async {
+    if (failAnalyze) throw StateError('Connection timed out');
+    return const SourcePreview(
+      id: 'abc123',
+      title: 'Título de YouTube',
+      author: 'Canal',
+      duration: Duration(seconds: 72),
+      type: SourceType.video,
+    );
+  }
+
+  @override
+  Stream<DownloadEvent> downloadAudio(DownloadRequest request) async* {
+    yield const DownloadEvent(
+      status: DownloadStatus.downloading,
+      downloadedBytes: 1,
+      totalBytes: 3,
+    );
+    if (waitForCancel) {
+      await _stopped.future;
+      yield const DownloadEvent(status: DownloadStatus.canceled);
+      return;
+    }
+    yield const DownloadEvent(
+      status: DownloadStatus.completed,
+      audio: DownloadedAudio(
+        id: 'abc123',
+        temporaryPath: '/tmp/abc123.mp3',
+        title: 'Título de YouTube',
+      ),
+    );
+  }
+
+  @override
+  Future<void> cancel() async {
+    canceled = true;
+    if (!_stopped.isCompleted) _stopped.complete();
+  }
+}
+
+class _WidgetDownloadService extends AudioDownloadService {
+  _WidgetDownloadService(this.backend, this.repository)
+    : super(
+        backend: backend,
+        tracks: repository,
+        supportDirectory: () async => Directory.systemTemp,
+        temporaryDirectory: () async => Directory.systemTemp,
+      );
+
+  final _WidgetDownloadBackend backend;
+  final _FakeTrackRepository repository;
+
+  @override
+  Future<DownloadAvailability> checkAvailability() =>
+      backend.checkAvailability();
+
+  @override
+  Future<SourcePreview> analyzeUrl(String url) => backend.analyzeUrl(url);
+
+  @override
+  Future<AudioImportResult> download(
+    String url, {
+    void Function(DownloadEvent event)? onProgress,
+  }) async {
+    final preview = await backend.analyzeUrl(url);
+    final existing = repository.tracks.where(
+      (track) => track.uri == 'file:///abc123.mp3',
+    );
+    if (existing.isNotEmpty) {
+      return AudioImportResult(
+        AudioImportStatus.duplicate,
+        track: existing.first,
+      );
+    }
+    await for (final event in backend.downloadAudio(
+      DownloadRequest(url: url, temporaryDirectory: 'unused'),
+    )) {
+      onProgress?.call(event);
+      if (event.status == DownloadStatus.canceled) {
+        return const AudioImportResult(AudioImportStatus.canceled);
+      }
+    }
+    onProgress?.call(const DownloadEvent(status: DownloadStatus.registering));
+    final track = Track(
+      uri: 'file:///abc123.mp3',
+      title: preview.title,
+      artist: preview.author,
+      dateAdded: DateTime.utc(2026),
+    );
+    await repository.upsertAll([track]);
+    return AudioImportResult(AudioImportStatus.downloaded, track: track);
+  }
+
+  @override
+  Future<void> cancel() => backend.cancel();
 }
 
 final class _Fixture {
@@ -987,8 +1278,16 @@ final class _Fixture {
     repository.tracks,
   );
 
-  Widget app({bool notificationPermissionGranted = true}) => ProviderScope(
+  AudioDownloadService downloadService(_WidgetDownloadBackend backend) =>
+      _WidgetDownloadService(backend, repository);
+
+  Widget app({
+    bool notificationPermissionGranted = true,
+    AudioDownloadService? downloadService,
+  }) => ProviderScope(
     overrides: [
+      if (downloadService != null)
+        audioDownloadServiceProvider.overrideWithValue(downloadService),
       audioPlayerServiceProvider.overrideWithValue(player),
       trackRepositoryProvider.overrideWithValue(repository),
       smartPlaylistRepositoryProvider.overrideWithValue(smart),
@@ -1167,7 +1466,8 @@ final class _FakeTrackRepository implements TrackRepository {
   @override
   Future<void> setAvailability(Map<String, bool> availability) async {}
   @override
-  Future<void> upsertAll(List<Track> tracks) async {}
+  Future<void> upsertAll(List<Track> tracks) async =>
+      this.tracks.addAll(tracks);
   @override
   Stream<List<Track>> watchAll() => Stream.value(tracks);
   @override

@@ -24,6 +24,7 @@ import 'package:astramusic/features/library/presentation/metadata_editor_dialog.
 import 'package:astramusic/features/library/presentation/library_controller.dart';
 import 'package:astramusic/features/library/presentation/library_providers.dart';
 import 'package:astramusic/features/library/presentation/library_entities_screen.dart';
+import 'package:astramusic/features/library/presentation/audio_download_screen.dart';
 import 'package:astramusic/features/player/presentation/player_controller.dart';
 import 'package:astramusic/features/player/presentation/player_screen.dart';
 import 'package:astramusic/features/player/presentation/queue_screen.dart';
@@ -654,6 +655,7 @@ class _DestinationBody extends StatelessWidget {
       showMobileBackButton: !desktop,
     ),
     AppDestinationType.diagnostics => const DiagnosticsDestination(),
+    AppDestinationType.audioDownload => const AudioDownloadScreen(),
   };
 
   Widget _mobileSecondary(String title, Widget child) => desktop
@@ -1974,6 +1976,14 @@ class PlaylistsDestination extends ConsumerWidget {
             ),
           ),
           const _LibraryCategoryLinks(),
+          ListTile(
+            key: const Key('library-download-audio'),
+            leading: const Icon(Icons.download_outlined),
+            title: const Text('Descargar audio'),
+            onTap: () => ref
+                .read(appDestinationProvider.notifier)
+                .select(AppDestination.audioDownload),
+          ),
           Expanded(
             key: const Key('destination-content'),
             child: playlists.when(

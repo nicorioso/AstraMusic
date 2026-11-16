@@ -142,6 +142,7 @@ class AudioDownloadService {
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
+      onProgress?.call(const DownloadEvent(status: DownloadStatus.registering));
       final tags = _tagReader.read(movedFile);
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
