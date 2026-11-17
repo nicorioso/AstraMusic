@@ -127,21 +127,45 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
         val url = call.argument<String>("url") ?: error("Falta URL")
         val id = call.argument<String>("id") ?: error("Falta ID")
         require(Regex("[A-Za-z0-9_-]{1,128}").matches(id)) { "ID inválido" }
-        val directory = File(context.cacheDir, "astra-download-${UUID.randomUUID()}")
-        directory.mkdirs()
+        val supplied = call.argument<String>("temporaryDirectory") ?: error("Falta directorio temporal")
+        val directory = File(supplied).canonicalFile
+        require(directory.path.startsWith(context.cacheDir.canonicalPath + File.separator)) {
+            "El directorio temporal no pertenece a la caché privada"
+        }
+        require(directory.isDirectory || directory.mkdirs()) { "No se pudo crear el directorio temporal" }
         workDir = directory
         emit(mapOf("status" to "analyzing"))
-        val output = execute(url,
-            "--no-playlist" to "", "-f" to "bestaudio/best", "--no-overwrites" to "", "--no-continue" to "",
-            "--extract-audio" to "", "--audio-format" to "mp3",
-            "-o" to File(directory, "$id.%(ext)s").absolutePath)
+        val outputPattern = File(directory, "$id.%(ext)s").absolutePath
+        try {
+            execute(url,
+                "--no-playlist" to "", "-f" to "bestaudio/best",
+                "--extract-audio" to "", "--audio-format" to "mp3",
+                "--write-thumbnail" to "", "--convert-thumbnails" to "jpg",
+                "--print" to "after_move:filepath", "-o" to outputPattern)
+        } catch (primary: Exception) {
+            if (canceled || !Regex("ffmpeg|postprocess|convert|audio format", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(primary.message ?: "")) throw primary
+            Log.w("AstraYtDlp", "MP3 postprocessing failed; trying native audio", primary)
+            directory.listFiles()?.filter { it.isFile && it.name.startsWith("$id.") &&
+                it.extension.lowercase() !in setOf("jpg", "jpeg", "png", "webp") }?.forEach { it.delete() }
+            execute(url,
+                "--no-playlist" to "", "-f" to "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio",
+                "--write-thumbnail" to "", "--print" to "after_move:filepath",
+                "-o" to outputPattern)
+        }
         if (canceled) error("Cancelado")
-        val audio = File(directory, "$id.mp3")
-        if (!audio.isFile || audio.length() == 0L) error("yt-dlp no produjo un MP3 válido: ${output.takeLast(500)}")
-        val thumbnail = File(directory, "$id.jpg")
+        val audioExtensions = setOf("mp3", "m4a", "aac", "opus", "ogg", "webm", "wav", "flac")
+        val files = directory.listFiles()?.filter { it.isFile } ?: emptyList()
+        Log.d("AstraYtDlp", "Final files: ${files.joinToString { "${it.name} (${it.length()} bytes)" }}")
+        val audio = files.filter { it.name.startsWith("$id.") &&
+            it.extension.lowercase() in audioExtensions && it.length() > 0L }
+            .maxByOrNull { it.length() }
+            ?: error("yt-dlp no produjo un archivo de audio válido")
+        val thumbnail = files.firstOrNull { it.name.startsWith("$id.") &&
+            it.extension.lowercase() in setOf("jpg", "jpeg", "webp", "png") && it.length() > 0L }
         workDir = null
         emit(mapOf("status" to "completed", "path" to audio.absolutePath,
-            "thumbnailPath" to thumbnail.takeIf { it.isFile && it.length() > 0 }?.absolutePath))
+            "thumbnailPath" to thumbnail?.absolutePath))
     }
     fun dispose() {
         canceled = true

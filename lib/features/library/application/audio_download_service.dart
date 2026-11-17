@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
 import 'dart:typed_data';
 
 import 'package:astramusic/core/platform/audio_download_backend.dart';
@@ -34,6 +37,16 @@ class BatchProgress {
 
 /// Registra una sola pista por operación; conserva archivos y filas previas.
 class AudioDownloadService {
+  static const _audioExtensions = {
+    '.mp3',
+    '.m4a',
+    '.aac',
+    '.opus',
+    '.ogg',
+    '.webm',
+    '.wav',
+    '.flac',
+  };
   AudioDownloadService({
     required AudioDownloadBackend backend,
     required TrackRepository tracks,
@@ -189,21 +202,30 @@ class AudioDownloadService {
       final destinationDirectory = Directory(
         path.join(support.path, 'downloaded_audio'),
       );
-      final destination = File(
-        path.join(destinationDirectory.path, '${preview.id}.mp3'),
-      );
-      final uri = destination.uri.toString();
-      final existing = await _findByUris({uri, destination.path});
+      final possibleDestinations = _audioExtensions
+          .map(
+            (extension) => File(
+              path.join(destinationDirectory.path, '${preview.id}$extension'),
+            ),
+          )
+          .toList();
+      final existing = await _findByUris({
+        for (final file in possibleDestinations) ...{
+          file.uri.toString(),
+          file.path,
+        },
+      });
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
-      if (existing.isNotEmpty && await _validFile(destination)) {
-        return AudioImportResult(
-          AudioImportStatus.duplicate,
-          track: existing.first,
-        );
+      for (final track in existing) {
+        final file = File.fromUri(Uri.parse(track.uri));
+        if (await _validFile(file)) {
+          return AudioImportResult(AudioImportStatus.duplicate, track: track);
+        }
       }
-      if (await destination.exists()) {
+      if (await Future.wait(possibleDestinations.map((file) => file.exists()))
+          .then((values) => values.any((exists) => exists))) {
         throw StateError(
           'Ya existe un archivo para este video; no se sobrescribió.',
         );
@@ -237,11 +259,23 @@ class AudioDownloadService {
       final source = File(downloaded.temporaryPath);
       final jobPath = await jobDirectory.resolveSymbolicLinks();
       final sourcePath = await source.resolveSymbolicLinks();
+      final extension = path.extension(sourcePath).toLowerCase();
       if (!path.isWithin(jobPath, sourcePath) ||
-          path.extension(sourcePath).toLowerCase() != '.mp3' ||
+          !_audioExtensions.contains(extension) ||
           !await _validFile(source)) {
+        final files = await jobDirectory.list(recursive: true).toList();
+        for (final file in files) {
+          final stat = await file.stat();
+          debugPrint(
+            'AstraMusic descarga temporal: ${file.path} (${stat.size} bytes)',
+          );
+        }
         throw StateError('El archivo temporal no es válido.');
       }
+      final destination = File(
+        path.join(destinationDirectory.path, '${preview.id}$extension'),
+      );
+      final uri = destination.uri.toString();
       await destinationDirectory.create(recursive: true);
       // Se vuelve a comprobar la colisión justo antes de mover.
       if (await destination.exists()) {

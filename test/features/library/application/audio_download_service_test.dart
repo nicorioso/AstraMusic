@@ -22,11 +22,13 @@ class _Backend implements AudioDownloadBackend {
     this.waitForCancel = false,
     this.thumbnailBytes,
     this.thumbnailUrl,
+    this.extension = 'mp3',
   });
   final bool empty;
   final bool waitForCancel;
   final List<int>? thumbnailBytes;
   final String? thumbnailUrl;
+  final String extension;
   final Completer<void> started = Completer<void>();
   final Completer<void> stopped = Completer<void>();
   int downloads = 0;
@@ -56,7 +58,9 @@ class _Backend implements AudioDownloadBackend {
   @override
   Stream<DownloadEvent> downloadAudio(DownloadRequest request) async* {
     downloads++;
-    final file = File(path.join(request.temporaryDirectory, 'abc123.mp3'));
+    final file = File(
+      path.join(request.temporaryDirectory, 'abc123.$extension'),
+    );
     await file.writeAsBytes(empty ? [] : [1, 2, 3]);
     final thumbnail = File(path.join(request.temporaryDirectory, 'abc123.jpg'));
     if (thumbnailBytes != null) await thumbnail.writeAsBytes(thumbnailBytes!);
@@ -208,6 +212,17 @@ void main() {
     supportDirectory: () async => root,
     temporaryDirectory: () async => Directory(path.join(root.path, 'tmp')),
   );
+
+  for (final extension in ['m4a', 'mp3', 'opus', 'webm']) {
+    test('registra audio .$extension desde la carpeta temporal', () async {
+      final result = await service(_Backend(extension: extension))
+          .download('https://youtu.be/abc123');
+      expect(result.status, AudioImportStatus.downloaded);
+      final track = (await repository.watchAll().first).single;
+      expect(track.uri, endsWith('abc123.$extension'));
+      expect(await File.fromUri(Uri.parse(track.uri)).length(), 3);
+    });
+  }
 
   test('mueve y registra audio con respaldo de metadatos', () async {
     final backend = _Backend();
