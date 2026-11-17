@@ -49,6 +49,51 @@ void main() {
     );
   });
 
+  test('conserva el diagnóstico nativo al actualizar y analizar', () async {
+    messenger.setMockMethodCallHandler(methods, (call) async {
+      throw PlatformException(
+        code: 'download_error',
+        message: 'YoutubeDLException: st; causa: IOException: no se pudo extraer libpython.zip.so',
+      );
+    });
+    final backend = AndroidYtDlpBackend(methods: methods, events: events);
+    for (final operation in [
+      backend.updateEngine,
+      () => backend.analyzeUrl('https://youtu.be/abc'),
+    ]) {
+      await expectLater(
+        operation(),
+        throwsA(
+          isA<PlatformException>().having(
+            (error) => error.message,
+            'mensaje',
+            contains('IOException: no se pudo extraer libpython.zip.so'),
+          ),
+        ),
+      );
+    }
+  });
+
+  test('conserva el diagnóstico nativo en eventos de descarga', () async {
+    final backend = AndroidYtDlpBackend(
+      methods: methods,
+      events: const _Events({
+        'status': 'failed',
+        'error': 'YoutubeDLException: st; causa: IOException: falta libffmpeg.zip.so',
+      }),
+    );
+    final event = await backend
+        .downloadAudio(
+          const DownloadRequest(
+            url: 'https://youtu.be/abc',
+            temporaryDirectory: '/cache/job',
+          ),
+        )
+        .last;
+    expect(event.status, DownloadStatus.failed);
+    expect(event.error, contains('IOException: falta libffmpeg.zip.so'));
+  });
+
   test('envía el directorio temporal al canal nativo', () async {
     Map<Object?, Object?>? arguments;
     messenger.setMockMethodCallHandler(methods, (call) async {

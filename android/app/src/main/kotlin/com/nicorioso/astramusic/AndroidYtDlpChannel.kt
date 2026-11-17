@@ -37,7 +37,17 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
     private fun emit(value: Map<String, Any?>) { main.post { sink?.success(value) } }
     private fun reply(result: MethodChannel.Result, value: Any?) { main.post { result.success(value) } }
     private fun fail(result: MethodChannel.Result, error: Throwable) {
-        main.post { result.error("download_error", diagnostic(error.message ?: "Error de descarga"), null) }
+        main.post { result.error("download_error", exceptionDetail(error), null) }
+    }
+    private fun exceptionDetail(error: Throwable): String {
+        val root = generateSequence(error) { it.cause }.last()
+        val message = error.message?.takeIf { it.isNotBlank() }
+            ?: root.message?.takeIf { it.isNotBlank() }
+            ?: error.stackTraceToString().take(300)
+        val rootDetail = root.takeIf { it !== error && !it.message.isNullOrBlank() }
+            ?.let { "; causa: ${it.javaClass.simpleName}: ${it.message}" }
+            ?: ""
+        return "${error.javaClass.simpleName}: $message$rootDetail"
     }
     private fun initialize() {
         synchronized(initializationLock) {
@@ -122,7 +132,7 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
             } catch (error: Throwable) {
                 Log.e("AstraYtDlp", "Native download failed", error)
                 if (call.method == "downloadAudio") {
-                    emit(mapOf("status" to if (canceled) "canceled" else "failed", "error" to diagnostic(error.message ?: "Error de descarga")))
+                    emit(mapOf("status" to if (canceled) "canceled" else "failed", "error" to exceptionDetail(error)))
                     workDir?.deleteRecursively()
                     workDir = null
                 } else fail(result, error)
