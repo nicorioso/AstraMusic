@@ -81,6 +81,9 @@ void main() {
     expect(saved!.width, 640);
     expect(saved.height, 480);
     expect(result.artworkPath, endsWith('.jpg'));
+    final embedded = const AudioMetadataTagReader().readArtwork(audio);
+    expect(embedded, isNotNull);
+    expect(image.decodeImage(embedded!), isNotNull);
   });
 
   test('prefiere la portada frontal entre varias imágenes incrustadas', () {

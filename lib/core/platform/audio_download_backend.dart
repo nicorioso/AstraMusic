@@ -84,6 +84,7 @@ class DownloadedAudio {
     this.author,
     this.duration,
     this.thumbnailUrl,
+    this.thumbnailPath,
   });
   final String id;
   final String temporaryPath;
@@ -91,6 +92,9 @@ class DownloadedAudio {
   final String? author;
   final Duration? duration;
   final String? thumbnailUrl;
+
+  /// Imagen auxiliar dentro de la carpeta temporal del trabajo.
+  final String? thumbnailPath;
 }
 
 class DownloadBatchResult {

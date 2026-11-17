@@ -158,6 +158,8 @@ void main() {
         final template = args[args.indexOf('-o') + 1];
         final file = File(template.replaceFirst('%(ext)s', 'mp3'));
         await file.writeAsBytes([1, 2, 3]);
+        await File(path.join(file.parent.path, 'abc123.jpg'))
+            .writeAsBytes([1, 2, 3]);
         return instant('ASTRA_PROGRESS:3:3:NA\nASTRA_FILE:${file.path}\n');
       });
       final backend = DesktopYtDlpBackend(runner: runner);
@@ -180,7 +182,12 @@ void main() {
       );
       expect(await File(events.last.audio!.temporaryPath).length(), 3);
       expect(runner.calls.last, contains('--no-overwrites'));
+      expect(runner.calls.last, contains('--write-thumbnail'));
+      expect(runner.calls.last, contains('--embed-thumbnail'));
+      final conversion = runner.calls.last.indexOf('--convert-thumbnails');
+      expect(runner.calls.last[conversion + 1], 'jpg');
       expect(path.basename(events.last.audio!.temporaryPath), 'abc123.mp3');
+      expect(path.basename(events.last.audio!.thumbnailPath!), 'abc123.jpg');
     },
   );
 

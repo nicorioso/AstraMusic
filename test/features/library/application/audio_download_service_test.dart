@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:astramusic/core/db/app_database.dart';
 import 'package:astramusic/core/platform/audio_download_backend.dart';
@@ -11,12 +12,20 @@ import 'package:astramusic/features/library/domain/track.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as image;
 import 'package:path/path.dart' as path;
 
 class _Backend implements AudioDownloadBackend {
-  _Backend({this.empty = false, this.waitForCancel = false});
+  _Backend({
+    this.empty = false,
+    this.waitForCancel = false,
+    this.thumbnailBytes,
+    this.thumbnailUrl,
+  });
   final bool empty;
   final bool waitForCancel;
+  final List<int>? thumbnailBytes;
+  final String? thumbnailUrl;
   final Completer<void> started = Completer<void>();
   final Completer<void> stopped = Completer<void>();
   int downloads = 0;
@@ -26,12 +35,13 @@ class _Backend implements AudioDownloadBackend {
       const DownloadAvailability(available: true);
 
   @override
-  Future<SourcePreview> analyzeUrl(String url) async => const SourcePreview(
+  Future<SourcePreview> analyzeUrl(String url) async => SourcePreview(
     id: 'abc123',
     title: 'Título de YouTube',
     author: 'Canal',
-    duration: Duration(seconds: 12),
+    duration: const Duration(seconds: 12),
     type: SourceType.video,
+    thumbnailUrl: thumbnailUrl,
   );
 
   @override
@@ -39,6 +49,8 @@ class _Backend implements AudioDownloadBackend {
     downloads++;
     final file = File(path.join(request.temporaryDirectory, 'abc123.mp3'));
     await file.writeAsBytes(empty ? [] : [1, 2, 3]);
+    final thumbnail = File(path.join(request.temporaryDirectory, 'abc123.jpg'));
+    if (thumbnailBytes != null) await thumbnail.writeAsBytes(thumbnailBytes!);
     if (!started.isCompleted) started.complete();
     yield const DownloadEvent(
       status: DownloadStatus.downloading,
@@ -56,6 +68,8 @@ class _Backend implements AudioDownloadBackend {
         id: 'abc123',
         temporaryPath: file.path,
         title: 'Título de YouTube',
+        thumbnailPath: thumbnailBytes == null ? null : thumbnail.path,
+        thumbnailUrl: thumbnailUrl,
       ),
     );
   }
@@ -66,14 +80,18 @@ class _Backend implements AudioDownloadBackend {
   }
 }
 
-class _Tags implements TagReader {
-  _Tags({this.fail = false});
+class _Tags implements ArtworkTagReader {
+  _Tags({this.fail = false, this.artworkBytes});
   final bool fail;
+  final Uint8List? artworkBytes;
   @override
   AudioTags read(File file) {
     if (fail) throw StateError('Fallo de etiquetas');
     return const AudioTags(title: 'abc123');
   }
+
+  @override
+  Uint8List? readArtwork(File file) => artworkBytes;
 }
 
 void main() {
@@ -90,14 +108,18 @@ void main() {
     await root.delete(recursive: true);
   });
 
-  AudioDownloadService service(_Backend backend, {TagReader? tags}) =>
-      AudioDownloadService(
-        backend: backend,
-        tracks: repository,
-        tagReader: tags ?? _Tags(),
-        supportDirectory: () async => root,
-        temporaryDirectory: () async => Directory(path.join(root.path, 'tmp')),
-      );
+  AudioDownloadService service(
+    _Backend backend, {
+    TagReader? tags,
+    Future<List<int>?> Function(Uri)? fetchThumbnail,
+  }) => AudioDownloadService(
+    backend: backend,
+    tracks: repository,
+    tagReader: tags ?? _Tags(),
+    fetchThumbnail: fetchThumbnail,
+    supportDirectory: () async => root,
+    temporaryDirectory: () async => Directory(path.join(root.path, 'tmp')),
+  );
 
   test('mueve y registra audio con respaldo de metadatos', () async {
     final backend = _Backend();
@@ -118,6 +140,79 @@ void main() {
       await Directory(path.join(root.path, 'tmp')).list().toList(),
       isEmpty,
     );
+  });
+
+  test(
+    'guarda la miniatura auxiliar y registra artworkPath en Drift',
+    () async {
+      final thumbnail = image.encodePng(image.Image(width: 8, height: 8));
+      final result = await service(_Backend(thumbnailBytes: thumbnail))
+          .download('https://youtu.be/abc123');
+      final stored = (await repository.watchAll().first).single;
+      expect(result.status, AudioImportStatus.downloaded);
+      expect(stored.artworkPath, isNotNull);
+      expect(stored.artworkPath, contains('downloaded_artwork'));
+      expect(await File(stored.artworkPath!).length(), greaterThan(0));
+      expect(
+        image.decodeImage(await File(stored.artworkPath!).readAsBytes()),
+        isNotNull,
+      );
+      expect(
+        await Directory(path.join(root.path, 'tmp')).list().toList(),
+        isEmpty,
+      );
+    },
+  );
+
+  test('usa miniatura embebida antes de la URL', () async {
+    final embedded = Uint8List.fromList(
+      image.encodePng(image.Image(width: 8, height: 8)),
+    );
+    var fetches = 0;
+    await service(
+      _Backend(thumbnailUrl: 'https://i.ytimg.com/vi/abc123/default.jpg'),
+      tags: _Tags(artworkBytes: embedded),
+      fetchThumbnail: (_) async {
+        fetches++;
+        return null;
+      },
+    ).download('https://youtu.be/abc123');
+    final stored = (await repository.watchAll().first).single;
+    expect(stored.artworkPath, isNotNull);
+    expect(fetches, 0);
+  });
+
+  test('descarga miniatura de URL cuando no hay imagen local', () async {
+    final thumbnail = image.encodePng(image.Image(width: 8, height: 8));
+    Uri? requested;
+    await service(
+      _Backend(thumbnailUrl: 'https://i.ytimg.com/vi/abc123/default.jpg'),
+      fetchThumbnail: (uri) async {
+        requested = uri;
+        return thumbnail;
+      },
+    ).download('https://youtu.be/abc123');
+    final stored = (await repository.watchAll().first).single;
+    expect(requested?.host, 'i.ytimg.com');
+    expect(await File(stored.artworkPath!).length(), greaterThan(0));
+  });
+
+  test('si la imagen auxiliar está corrupta usa la URL de respaldo', () async {
+    final thumbnail = image.encodePng(image.Image(width: 8, height: 8));
+    var requests = 0;
+    await service(
+      _Backend(
+        thumbnailBytes: [1, 2, 3],
+        thumbnailUrl: 'https://i.ytimg.com/vi/abc123/default.jpg',
+      ),
+      fetchThumbnail: (_) async {
+        requests++;
+        return thumbnail;
+      },
+    ).download('https://youtu.be/abc123');
+    final stored = (await repository.watchAll().first).single;
+    expect(requests, 1);
+    expect(await File(stored.artworkPath!).length(), greaterThan(0));
   });
 
   test(
@@ -190,7 +285,11 @@ void main() {
       'CREATE TRIGGER reject_download BEFORE INSERT ON tracks BEGIN SELECT RAISE(ABORT, "rechazado"); END',
     );
     await expectLater(
-      service(_Backend()).download('https://youtu.be/abc123'),
+      service(
+        _Backend(
+          thumbnailBytes: image.encodePng(image.Image(width: 8, height: 8)),
+        ),
+      ).download('https://youtu.be/abc123'),
       throwsA(isA<Exception>()),
     );
     expect(await repository.count(), 0);
@@ -203,6 +302,8 @@ void main() {
       await Directory(path.join(root.path, 'tmp')).list().toList(),
       isEmpty,
     );
+    final artworks = Directory(path.join(root.path, 'downloaded_artwork'));
+    expect(await artworks.list().toList(), isEmpty);
   });
 
   test('cancela y limpia el trabajo temporal', () async {

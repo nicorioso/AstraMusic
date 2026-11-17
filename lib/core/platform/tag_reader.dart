@@ -54,7 +54,11 @@ abstract interface class TagReader {
   AudioTags read(File file);
 }
 
-final class AudioMetadataTagReader implements TagReader {
+abstract interface class ArtworkTagReader implements TagReader {
+  Uint8List? readArtwork(File file);
+}
+
+final class AudioMetadataTagReader implements ArtworkTagReader {
   const AudioMetadataTagReader();
 
   @override
@@ -70,6 +74,13 @@ final class AudioMetadataTagReader implements TagReader {
       year: metadata.year?.year,
       durationMs: metadata.duration?.inMilliseconds,
     );
+  }
+
+  @override
+  Uint8List? readArtwork(File file) {
+    final pictures = readMetadata(file, getImage: true).pictures;
+    if (pictures.isEmpty) return null;
+    return Uint8List.fromList(selectPrimaryArtwork(pictures).bytes);
   }
 }
 

@@ -200,6 +200,10 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
         '--extract-audio',
         '--audio-format',
         request.format.name,
+        '--write-thumbnail',
+        '--convert-thumbnails',
+        'jpg',
+        '--embed-thumbnail',
         ...ffmpegArgs,
         '--newline',
         '--progress',
@@ -261,6 +265,11 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
       if (!await file.exists() || await file.length() == 0) {
         throw StateError('El archivo descargado está vacío o no existe.');
       }
+      final thumbnail = File(path.join(workDir.path, '${preview.id}.jpg'));
+      final thumbnailPath =
+          await thumbnail.exists() && await thumbnail.length() > 0
+          ? thumbnail.path
+          : null;
       completed = true;
       yield DownloadEvent(
         status: DownloadStatus.completed,
@@ -271,6 +280,7 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
           author: preview.author,
           duration: preview.duration,
           thumbnailUrl: preview.thumbnailUrl,
+          thumbnailPath: thumbnailPath,
         ),
       );
     } on _Canceled {

@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:astramusic/core/platform/audio_download_backend.dart';
 import 'package:astramusic/core/platform/tag_reader.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
+import 'package:image/image.dart' as image;
 import 'package:path/path.dart' as path;
 
 enum AudioImportStatus { downloaded, duplicate, canceled }
@@ -23,12 +25,14 @@ class AudioDownloadService {
     required Future<Directory> Function() supportDirectory,
     required Future<Directory> Function() temporaryDirectory,
     TagReader tagReader = const AudioMetadataTagReader(),
+    Future<List<int>?> Function(Uri)? fetchThumbnail,
   }) : this._internal(
          backend,
          tracks,
          supportDirectory,
          temporaryDirectory,
          tagReader,
+         fetchThumbnail ?? _fetchThumbnail,
        );
 
   AudioDownloadService._internal(
@@ -37,6 +41,7 @@ class AudioDownloadService {
     this._supportDirectory,
     this._temporaryDirectory,
     this._tagReader,
+    this._fetchThumbnailBytes,
   );
 
   final AudioDownloadBackend _backend;
@@ -44,6 +49,7 @@ class AudioDownloadService {
   final Future<Directory> Function() _supportDirectory;
   final Future<Directory> Function() _temporaryDirectory;
   final TagReader _tagReader;
+  final Future<List<int>?> Function(Uri) _fetchThumbnailBytes;
   bool _busy = false;
   bool _cancelRequested = false;
 
@@ -60,6 +66,7 @@ class AudioDownloadService {
     _cancelRequested = false;
     Directory? jobDirectory;
     File? movedFile;
+    File? createdArtwork;
     try {
       onProgress?.call(const DownloadEvent(status: DownloadStatus.analyzing));
       final preview = await _backend.analyzeUrl(url);
@@ -147,6 +154,17 @@ class AudioDownloadService {
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
+      final artwork = await _persistArtwork(
+        preview: preview,
+        downloaded: downloaded,
+        audio: movedFile,
+        jobDirectory: jobDirectory,
+        supportDirectory: support,
+      );
+      createdArtwork = artwork.$2;
+      if (_cancelRequested) {
+        return const AudioImportResult(AudioImportStatus.canceled);
+      }
       final stat = await movedFile.stat();
       if (stat.size <= 0) throw StateError('El archivo descargado está vacío.');
       final now = DateTime.now();
@@ -169,6 +187,7 @@ class AudioDownloadService {
         fileSize: stat.size,
         dateAdded: now,
         dateModified: stat.modified,
+        artworkPath: artwork.$1,
       );
       // Una segunda consulta protege los metadatos de una fila creada en paralelo.
       final concurrent = await _findByUris({uri, destination.path});
@@ -184,10 +203,14 @@ class AudioDownloadService {
       }
       await _tracks.upsertAll([track]);
       movedFile = null;
+      createdArtwork = null;
       return AudioImportResult(AudioImportStatus.downloaded, track: track);
     } finally {
       if (movedFile != null && await movedFile.exists()) {
         await movedFile.delete();
+      }
+      if (createdArtwork != null && await createdArtwork.exists()) {
+        await createdArtwork.delete();
       }
       if (jobDirectory != null && await jobDirectory.exists()) {
         await jobDirectory.delete(recursive: true);
@@ -214,6 +237,78 @@ class AudioDownloadService {
 
   Future<bool> _validFile(File file) async =>
       await file.exists() && await file.length() > 0;
+
+  Future<(String?, File?)> _persistArtwork({
+    required SourcePreview preview,
+    required DownloadedAudio downloaded,
+    required File audio,
+    required Directory jobDirectory,
+    required Directory supportDirectory,
+  }) async {
+    Uint8List? jpg;
+    if (_tagReader case final ArtworkTagReader reader) {
+      try {
+        final embedded = reader.readArtwork(audio);
+        if (embedded != null) jpg = _toJpeg(embedded);
+      } catch (_) {
+        // Una miniatura defectuosa en el MP3 no impide usar la auxiliar.
+      }
+    }
+    final thumbnailPath = downloaded.thumbnailPath;
+    if (jpg == null && thumbnailPath != null) {
+      try {
+        final auxiliary = File(thumbnailPath);
+        final jobPath = await jobDirectory.resolveSymbolicLinks();
+        final imagePath = await auxiliary.resolveSymbolicLinks();
+        if (path.isWithin(jobPath, imagePath) &&
+            await auxiliary.length() <= _maxThumbnailBytes) {
+          jpg = _toJpeg(await auxiliary.readAsBytes());
+        }
+      } on FileSystemException {
+        // Puede faltar la imagen auxiliar tras el posprocesamiento.
+      }
+    }
+    if (jpg == null) {
+      final url = Uri.tryParse(
+        downloaded.thumbnailUrl ?? preview.thumbnailUrl ?? '',
+      );
+      if (url != null &&
+          url.scheme == 'https' &&
+          _trustedThumbnailHost(url.host)) {
+        try {
+          final bytes = await _fetchThumbnailBytes(url);
+          if (bytes != null && bytes.length <= _maxThumbnailBytes) {
+            jpg = _toJpeg(bytes);
+          }
+        } catch (_) {
+          // Sin red, el audio sigue siendo importable.
+        }
+      }
+    }
+    if (jpg == null) return (null, null);
+
+    final directory = Directory(
+      path.join(supportDirectory.path, 'downloaded_artwork'),
+    );
+    await directory.create(recursive: true);
+    var target = File(path.join(directory.path, '${preview.id}.jpg'));
+    if (await target.exists()) {
+      if (await target.length() > 0) return (target.path, null);
+      target = File(
+        path.join(
+          directory.path,
+          '${preview.id}-${DateTime.now().microsecondsSinceEpoch}.jpg',
+        ),
+      );
+    }
+    try {
+      await target.writeAsBytes(jpg, flush: true);
+      return (target.path, target);
+    } catch (_) {
+      if (await target.exists()) await target.delete();
+      rethrow;
+    }
+  }
 
   Future<File> _moveFile(
     File source,
@@ -248,4 +343,58 @@ String? _tagOrFallback(String? tag, String? fallback, String? lastResort) {
   final backup = fallback?.trim();
   if (backup != null && backup.isNotEmpty) return backup;
   return lastResort;
+}
+
+const _maxThumbnailBytes = 5 * 1024 * 1024;
+
+bool _trustedThumbnailHost(String host) {
+  final lower = host.toLowerCase();
+  return lower == 'ytimg.com' ||
+      lower.endsWith('.ytimg.com') ||
+      lower == 'img.youtube.com' ||
+      lower.endsWith('.googleusercontent.com');
+}
+
+Uint8List? _toJpeg(List<int> bytes) {
+  if (bytes.isEmpty || bytes.length > _maxThumbnailBytes) return null;
+  try {
+    final decoded = image.decodeImage(Uint8List.fromList(bytes));
+    if (decoded == null) return null;
+    final longest = decoded.width > decoded.height
+        ? decoded.width
+        : decoded.height;
+    final resized = longest <= 640
+        ? decoded
+        : image.copyResize(
+            decoded,
+            width: decoded.width >= decoded.height ? 640 : null,
+            height: decoded.height > decoded.width ? 640 : null,
+          );
+    return Uint8List.fromList(image.encodeJpg(resized, quality: 82));
+  } on Exception {
+    return null;
+  }
+}
+
+Future<List<int>?> _fetchThumbnail(Uri uri) async {
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+  try {
+    final request = await client
+        .getUrl(uri)
+        .timeout(const Duration(seconds: 8));
+    request.followRedirects = false;
+    final response = await request.close().timeout(const Duration(seconds: 8));
+    if (response.statusCode != HttpStatus.ok ||
+        response.contentLength > _maxThumbnailBytes) {
+      return null;
+    }
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in response.timeout(const Duration(seconds: 8))) {
+      bytes.add(chunk);
+      if (bytes.length > _maxThumbnailBytes) return null;
+    }
+    return bytes.takeBytes();
+  } finally {
+    client.close(force: true);
+  }
 }
