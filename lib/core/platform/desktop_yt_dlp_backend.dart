@@ -49,17 +49,20 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
     DownloadProcessRunner? runner,
     this.ytDlpExecutable = 'yt-dlp',
     this.ffmpegExecutable = 'ffmpeg',
+    this.maxPlaylistEntries = 150,
   }) : _runner = runner ?? const LocalDownloadProcessRunner();
 
   final DownloadProcessRunner _runner;
   final String ytDlpExecutable;
   final String ffmpegExecutable;
+  final int maxPlaylistEntries;
   DownloadProcess? _activeProcess;
   Completer<void>? _activeJob;
   bool _canceled = false;
 
   @override
   Future<DownloadAvailability> checkAvailability() async {
+    if (_activeJob == null) _canceled = false;
     try {
       final yt = await _version(ytDlpExecutable, ['--version']);
       final ffmpeg = await _version(ffmpegExecutable, ['-version']);
@@ -99,6 +102,7 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
 
   @override
   Future<SourcePreview> analyzeUrl(String url) async {
+    if (_activeJob == null) _canceled = false;
     final parsed = YoutubeUrl.parse(url);
     if (parsed == null) {
       throw const FormatException('Ingresa una URL válida de YouTube.');
@@ -135,6 +139,95 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
       type: parsed.isPlaylist ? SourceType.playlist : SourceType.video,
       duration: seconds == null ? null : Duration(seconds: seconds),
       thumbnailUrl: json['thumbnail'] as String?,
+    );
+  }
+
+  @override
+  Future<PlaylistPreview> analyzePlaylist(String url) async {
+    if (_activeJob == null) _canceled = false;
+    final parsed = YoutubeUrl.parse(url);
+    if (parsed == null || !parsed.isPlaylist) {
+      throw const FormatException('Ingresa una URL de playlist de YouTube.');
+    }
+    if (maxPlaylistEntries < 1 || maxPlaylistEntries > 500) {
+      throw RangeError('El límite de playlist debe estar entre 1 y 500.');
+    }
+    final process = await _runner.start(ytDlpExecutable, [
+      '--ignore-config',
+      '--yes-playlist',
+      '--flat-playlist',
+      '--skip-download',
+      '--dump-single-json',
+      '--playlist-end',
+      '${maxPlaylistEntries + 1}',
+      '--',
+      url.trim(),
+    ]);
+    _activeProcess = process;
+    final stdoutFuture = utf8.decoder.bind(process.stdout).join();
+    final stderrFuture = utf8.decoder.bind(process.stderr).join();
+    final code = await process.exitCode;
+    final output = await stdoutFuture;
+    final diagnostic = await stderrFuture;
+    _activeProcess = null;
+    if (_canceled) throw const _Canceled();
+    if (code != 0) throw StateError(friendlyDownloadError(diagnostic));
+    return parsePlaylistJson(output, maxEntries: maxPlaylistEntries);
+  }
+
+  static PlaylistPreview parsePlaylistJson(
+    String output, {
+    int maxEntries = 150,
+  }) {
+    final json = jsonDecode(output) as Map<String, dynamic>;
+    if (json['_type'] != 'playlist' || json['entries'] is! List) {
+      throw const FormatException('La URL no contiene una playlist válida.');
+    }
+    final rawEntries = json['entries'] as List;
+    final entries = <PlaylistEntry>[];
+    for (final raw in rawEntries) {
+      if (raw is! Map<String, dynamic>) continue;
+      final id = raw['id'];
+      final title = raw['title'] as String?;
+      final availability = (raw['availability'] as String?)?.toLowerCase();
+      if (id is! String ||
+          !RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ||
+          title == null ||
+          title.trim().isEmpty ||
+          title.toLowerCase().contains('private video') ||
+          title.toLowerCase().contains('deleted video') ||
+          {
+            'private',
+            'needs_auth',
+            'subscriber_only',
+            'premium_only',
+          }.contains(availability)) {
+        continue;
+      }
+      final seconds = (raw['duration'] as num?)?.round();
+      entries.add(
+        PlaylistEntry(
+          id: id,
+          title: title,
+          duration: seconds == null ? null : Duration(seconds: seconds),
+        ),
+      );
+      if (entries.length == maxEntries) break;
+    }
+    final id = json['id'];
+    if (id is! String || id.isEmpty) {
+      throw const FormatException('La playlist no tiene ID.');
+    }
+    return PlaylistPreview(
+      id: id,
+      title: (json['title'] as String?)?.trim().isNotEmpty == true
+          ? json['title'] as String
+          : id,
+      author:
+          (json['uploader'] as String?) ?? (json['channel'] as String?) ?? '',
+      thumbnailUrl: json['thumbnail'] as String?,
+      entries: entries,
+      truncated: rawEntries.length > maxEntries,
     );
   }
 
@@ -307,10 +400,9 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
   @override
   Future<void> cancel() async {
     final job = _activeJob;
-    if (job == null) return;
     _canceled = true;
     _activeProcess?.kill();
-    await job.future;
+    if (job != null) await job.future;
   }
 }
 

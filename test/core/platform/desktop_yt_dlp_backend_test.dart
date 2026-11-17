@@ -58,7 +58,7 @@ FakeProcess instant(String out, {String err = '', int code = 0}) {
 
 void main() {
   test('el resultado por lote protege sus colecciones', () {
-    final successes = <DownloadedAudio>[];
+    final successes = <DownloadBatchItem>[];
     final errors = <String, String>{};
     final result = DownloadBatchResult(
       successes: successes,
@@ -66,7 +66,12 @@ void main() {
       canceled: false,
     );
     successes.add(
-      const DownloadedAudio(id: 'a', temporaryPath: '/tmp/a', title: 'a'),
+      const DownloadBatchItem(
+        sourceId: 'a',
+        title: 'a',
+        trackId: 1,
+        alreadyPresent: false,
+      ),
     );
     errors['a'] = 'error';
     expect(result.successes, isEmpty);
@@ -142,6 +147,31 @@ void main() {
       ),
     );
     expect((await backend.checkAvailability()).available, false);
+  });
+
+  test('analiza playlist plana, filtra privadas y limita entradas', () async {
+    const json =
+        '{"_type":"playlist","id":"PL123","title":"Mi lista","uploader":"Canal","entries":['
+        '{"id":"uno123","title":"Primera","duration":61},'
+        '{"id":"privado","title":"[Private video]"},'
+        '{"id":"dos456","title":"Segunda","duration":90},'
+        '{"id":"tres789","title":"Tercera"}]}';
+    final runner = FakeRunner((_, _) => instant(json));
+    final backend = DesktopYtDlpBackend(runner: runner, maxPlaylistEntries: 2);
+    final preview = await backend.analyzePlaylist(
+      'https://youtube.com/playlist?list=PL123',
+    );
+    expect(preview.title, 'Mi lista');
+    expect(preview.author, 'Canal');
+    expect(preview.entries.map((entry) => entry.id), ['uno123', 'dos456']);
+    expect(preview.entries.first.duration, const Duration(seconds: 61));
+    expect(preview.truncated, true);
+    expect(runner.calls.single, contains('--flat-playlist'));
+    expect(runner.calls.single, contains('--yes-playlist'));
+    expect(
+      runner.calls.single[runner.calls.single.indexOf('--playlist-end') + 1],
+      '3',
+    );
   });
 
   test(

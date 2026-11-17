@@ -4,8 +4,10 @@ import 'dart:typed_data';
 
 import 'package:astramusic/core/platform/audio_download_backend.dart';
 import 'package:astramusic/core/platform/tag_reader.dart';
+import 'package:astramusic/core/platform/youtube_download_utils.dart';
 import 'package:astramusic/features/library/domain/track.dart';
 import 'package:astramusic/features/library/domain/track_repository.dart';
+import 'package:astramusic/features/playlists/domain/playlist_repository.dart';
 import 'package:image/image.dart' as image;
 import 'package:path/path.dart' as path;
 
@@ -17,11 +19,25 @@ class AudioImportResult {
   final Track? track;
 }
 
+class BatchProgress {
+  const BatchProgress({
+    required this.index,
+    required this.total,
+    required this.title,
+    required this.event,
+  });
+  final int index;
+  final int total;
+  final String title;
+  final DownloadEvent event;
+}
+
 /// Registra una sola pista por operación; conserva archivos y filas previas.
 class AudioDownloadService {
   AudioDownloadService({
     required AudioDownloadBackend backend,
     required TrackRepository tracks,
+    PlaylistRepository? playlists,
     required Future<Directory> Function() supportDirectory,
     required Future<Directory> Function() temporaryDirectory,
     TagReader tagReader = const AudioMetadataTagReader(),
@@ -29,6 +45,7 @@ class AudioDownloadService {
   }) : this._internal(
          backend,
          tracks,
+         playlists,
          supportDirectory,
          temporaryDirectory,
          tagReader,
@@ -38,6 +55,7 @@ class AudioDownloadService {
   AudioDownloadService._internal(
     this._backend,
     this._tracks,
+    this._playlists,
     this._supportDirectory,
     this._temporaryDirectory,
     this._tagReader,
@@ -46,6 +64,7 @@ class AudioDownloadService {
 
   final AudioDownloadBackend _backend;
   final TrackRepository _tracks;
+  final PlaylistRepository? _playlists;
   final Future<Directory> Function() _supportDirectory;
   final Future<Directory> Function() _temporaryDirectory;
   final TagReader _tagReader;
@@ -56,14 +75,99 @@ class AudioDownloadService {
   Future<DownloadAvailability> checkAvailability() =>
       _backend.checkAvailability();
   Future<SourcePreview> analyzeUrl(String url) => _backend.analyzeUrl(url);
+  Future<PlaylistPreview> analyzePlaylist(String url) =>
+      _backend.analyzePlaylist(url);
+
+  Future<DownloadBatchResult> downloadPlaylist(
+    PlaylistPreview playlist, {
+    void Function(BatchProgress progress)? onProgress,
+  }) async {
+    if (_busy) throw StateError('Ya hay una descarga activa.');
+    if (_playlists == null) {
+      throw StateError('No hay repositorio de playlists.');
+    }
+    _busy = true;
+    _cancelRequested = false;
+    final successes = <DownloadBatchItem>[];
+    final errors = <String, String>{};
+    int? playlistId;
+    try {
+      for (var i = 0; i < playlist.entries.length; i++) {
+        if (_cancelRequested) break;
+        final entry = playlist.entries[i];
+        try {
+          final result = await _downloadOne(
+            entry.url,
+            withinBatch: true,
+            onProgress: (event) => onProgress?.call(
+              BatchProgress(
+                index: i + 1,
+                total: playlist.entries.length,
+                title: entry.title,
+                event: event,
+              ),
+            ),
+          );
+          if (result.status == AudioImportStatus.canceled || _cancelRequested) {
+            break;
+          }
+          final track = result.track;
+          if (track == null || track.id == null) {
+            throw StateError('La pista no quedó registrada en la biblioteca.');
+          }
+          successes.add(
+            DownloadBatchItem(
+              sourceId: entry.id,
+              title: entry.title,
+              trackId: track.id!,
+              alreadyPresent: result.status == AudioImportStatus.duplicate,
+            ),
+          );
+        } catch (error) {
+          if (_cancelRequested) break;
+          errors[entry.id] = friendlyDownloadError('$error');
+        }
+      }
+      if (successes.isNotEmpty) {
+        final created = await _playlists.create(playlist.title);
+        try {
+          await _playlists.addTracks(
+            created.id,
+            successes.map((item) => item.trackId).toList(),
+          );
+          playlistId = created.id;
+        } catch (error) {
+          await _playlists.delete(created.id);
+          errors['playlist'] = friendlyDownloadError('$error');
+        }
+      }
+      return DownloadBatchResult(
+        successes: successes,
+        errors: errors,
+        canceled: _cancelRequested,
+        playlistId: playlistId,
+      );
+    } finally {
+      _busy = false;
+      _cancelRequested = false;
+    }
+  }
 
   Future<AudioImportResult> download(
     String url, {
     void Function(DownloadEvent event)? onProgress,
+  }) => _downloadOne(url, onProgress: onProgress);
+
+  Future<AudioImportResult> _downloadOne(
+    String url, {
+    void Function(DownloadEvent event)? onProgress,
+    bool withinBatch = false,
   }) async {
-    if (_busy) throw StateError('Ya hay una descarga activa.');
-    _busy = true;
-    _cancelRequested = false;
+    if (_busy && !withinBatch) throw StateError('Ya hay una descarga activa.');
+    if (!withinBatch) {
+      _busy = true;
+      _cancelRequested = false;
+    }
     Directory? jobDirectory;
     File? movedFile;
     File? createdArtwork;
@@ -204,7 +308,11 @@ class AudioDownloadService {
       await _tracks.upsertAll([track]);
       movedFile = null;
       createdArtwork = null;
-      return AudioImportResult(AudioImportStatus.downloaded, track: track);
+      final registered = await _findByUris({uri});
+      return AudioImportResult(
+        AudioImportStatus.downloaded,
+        track: registered.single,
+      );
     } finally {
       if (movedFile != null && await movedFile.exists()) {
         await movedFile.delete();
@@ -215,8 +323,10 @@ class AudioDownloadService {
       if (jobDirectory != null && await jobDirectory.exists()) {
         await jobDirectory.delete(recursive: true);
       }
-      _busy = false;
-      _cancelRequested = false;
+      if (!withinBatch) {
+        _busy = false;
+        _cancelRequested = false;
+      }
     }
   }
 

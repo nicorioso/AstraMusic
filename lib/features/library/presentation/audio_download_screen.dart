@@ -23,6 +23,7 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
   final _url = TextEditingController();
   String? _analyzedUrl;
   String? _inputError;
+  bool _downloadWholePlaylist = false;
 
   @override
   void initState() {
@@ -51,6 +52,7 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
       _url.text = data!.text!.trim();
       _analyzedUrl = null;
       _inputError = null;
+      _downloadWholePlaylist = false;
     });
   }
 
@@ -63,11 +65,16 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
     setState(() {
       _inputError = null;
       _analyzedUrl = null;
+      _downloadWholePlaylist = false;
     });
     await ref.read(audioDownloadControllerProvider.notifier).analyze(url);
     if (!mounted || _url.text.trim() != url) return;
-    if (ref.read(audioDownloadControllerProvider).preview != null) {
-      setState(() => _analyzedUrl = url);
+    final state = ref.read(audioDownloadControllerProvider);
+    if (state.preview != null || state.playlistPreview != null) {
+      setState(() {
+        _analyzedUrl = url;
+        _downloadWholePlaylist = state.preview == null;
+      });
     }
   }
 
@@ -79,16 +86,22 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
         (value) => (
           availability: value.availability,
           preview: value.preview,
+          playlistPreview: value.playlistPreview,
           status: value.status,
           error: value.error,
           result: value.result,
+          batchIndex: value.batchProgress?.index,
+          batchTitle: value.batchProgress?.title,
+          batchResult: value.batchResult,
           isBusy: value.isBusy,
         ),
       ),
     );
     final available = main.availability?.available == true;
     final preview = _analyzedUrl == _url.text.trim() ? main.preview : null;
-    final playlist = YoutubeUrl.parse(_url.text)?.isPlaylist == true;
+    final playlistPreview = _analyzedUrl == _url.text.trim()
+        ? main.playlistPreview
+        : null;
     final onlyPlaylist = YoutubeUrl.parse(_url.text)?.uri.path == '/playlist';
     final result = main.result;
     final busy = main.isBusy;
@@ -148,6 +161,7 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
                   onChanged: (_) => setState(() {
                     _analyzedUrl = null;
                     _inputError = null;
+                    _downloadWholePlaylist = false;
                   }),
                   decoration: InputDecoration(
                     labelText: 'URL de YouTube',
@@ -171,6 +185,7 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
                                   _url.clear();
                                   _analyzedUrl = null;
                                   _inputError = null;
+                                  _downloadWholePlaylist = false;
                                 }),
                           icon: const Icon(Icons.clear),
                         ),
@@ -188,22 +203,40 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
                     label: const Text('Analizar'),
                   ),
                 ),
-                if (preview != null) ...[
+                if (preview != null || playlistPreview != null) ...[
                   const SizedBox(height: 20),
-                  _PreviewCard(preview: preview),
-                  if (playlist) ...[
+                  if (preview != null) _PreviewCard(preview: preview),
+                  if (playlistPreview != null) ...[
                     const SizedBox(height: 12),
-                    const _Notice(
-                      key: Key('download-playlist-notice'),
-                      icon: Icons.playlist_play,
-                      message: 'Esta versión descargará únicamente la pista individual. Las playlists llegarán después.',
-                    ),
-                  ],
-                  if (onlyPlaylist) ...[
-                    const SizedBox(height: 8),
-                    const _Notice(
-                      icon: Icons.info_outline,
-                      message: 'Abre un video de esa playlist y pega su enlace para descargar una pista.',
+                    _PlaylistPreviewCard(preview: playlistPreview),
+                    if (preview != null)
+                      ListTile(
+                        key: const Key('download-single-choice'),
+                        leading: Icon(
+                          _downloadWholePlaylist
+                              ? Icons.radio_button_unchecked
+                              : Icons.radio_button_checked,
+                        ),
+                        title: const Text('Descargar solo este video'),
+                        onTap: busy
+                            ? null
+                            : () => setState(
+                                () => _downloadWholePlaylist = false,
+                              ),
+                      ),
+                    ListTile(
+                      key: const Key('download-playlist-choice'),
+                      leading: Icon(
+                        _downloadWholePlaylist
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                      ),
+                      title: Text(
+                        'Descargar playlist completa (${playlistPreview.entries.length} canciones)',
+                      ),
+                      onTap: busy
+                          ? null
+                          : () => setState(() => _downloadWholePlaylist = true),
                     ),
                   ],
                   const SizedBox(height: 16),
@@ -211,22 +244,45 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
                     alignment: Alignment.centerLeft,
                     child: FilledButton.icon(
                       key: const Key('download-start-button'),
-                      onPressed: available && !busy && !onlyPlaylist
+                      onPressed:
+                          available &&
+                              !busy &&
+                              (!_downloadWholePlaylist ||
+                                  playlistPreview?.entries.isNotEmpty ==
+                                      true) &&
+                              (!onlyPlaylist || _downloadWholePlaylist)
                           ? () => unawaited(
-                              ref
-                                  .read(
-                                    audioDownloadControllerProvider.notifier,
-                                  )
-                                  .start(_analyzedUrl!),
+                              _downloadWholePlaylist
+                                  ? ref
+                                        .read(
+                                          audioDownloadControllerProvider
+                                              .notifier,
+                                        )
+                                        .startPlaylist(playlistPreview!)
+                                  : ref
+                                        .read(
+                                          audioDownloadControllerProvider
+                                              .notifier,
+                                        )
+                                        .start(_analyzedUrl!),
                             )
                           : null,
                       icon: const Icon(Icons.download),
-                      label: const Text('Descargar'),
+                      label: Text(
+                        _downloadWholePlaylist
+                            ? 'Descargar playlist'
+                            : 'Descargar',
+                      ),
                     ),
                   ),
                 ],
                 if (busy || main.status != null) ...[
                   const SizedBox(height: 20),
+                  if (main.batchIndex != null)
+                    Text(
+                      'Canción ${main.batchIndex} de ${main.playlistPreview?.entries.length ?? 0}: ${main.batchTitle}',
+                      key: const Key('download-batch-progress'),
+                    ),
                   Text(
                     _statusText(main.status),
                     key: const Key('download-status'),
@@ -284,6 +340,37 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
                         ),
                         icon: const Icon(Icons.play_arrow),
                         label: const Text('Reproducir pista'),
+                      ),
+                    ),
+                ],
+                if (main.batchResult case final batch?) ...[
+                  const SizedBox(height: 12),
+                  _Notice(
+                    key: const Key('download-batch-result'),
+                    icon: batch.canceled
+                        ? Icons.info_outline
+                        : Icons.check_circle_outline,
+                    message:
+                        '${batch.addedCount} añadidas, ${batch.existingCount} ya existentes, ${batch.errors.length} fallidas${batch.canceled ? '. Descarga cancelada.' : '.'}',
+                  ),
+                  for (final error in batch.errors.entries)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        '${_playlistEntryTitle(main.playlistPreview, error.key)}: ${error.value}',
+                        style: TextStyle(color: colors.error),
+                      ),
+                    ),
+                  if (batch.playlistId != null)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        key: const Key('download-open-playlist'),
+                        onPressed: () => ref
+                            .read(appDestinationProvider.notifier)
+                            .select(AppDestination.playlist(batch.playlistId!)),
+                        icon: const Icon(Icons.playlist_play),
+                        label: const Text('Ver playlist'),
                       ),
                     ),
                 ],
@@ -356,6 +443,70 @@ class _PreviewCard extends StatelessWidget {
   }
 }
 
+class _PlaylistPreviewCard extends StatelessWidget {
+  const _PlaylistPreviewCard({required this.preview});
+  final PlaylistPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.astraColors;
+    return Container(
+      key: const Key('download-playlist-preview'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceRaised,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 64,
+                height: 64,
+                child: preview.thumbnailUrl == null
+                    ? Icon(Icons.playlist_play, color: colors.accent)
+                    : Image.network(
+                        preview.thumbnailUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            Icon(Icons.playlist_play, color: colors.accent),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      preview.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      '${preview.author} · ${preview.entries.length} canciones',
+                      style: TextStyle(color: colors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (preview.truncated)
+            Text(
+              'Se mostrarán solo las primeras ${preview.entries.length} pistas.',
+              style: TextStyle(color: colors.textMuted),
+            ),
+          for (final entry in preview.entries.take(3))
+            Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
 class _DownloadProgress extends ConsumerWidget {
   const _DownloadProgress();
 
@@ -422,6 +573,13 @@ String _duration(Duration duration) {
   final minutes = seconds ~/ 60;
   final remaining = seconds % 60;
   return '$minutes:${remaining.toString().padLeft(2, '0')}';
+}
+
+String _playlistEntryTitle(PlaylistPreview? preview, String id) {
+  for (final entry in preview?.entries ?? const <PlaylistEntry>[]) {
+    if (entry.id == id) return entry.title;
+  }
+  return id;
 }
 
 String _statusText(DownloadStatus? status) => switch (status) {

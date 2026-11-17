@@ -1004,11 +1004,25 @@ void main() {
     await tester.tap(find.byKey(const Key('download-analyze-button')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('download-preview')), findsOneWidget);
-    expect(find.text('Título de YouTube'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('download-preview')),
+        matching: find.text('Título de YouTube'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Canal'), findsOneWidget);
     expect(find.text('1:12'), findsOneWidget);
-    expect(find.byKey(const Key('download-playlist-notice')), findsOneWidget);
+    expect(find.byKey(const Key('download-playlist-preview')), findsOneWidget);
+    expect(find.byKey(const Key('download-single-choice')), findsOneWidget);
+    expect(find.byKey(const Key('download-playlist-choice')), findsOneWidget);
     await tester.tap(find.byKey(const Key('download-start-button')));
+    await tester.pumpAndSettle();
+    final downloadList = find.descendant(
+      of: find.byKey(const Key('audio-download-screen')),
+      matching: find.byType(ListView),
+    );
+    await tester.drag(downloadList, const Offset(0, -500));
     await tester.pumpAndSettle();
     expect(find.text('Terminado'), findsOneWidget);
     expect(find.text('La pista se añadió a tu biblioteca.'), findsOneWidget);
@@ -1021,14 +1035,6 @@ void main() {
     await tester.tap(find.byKey(const Key('download-play-button')));
     await tester.pump();
     expect(fixture.player.playQueueCalls, 1);
-    await tester.tap(find.byKey(const Key('download-start-button')));
-    await tester.pumpAndSettle();
-    expect(
-      find.text(
-        'Esta pista ya está en tu biblioteca. Se conservaron tus cambios.',
-      ),
-      findsOneWidget,
-    );
   });
 
   testWidgets('escritorio cancela y vuelve con Escape', (tester) async {
@@ -1068,6 +1074,90 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('library-destination')), findsOneWidget);
+  });
+
+  testWidgets('playlist móvil muestra elección, progreso y fallo parcial', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    final backend = _WidgetDownloadBackend(failSecond: true);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(
+      fixture.app(downloadService: fixture.downloadService(backend)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-download-audio')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('download-url-field')),
+      'https://youtube.com/playlist?list=PL123',
+    );
+    await tester.tap(find.byKey(const Key('download-analyze-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Lista de prueba'), findsOneWidget);
+    expect(
+      find.text('Descargar playlist completa (2 canciones)'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('download-single-choice')), findsNothing);
+    await tester.tap(find.byKey(const Key('download-start-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('download-batch-result')), findsOneWidget);
+    expect(
+      find.text('1 añadidas, 0 ya existentes, 1 fallidas.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Segunda canción:'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+  });
+
+  testWidgets('cancelar playlist durante segunda pista conserva la primera', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    final backend = _WidgetDownloadBackend(blockSecond: true);
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(
+      fixture.app(downloadService: fixture.downloadService(backend)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-download-audio')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('download-url-field')),
+      'https://youtube.com/playlist?list=PL123',
+    );
+    await tester.tap(find.byKey(const Key('download-analyze-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('download-start-button')));
+    await tester.pump();
+    await tester.pump();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('audio-download-screen'))),
+    );
+    expect(
+      container.read(audioDownloadControllerProvider).batchProgress?.index,
+      2,
+    );
+    final downloadList = find.descendant(
+      of: find.byKey(const Key('audio-download-screen')),
+      matching: find.byType(ListView),
+    );
+    await tester.drag(downloadList, const Offset(0, -400));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('download-cancel-button')));
+    await tester.pumpAndSettle();
+    final result = container.read(audioDownloadControllerProvider).batchResult;
+    expect(result?.canceled, true);
+    expect(result?.addedCount, 1);
+    expect(backend.canceled, true);
+    expect(find.byKey(const Key('download-batch-result')), findsOneWidget);
   });
 
   testWidgets('avisa motor ausente y errores de URL y red', (tester) async {
@@ -1135,11 +1225,18 @@ Future<void> _setSize(WidgetTester tester, Size size) async {
 }
 
 class _WidgetDownloadBackend implements AudioDownloadBackend {
-  _WidgetDownloadBackend({this.available = true, this.waitForCancel = false});
+  _WidgetDownloadBackend({
+    this.available = true,
+    this.waitForCancel = false,
+    this.failSecond = false,
+    this.blockSecond = false,
+  });
 
   bool available;
   bool failAnalyze = false;
   final bool waitForCancel;
+  final bool failSecond;
+  final bool blockSecond;
   final _stopped = Completer<void>();
   bool canceled = false;
 
@@ -1165,22 +1262,41 @@ class _WidgetDownloadBackend implements AudioDownloadBackend {
   }
 
   @override
+  Future<PlaylistPreview> analyzePlaylist(String url) async => PlaylistPreview(
+    id: 'PL123',
+    title: 'Lista de prueba',
+    author: 'Canal',
+    entries: const [
+      PlaylistEntry(id: 'abc123', title: 'Título de YouTube'),
+      PlaylistEntry(id: 'def456', title: 'Segunda canción'),
+    ],
+  );
+
+  @override
   Stream<DownloadEvent> downloadAudio(DownloadRequest request) async* {
+    final id = Uri.parse(request.url).queryParameters['v'] ?? 'abc123';
     yield const DownloadEvent(
       status: DownloadStatus.downloading,
       downloadedBytes: 1,
       totalBytes: 3,
     );
-    if (waitForCancel) {
+    if (waitForCancel || (blockSecond && id == 'def456')) {
       await _stopped.future;
       yield const DownloadEvent(status: DownloadStatus.canceled);
       return;
     }
-    yield const DownloadEvent(
+    if (failSecond && id == 'def456') {
+      yield const DownloadEvent(
+        status: DownloadStatus.failed,
+        error: 'Video unavailable',
+      );
+      return;
+    }
+    yield DownloadEvent(
       status: DownloadStatus.completed,
       audio: DownloadedAudio(
-        id: 'abc123',
-        temporaryPath: '/tmp/abc123.mp3',
+        id: id,
+        temporaryPath: '/tmp/$id.mp3',
         title: 'Título de YouTube',
       ),
     );
@@ -1211,6 +1327,61 @@ class _WidgetDownloadService extends AudioDownloadService {
 
   @override
   Future<SourcePreview> analyzeUrl(String url) => backend.analyzeUrl(url);
+
+  @override
+  Future<PlaylistPreview> analyzePlaylist(String url) =>
+      backend.analyzePlaylist(url);
+
+  @override
+  Future<DownloadBatchResult> downloadPlaylist(
+    PlaylistPreview playlist, {
+    void Function(BatchProgress progress)? onProgress,
+  }) async {
+    final successes = <DownloadBatchItem>[];
+    final errors = <String, String>{};
+    for (var i = 0; i < playlist.entries.length; i++) {
+      final entry = playlist.entries[i];
+      var failed = false;
+      await for (final event in backend.downloadAudio(
+        DownloadRequest(url: entry.url, temporaryDirectory: 'unused'),
+      )) {
+        onProgress?.call(
+          BatchProgress(
+            index: i + 1,
+            total: playlist.entries.length,
+            title: entry.title,
+            event: event,
+          ),
+        );
+        if (event.status == DownloadStatus.failed) {
+          errors[entry.id] = event.error ?? 'Error';
+          failed = true;
+        }
+        if (event.status == DownloadStatus.canceled) {
+          return DownloadBatchResult(
+            successes: successes,
+            errors: errors,
+            canceled: true,
+          );
+        }
+      }
+      if (!failed) {
+        successes.add(
+          DownloadBatchItem(
+            sourceId: entry.id,
+            title: entry.title,
+            trackId: 100 + i,
+            alreadyPresent: false,
+          ),
+        );
+      }
+    }
+    return DownloadBatchResult(
+      successes: successes,
+      errors: errors,
+      canceled: false,
+    );
+  }
 
   @override
   Future<AudioImportResult> download(

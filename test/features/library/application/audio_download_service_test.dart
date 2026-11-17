@@ -9,6 +9,7 @@ import 'package:astramusic/features/library/application/audio_download_controlle
 import 'package:astramusic/features/library/application/audio_download_service.dart';
 import 'package:astramusic/features/library/data/drift_track_repository.dart';
 import 'package:astramusic/features/library/domain/track.dart';
+import 'package:astramusic/features/playlists/data/drift_playlist_repository.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,6 +43,14 @@ class _Backend implements AudioDownloadBackend {
     duration: const Duration(seconds: 12),
     type: SourceType.video,
     thumbnailUrl: thumbnailUrl,
+  );
+
+  @override
+  Future<PlaylistPreview> analyzePlaylist(String url) async => PlaylistPreview(
+    id: 'PL123',
+    title: 'Lista de prueba',
+    author: 'Canal',
+    entries: const [PlaylistEntry(id: 'abc123', title: 'Tema')],
   );
 
   @override
@@ -87,12 +96,90 @@ class _Tags implements ArtworkTagReader {
   @override
   AudioTags read(File file) {
     if (fail) throw StateError('Fallo de etiquetas');
-    return const AudioTags(title: 'abc123');
+    return AudioTags(title: path.basenameWithoutExtension(file.path));
   }
 
   @override
   Uint8List? readArtwork(File file) => artworkBytes;
 }
+
+class _BatchBackend implements AudioDownloadBackend {
+  _BatchBackend({this.failIds = const {}, this.blockId});
+  final Set<String> failIds;
+  final String? blockId;
+  final blockedStarted = Completer<void>();
+  final stopped = Completer<void>();
+  final downloadedIds = <String>[];
+
+  String _id(String url) => Uri.parse(url).queryParameters['v']!;
+
+  @override
+  Future<DownloadAvailability> checkAvailability() async =>
+      const DownloadAvailability(available: true);
+  @override
+  Future<SourcePreview> analyzeUrl(String url) async {
+    final id = _id(url);
+    return SourcePreview(
+      id: id,
+      title: 'Tema $id',
+      author: 'Canal',
+      type: SourceType.video,
+    );
+  }
+
+  @override
+  Future<PlaylistPreview> analyzePlaylist(String url) async =>
+      _playlistPreview();
+  @override
+  Stream<DownloadEvent> downloadAudio(DownloadRequest request) async* {
+    final id = _id(request.url);
+    downloadedIds.add(id);
+    if (failIds.contains(id)) {
+      yield const DownloadEvent(
+        status: DownloadStatus.failed,
+        error: 'Video unavailable',
+      );
+      return;
+    }
+    final file = File(path.join(request.temporaryDirectory, '$id.mp3'));
+    await file.writeAsBytes([1, 2, 3]);
+    yield const DownloadEvent(
+      status: DownloadStatus.downloading,
+      downloadedBytes: 1,
+      totalBytes: 3,
+    );
+    if (id == blockId) {
+      blockedStarted.complete();
+      await stopped.future;
+      yield const DownloadEvent(status: DownloadStatus.canceled);
+      return;
+    }
+    yield DownloadEvent(
+      status: DownloadStatus.completed,
+      audio: DownloadedAudio(
+        id: id,
+        temporaryPath: file.path,
+        title: 'Tema $id',
+      ),
+    );
+  }
+
+  @override
+  Future<void> cancel() async {
+    if (!stopped.isCompleted) stopped.complete();
+  }
+}
+
+PlaylistPreview _playlistPreview() => PlaylistPreview(
+  id: 'PL123',
+  title: 'Mi playlist',
+  author: 'Canal',
+  entries: const [
+    PlaylistEntry(id: 'uno123', title: 'Primera'),
+    PlaylistEntry(id: 'dos456', title: 'Segunda'),
+    PlaylistEntry(id: 'tres789', title: 'Tercera'),
+  ],
+);
 
 void main() {
   late Directory root;
@@ -109,12 +196,13 @@ void main() {
   });
 
   AudioDownloadService service(
-    _Backend backend, {
+    AudioDownloadBackend backend, {
     TagReader? tags,
     Future<List<int>?> Function(Uri)? fetchThumbnail,
   }) => AudioDownloadService(
     backend: backend,
     tracks: repository,
+    playlists: DriftPlaylistRepository(database),
     tagReader: tags ?? _Tags(),
     fetchThumbnail: fetchThumbnail,
     supportDirectory: () async => root,
@@ -398,4 +486,87 @@ void main() {
     expect(canceled.status, DownloadStatus.canceled);
     expect(canceled.isBusy, false);
   });
+
+  test(
+    'lote continúa tras fallo y crea playlist en orden con duplicado',
+    () async {
+      final existingFile = File(
+        path.join(root.path, 'downloaded_audio', 'dos456.mp3'),
+      );
+      await existingFile.parent.create(recursive: true);
+      await existingFile.writeAsBytes([1, 2]);
+      await repository.upsertAll([
+        Track(
+          uri: existingFile.uri.toString(),
+          title: 'Personalizada',
+          dateAdded: DateTime.utc(2020),
+          isFavorite: true,
+        ),
+      ]);
+      final backend = _BatchBackend(failIds: {'fallo00'});
+      final preview = PlaylistPreview(
+        id: 'PL123',
+        title: 'Mi playlist',
+        author: 'Canal',
+        entries: const [
+          PlaylistEntry(id: 'uno123', title: 'Primera'),
+          PlaylistEntry(id: 'fallo00', title: 'Falla'),
+          PlaylistEntry(id: 'dos456', title: 'Segunda'),
+          PlaylistEntry(id: 'tres789', title: 'Tercera'),
+        ],
+      );
+      final progress = <BatchProgress>[];
+      final result = await service(backend)
+          .downloadPlaylist(preview, onProgress: progress.add);
+      expect(result.canceled, false);
+      expect(result.addedCount, 2);
+      expect(result.existingCount, 1);
+      expect(result.errors['fallo00'], contains('no está disponible'));
+      expect(
+        progress.any(
+          (item) =>
+              item.index == 4 && item.total == 4 && item.title == 'Tercera',
+        ),
+        true,
+      );
+      final tracks = await DriftPlaylistRepository(database)
+          .watchTracks(result.playlistId!)
+          .first;
+      expect(tracks.map((track) => track.title).toList(), [
+        'Tema uno123',
+        'Personalizada',
+        'Tema tres789',
+      ]);
+      expect(tracks[1].isFavorite, true);
+      expect(await repository.count(), 3);
+    },
+  );
+
+  test(
+    'cancelación de lote conserva completadas y limpia pista en curso',
+    () async {
+      final backend = _BatchBackend(blockId: 'dos456');
+      final downloader = service(backend);
+      final pending = downloader.downloadPlaylist(_playlistPreview());
+      await backend.blockedStarted.future;
+      await downloader.cancel();
+      final result = await pending;
+      expect(result.canceled, true);
+      expect(result.addedCount, 1);
+      expect(backend.downloadedIds, ['uno123', 'dos456']);
+      final tracks = await DriftPlaylistRepository(database)
+          .watchTracks(result.playlistId!)
+          .first;
+      expect(tracks.map((track) => track.title).toList(), ['Tema uno123']);
+      expect(
+        await File(path.join(root.path, 'downloaded_audio', 'dos456.mp3'))
+            .exists(),
+        false,
+      );
+      expect(
+        await Directory(path.join(root.path, 'tmp')).list().toList(),
+        isEmpty,
+      );
+    },
+  );
 }
