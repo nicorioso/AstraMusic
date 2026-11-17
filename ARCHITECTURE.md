@@ -433,10 +433,33 @@ ni se requiere que los archivos fuente sigan presentes después de importar.
 - En debug: datos de prueba y métricas de primer frame, carga de biblioteca,
   carga de cola, cachés y reconstrucciones.
 
+### Descargas de audio de YouTube
+
+- `AudioDownloadBackend` define análisis de URL/playlist, disponibilidad, eventos
+  de progreso, descarga y cancelación. `DesktopYtDlpBackend` ejecuta `yt-dlp`
+  como proceso hijo en Linux/Windows; `AndroidYtDlpBackend` usa el canal Kotlin
+  `AndroidYtDlpChannel` y un motor integrado. Los dos priorizan contenedores
+  nativos (`m4a`, `mp3` y otros formatos de audio admitidos) y usan cuatro
+  fragmentos concurrentes y búfer de 16K.
+- `AudioDownloadService` coordina carpeta temporal, validación del ID y del
+  archivo, movimiento a `downloaded_audio/`, etiquetas, carátula y registro en
+  `TrackRepository`. Detecta duplicados por URI/ruta y archivo existente sin
+  reemplazar metadatos del usuario. Ante fallo o cancelación borra el archivo
+  recién movido, su carátula nueva y el directorio temporal; conserva las
+  pistas registradas con anterioridad.
+- Las playlists se procesan con dos trabajos simultáneos en escritorio y uno
+  en Android. Los resultados se ordenan según la lista original antes de
+  `PlaylistRepository.addTracks`. Los fallos por pista se informan por separado;
+  si falla la inserción de pistas en la playlist, se elimina la playlist creada.
+- `AudioDownloadScreen` y su controlador Riverpod exponen análisis, progreso,
+  cancelación y resultados parciales. En Android ofrecen actualización manual
+  del motor: Kotlin intenta primero el canal nightly y, si falla, el estable.
+  La inicialización de YoutubeDL y FFmpeg se hace una vez por sesión.
+
 ### Capacidades no encontradas
 
 - Letras sincronizadas o no sincronizadas: **[Por definir / Pendiente]**.
-- Streaming, descarga o caché de audio: **[Por definir / Pendiente]**.
+- Streaming de catálogo y caché de audio remoto: **[Por definir / Pendiente]**.
 - Ecualizador, velocidad de reproducción y crossfade: **[Por definir / Pendiente]**.
 - Sincronización entre dispositivos, cuentas o respaldo en nube:
   **[Por definir / Pendiente]**.

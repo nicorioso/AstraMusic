@@ -5,10 +5,10 @@ sin ánimo de lucro. El proyecto nace para que cualquier persona pueda disfrutar
 su propia biblioteca musical sin suscripciones, anuncios ni pagos para acceder
 a las funciones del reproductor.
 
-La aplicación reproduce archivos almacenados en el dispositivo: no ofrece un
-catálogo de música, no descarga canciones y no incluye contenido protegido. La
-persona usuaria conserva el control de sus archivos y es responsable de contar
-con los permisos necesarios sobre ellos.
+La aplicación reproduce archivos locales y permite importar audio desde una URL
+de YouTube, incluida una playlist. No ofrece un catálogo de streaming ni incluye
+contenido protegido. La persona usuaria conserva el control de sus archivos y
+es responsable de contar con los permisos necesarios sobre ellos.
 
 ## Vista previa de la aplicación
 
@@ -47,9 +47,17 @@ las instrucciones de compilación están en [la guía de publicación](docs/rele
   Ctrl/Cmd y Shift en escritorio para seleccionar y aplicar acciones en lote.
 - Importación y exportación de playlists autónomas `.amplaylist`, con audios y
   carátulas opcionales; listas inteligentes basadas en historial y biblioteca.
+- Descarga de audio y playlists de YouTube a la biblioteca local, con progreso,
+  cancelación y resultados parciales. En Android se puede actualizar el motor
+  de extracción desde la pantalla de descargas.
 - Lectura de metadatos y carátulas incrustadas.
 - Interfaz adaptable para dispositivos móviles y computadores, con atajos de
   teclado y barra de título propia en escritorio.
+
+Para descargar en Linux o Windows se requieren `yt-dlp` y `ffmpeg` disponibles
+en el sistema. El audio se guarda en el almacenamiento privado de AstraMusic;
+los formatos nativos se priorizan para evitar recodificación. Consulta la
+[guía de descargas](docs/guia-descargas-youtube.md).
 
 ## Requisitos generales
 
