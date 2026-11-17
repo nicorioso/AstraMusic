@@ -105,42 +105,53 @@ class AudioDownloadService {
     final errors = <String, String>{};
     int? playlistId;
     try {
-      for (var i = 0; i < playlist.entries.length; i++) {
-        if (_cancelRequested) break;
-        final entry = playlist.entries[i];
-        try {
-          final result = await _downloadOne(
-            entry.url,
-            withinBatch: true,
-            onProgress: (event) => onProgress?.call(
-              BatchProgress(
-                index: i + 1,
-                total: playlist.entries.length,
-                title: entry.title,
-                event: event,
+      final results = List<DownloadBatchItem?>.filled(
+        playlist.entries.length,
+        null,
+      );
+      var next = 0;
+      Future<void> worker() async {
+        while (!_cancelRequested && next < playlist.entries.length) {
+          final i = next++;
+          final entry = playlist.entries[i];
+          try {
+            final result = await _downloadOne(
+              entry.url,
+              withinBatch: true,
+              onProgress: (event) => onProgress?.call(
+                BatchProgress(
+                  index: i + 1,
+                  total: playlist.entries.length,
+                  title: entry.title,
+                  event: event,
+                ),
               ),
-            ),
-          );
-          if (result.status == AudioImportStatus.canceled || _cancelRequested) {
-            break;
-          }
-          final track = result.track;
-          if (track == null || track.id == null) {
-            throw StateError('La pista no quedó registrada en la biblioteca.');
-          }
-          successes.add(
-            DownloadBatchItem(
+            );
+            if (result.status == AudioImportStatus.canceled) continue;
+            final track = result.track;
+            if (track == null || track.id == null) {
+              throw StateError(
+                'La pista no quedó registrada en la biblioteca.',
+              );
+            }
+            results[i] = DownloadBatchItem(
               sourceId: entry.id,
               title: entry.title,
               trackId: track.id!,
               alreadyPresent: result.status == AudioImportStatus.duplicate,
-            ),
-          );
-        } catch (error) {
-          if (_cancelRequested) break;
-          errors[entry.id] = friendlyDownloadError('$error');
+            );
+          } catch (error) {
+            if (!_cancelRequested) {
+              errors[entry.id] = friendlyDownloadError('$error');
+            }
+          }
         }
       }
+
+      await Future.wait(
+        List.generate(Platform.isAndroid ? 1 : 2, (_) => worker()),
+      );
+      successes.addAll(results.whereType<DownloadBatchItem>());
       if (successes.isNotEmpty) {
         final created = await _playlists.create(playlist.title);
         try {
@@ -237,6 +248,14 @@ class AudioDownloadService {
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
+      final thumbnailUrl = Uri.tryParse(preview.thumbnailUrl ?? '');
+      final thumbnailFuture =
+          Platform.isAndroid &&
+              thumbnailUrl != null &&
+              thumbnailUrl.scheme == 'https' &&
+              _trustedThumbnailHost(thumbnailUrl.host)
+          ? _fetchThumbnailBytes(thumbnailUrl).catchError((Object _) => null)
+          : Future<List<int>?>.value(null);
       DownloadedAudio? downloaded;
       await for (final event in _backend.downloadAudio(
         DownloadRequest(url: url, temporaryDirectory: jobDirectory.path),
@@ -298,6 +317,7 @@ class AudioDownloadService {
         audio: movedFile,
         jobDirectory: jobDirectory,
         supportDirectory: support,
+        prefetchedThumbnail: thumbnailFuture,
       );
       createdArtwork = artwork.$2;
       if (_cancelRequested) {
@@ -388,6 +408,7 @@ class AudioDownloadService {
     required File audio,
     required Directory jobDirectory,
     required Directory supportDirectory,
+    required Future<List<int>?> prefetchedThumbnail,
   }) async {
     Uint8List? jpg;
     if (_tagReader case final ArtworkTagReader reader) {
@@ -420,7 +441,10 @@ class AudioDownloadService {
           url.scheme == 'https' &&
           _trustedThumbnailHost(url.host)) {
         try {
-          final bytes = await _fetchThumbnailBytes(url);
+          final bytes =
+              Platform.isAndroid && url.toString() == preview.thumbnailUrl
+              ? await prefetchedThumbnail
+              : await _fetchThumbnailBytes(url);
           if (bytes != null && bytes.length <= _maxThumbnailBytes) {
             jpg = _toJpeg(bytes);
           }

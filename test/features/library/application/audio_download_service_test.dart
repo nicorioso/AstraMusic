@@ -564,6 +564,9 @@ void main() {
       final downloader = service(backend);
       final pending = downloader.downloadPlaylist(_playlistPreview());
       await backend.blockedStarted.future;
+      await repository.watchAll().firstWhere(
+        (tracks) => tracks.any((track) => track.title == 'Tema uno123'),
+      );
       await downloader.cancel();
       final result = await pending;
       expect(result.canceled, true);

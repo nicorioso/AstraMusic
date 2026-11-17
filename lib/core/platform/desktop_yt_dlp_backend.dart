@@ -42,7 +42,7 @@ class _LocalDownloadProcess implements DownloadProcess {
   bool kill() => process.kill();
 }
 
-/// Un trabajo activo por adaptador. La carpeta devuelta pertenece al llamador
+/// La carpeta devuelta pertenece al llamador
 /// después del evento [DownloadStatus.completed].
 class DesktopYtDlpBackend implements AudioDownloadBackend {
   DesktopYtDlpBackend({
@@ -56,13 +56,13 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
   final String ytDlpExecutable;
   final String ffmpegExecutable;
   final int maxPlaylistEntries;
-  DownloadProcess? _activeProcess;
-  Completer<void>? _activeJob;
+  final _activeJobs = <Completer<void>>{};
+  final _downloadProcesses = <DownloadProcess>{};
   bool _canceled = false;
 
   @override
   Future<DownloadAvailability> checkAvailability() async {
-    if (_activeJob == null) _canceled = false;
+    if (_activeJobs.isEmpty) _canceled = false;
     try {
       final yt = await _version(ytDlpExecutable, ['--version']);
       final ffmpeg = await _version(ffmpegExecutable, ['-version']);
@@ -86,13 +86,11 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
 
   Future<String> _version(String executable, List<String> args) async {
     final process = await _runner.start(executable, args);
-    _activeProcess = process;
     final stdoutFuture = utf8.decoder.bind(process.stdout).join();
     final stderrFuture = utf8.decoder.bind(process.stderr).join();
     final code = await process.exitCode;
     final output = await stdoutFuture;
     final diagnostic = await stderrFuture;
-    _activeProcess = null;
     if (_canceled) throw const _Canceled();
     if (code != 0 || output.trim().isEmpty) {
       throw StateError('$executable: $diagnostic');
@@ -102,7 +100,7 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
 
   @override
   Future<SourcePreview> analyzeUrl(String url) async {
-    if (_activeJob == null) _canceled = false;
+    if (_activeJobs.isEmpty) _canceled = false;
     final parsed = YoutubeUrl.parse(url);
     if (parsed == null) {
       throw const FormatException('Ingresa una URL válida de YouTube.');
@@ -116,13 +114,11 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
       url.trim(),
     ];
     final process = await _runner.start(ytDlpExecutable, args);
-    _activeProcess = process;
     final stdoutFuture = utf8.decoder.bind(process.stdout).join();
     final stderrFuture = utf8.decoder.bind(process.stderr).join();
     final code = await process.exitCode;
     final output = await stdoutFuture;
     final diagnostic = await stderrFuture;
-    _activeProcess = null;
     if (_canceled) throw const _Canceled();
     if (code != 0) throw StateError(friendlyDownloadError(diagnostic));
     final json = jsonDecode(output) as Map<String, dynamic>;
@@ -144,7 +140,7 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
 
   @override
   Future<PlaylistPreview> analyzePlaylist(String url) async {
-    if (_activeJob == null) _canceled = false;
+    if (_activeJobs.isEmpty) _canceled = false;
     final parsed = YoutubeUrl.parse(url);
     if (parsed == null || !parsed.isPlaylist) {
       throw const FormatException('Ingresa una URL de playlist de YouTube.');
@@ -163,13 +159,11 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
       '--',
       url.trim(),
     ]);
-    _activeProcess = process;
     final stdoutFuture = utf8.decoder.bind(process.stdout).join();
     final stderrFuture = utf8.decoder.bind(process.stderr).join();
     final code = await process.exitCode;
     final output = await stdoutFuture;
     final diagnostic = await stderrFuture;
-    _activeProcess = null;
     if (_canceled) throw const _Canceled();
     if (code != 0) throw StateError(friendlyDownloadError(diagnostic));
     return parsePlaylistJson(output, maxEntries: maxPlaylistEntries);
@@ -247,16 +241,9 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
 
   @override
   Stream<DownloadEvent> downloadAudio(DownloadRequest request) async* {
-    if (_activeJob != null) {
-      yield const DownloadEvent(
-        status: DownloadStatus.failed,
-        error: 'Ya hay una descarga activa.',
-      );
-      return;
-    }
     final job = Completer<void>();
-    _activeJob = job;
-    _canceled = false;
+    _activeJobs.add(job);
+    if (_activeJobs.length == 1) _canceled = false;
     Directory? workDir;
     var completed = false;
     try {
@@ -290,12 +277,13 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
         '--no-playlist',
         '--no-overwrites',
         '--no-continue',
-        '--extract-audio',
-        '--audio-format',
-        request.format.name,
+        '-f',
+        'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',
+        '--concurrent-fragments',
+        '4',
+        '--buffer-size',
+        '16K',
         '--write-thumbnail',
-        '--convert-thumbnails',
-        'jpg',
         '--embed-thumbnail',
         ...ffmpegArgs,
         '--newline',
@@ -309,7 +297,7 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
         '--',
         request.url.trim(),
       ]);
-      _activeProcess = process;
+      _downloadProcesses.add(process);
       if (_canceled) process.kill();
       final events = StreamController<DownloadEvent>();
       String? finalPath;
@@ -345,24 +333,37 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
       );
       yield* events.stream;
       final code = await exit;
-      _activeProcess = null;
+      _downloadProcesses.remove(process);
       if (_canceled) throw const _Canceled();
       if (code != 0) throw StateError(friendlyDownloadError(stderr.toString()));
       if (finalPath == null ||
           path.normalize(path.dirname(finalPath!)) !=
               path.normalize(workDir.path) ||
-          path.basename(finalPath!) != '${preview.id}.${request.format.name}') {
+          path.basenameWithoutExtension(finalPath!) != preview.id ||
+          !{
+            '.m4a',
+            '.mp3',
+            '.opus',
+            '.webm',
+            '.ogg',
+            '.aac',
+            '.flac',
+            '.wav',
+          }.contains(path.extension(finalPath!).toLowerCase())) {
         throw StateError('yt-dlp no informó un archivo final válido.');
       }
       final file = File(finalPath!);
       if (!await file.exists() || await file.length() == 0) {
         throw StateError('El archivo descargado está vacío o no existe.');
       }
-      final thumbnail = File(path.join(workDir.path, '${preview.id}.jpg'));
-      final thumbnailPath =
-          await thumbnail.exists() && await thumbnail.length() > 0
-          ? thumbnail.path
-          : null;
+      String? thumbnailPath;
+      for (final ext in ['webp', 'jpg', 'jpeg', 'png']) {
+        final thumbnail = File(path.join(workDir.path, '${preview.id}.$ext'));
+        if (await thumbnail.exists() && await thumbnail.length() > 0) {
+          thumbnailPath = thumbnail.path;
+          break;
+        }
+      }
       completed = true;
       yield DownloadEvent(
         status: DownloadStatus.completed,
@@ -388,21 +389,21 @@ class DesktopYtDlpBackend implements AudioDownloadBackend {
         );
       }
     } finally {
-      _activeProcess = null;
       if (!completed && workDir != null && await workDir.exists()) {
         await workDir.delete(recursive: true);
       }
-      _activeJob = null;
+      _activeJobs.remove(job);
       job.complete();
     }
   }
 
   @override
   Future<void> cancel() async {
-    final job = _activeJob;
     _canceled = true;
-    _activeProcess?.kill();
-    if (job != null) await job.future;
+    for (final process in _downloadProcesses.toList()) {
+      process.kill();
+    }
+    await Future.wait(_activeJobs.map((job) => job.future).toList());
   }
 }
 

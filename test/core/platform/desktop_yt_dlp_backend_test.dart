@@ -104,7 +104,10 @@ void main() {
   });
 
   test('traduce errores frecuentes y acota diagnósticos', () {
-    expect(friendlyDownloadError('SocketTimeoutException: Connection timed out'), contains('conexión'));
+    expect(
+      friendlyDownloadError('SocketTimeoutException: Connection timed out'),
+      contains('conexión'),
+    );
     expect(
       friendlyDownloadError('Private video'),
       contains('no está disponible'),
@@ -214,8 +217,20 @@ void main() {
       expect(runner.calls.last, contains('--no-overwrites'));
       expect(runner.calls.last, contains('--write-thumbnail'));
       expect(runner.calls.last, contains('--embed-thumbnail'));
-      final conversion = runner.calls.last.indexOf('--convert-thumbnails');
-      expect(runner.calls.last[conversion + 1], 'jpg');
+      expect(runner.calls.last, isNot(contains('--convert-thumbnails')));
+      expect(
+        runner.calls.last,
+        contains('bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio'),
+      );
+      expect(
+        runner.calls.last,
+        containsAllInOrder([
+          '--concurrent-fragments',
+          '4',
+          '--buffer-size',
+          '16K',
+        ]),
+      );
       expect(path.basename(events.last.audio!.temporaryPath), 'abc123.mp3');
       expect(path.basename(events.last.audio!.thumbnailPath!), 'abc123.jpg');
     },

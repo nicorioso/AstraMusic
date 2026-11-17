@@ -40,8 +40,17 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
         main.post { result.error("download_error", diagnostic(error.message ?: "Error de descarga"), null) }
     }
     private fun initialize() {
-        YoutubeDL.getInstance().init(context)
-        FFmpeg.getInstance().init(context)
+        synchronized(initializationLock) {
+            if (!initialized) {
+                YoutubeDL.getInstance().init(context.applicationContext)
+                FFmpeg.getInstance().init(context.applicationContext)
+                initialized = true
+            }
+        }
+    }
+    companion object {
+        private val initializationLock = Any()
+        @Volatile private var initialized = false
     }
     private fun request(url: String, vararg options: Pair<String, String>): YoutubeDLRequest {
         val request = YoutubeDLRequest(url)
@@ -136,23 +145,11 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
         workDir = directory
         emit(mapOf("status" to "analyzing"))
         val outputPattern = File(directory, "$id.%(ext)s").absolutePath
-        try {
-            execute(url,
-                "--no-playlist" to "", "-f" to "bestaudio/best",
-                "--extract-audio" to "", "--audio-format" to "mp3",
-                "--write-thumbnail" to "", "--convert-thumbnails" to "jpg",
-                "--print" to "after_move:filepath", "-o" to outputPattern)
-        } catch (primary: Exception) {
-            if (canceled || !Regex("ffmpeg|postprocess|convert|audio format", RegexOption.IGNORE_CASE)
-                    .containsMatchIn(primary.message ?: "")) throw primary
-            Log.w("AstraYtDlp", "MP3 postprocessing failed; trying native audio", primary)
-            directory.listFiles()?.filter { it.isFile && it.name.startsWith("$id.") &&
-                it.extension.lowercase() !in setOf("jpg", "jpeg", "png", "webp") }?.forEach { it.delete() }
-            execute(url,
-                "--no-playlist" to "", "-f" to "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio",
-                "--write-thumbnail" to "", "--print" to "after_move:filepath",
-                "-o" to outputPattern)
-        }
+        execute(url,
+            "--no-playlist" to "", "-f" to "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio",
+            "--concurrent-fragments" to "4", "--buffer-size" to "16K",
+            "--write-thumbnail" to "", "--print" to "after_move:filepath",
+            "-o" to outputPattern)
         if (canceled) error("Cancelado")
         val audioExtensions = setOf("mp3", "m4a", "aac", "opus", "ogg", "webm", "wav", "flac")
         val files = directory.listFiles()?.filter { it.isFile } ?: emptyList()
