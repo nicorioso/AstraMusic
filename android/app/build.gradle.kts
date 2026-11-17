@@ -18,6 +18,13 @@ if (releaseSigningFile.exists()) {
 android {
     namespace = "com.nicorioso.astramusic"
     compileSdk = 36
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols += "**/libpython.zip.so"
+            keepDebugSymbols += "**/libffmpeg.zip.so"
+        }
+    }
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -27,7 +34,8 @@ android {
 
     defaultConfig {
         applicationId = "com.nicorioso.astramusic"
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
+        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64") }
         targetSdk = 36
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -57,6 +65,7 @@ android {
 
     buildTypes {
         release {
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
         }
     }
@@ -70,4 +79,10 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// Los artefactos oficiales se publican en Maven Central.
+dependencies {
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:astramusic/core/platform/audio_download_backend.dart';
+import 'package:astramusic/core/platform/android_yt_dlp_backend.dart';
 import 'package:astramusic/core/platform/desktop_yt_dlp_backend.dart';
 import 'package:astramusic/core/platform/youtube_download_utils.dart';
 import 'package:astramusic/features/library/application/audio_download_service.dart';
@@ -13,6 +14,7 @@ import 'package:path_provider/path_provider.dart';
 
 final audioDownloadBackendProvider = Provider<AudioDownloadBackend>((ref) {
   if (Platform.isLinux || Platform.isWindows) return DesktopYtDlpBackend();
+  if (Platform.isAndroid) return AndroidYtDlpBackend();
   return const _UnavailableAudioDownloadBackend();
 });
 

@@ -7,6 +7,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceActivity() {
+    private var ytDlpChannel: AndroidYtDlpChannel? = null
     private var mediaStoreScanner: MediaStoreLibraryScanner? = null
     private var artworkChannel: ArtworkChannel? = null
     private var packageAudioChannel: PackageAudioChannel? = null
@@ -16,6 +17,7 @@ class MainActivity : AudioServiceActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         // TODO: reconectar MediaStore cuando exista un flujo de UI con alcance explícito.
+        ytDlpChannel = AndroidYtDlpChannel(applicationContext, flutterEngine.dartExecutor.binaryMessenger)
         mediaStoreScanner = MediaStoreLibraryScanner(
             applicationContext,
             flutterEngine.dartExecutor.binaryMessenger,
@@ -58,6 +60,8 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        ytDlpChannel?.dispose()
+        ytDlpChannel = null
         mediaStoreScanner?.dispose()
         mediaStoreScanner = null
         artworkChannel?.dispose()
