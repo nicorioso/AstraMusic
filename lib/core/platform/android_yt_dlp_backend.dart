@@ -15,6 +15,12 @@ class AndroidYtDlpBackend implements AudioDownloadBackend {
   final EventChannel _events;
   bool _canceled = false;
 
+  /// Actualiza el extractor empaquetado sin bloquear el hilo principal.
+  Future<String?> updateEngine() async {
+    final response = await _methods.invokeMapMethod<String, dynamic>('updateEngine');
+    return response?['version'] as String?;
+  }
+
   @override
   Future<DownloadAvailability> checkAvailability() async {
     try {

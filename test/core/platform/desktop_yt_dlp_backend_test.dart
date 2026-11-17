@@ -104,7 +104,7 @@ void main() {
   });
 
   test('traduce errores frecuentes y acota diagnósticos', () {
-    expect(friendlyDownloadError('Connection timed out'), contains('conexión'));
+    expect(friendlyDownloadError('SocketTimeoutException: Connection timed out'), contains('conexión'));
     expect(
       friendlyDownloadError('Private video'),
       contains('no está disponible'),

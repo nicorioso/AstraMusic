@@ -28,7 +28,12 @@ class YoutubeUrl {
 }
 
 String friendlyDownloadError(String detail) {
-  final lower = detail.toLowerCase();
+  final lines = detail.split(RegExp(r'\r?\n')).map((line) => line.trim().replaceFirst(RegExp(r'^(Bad state:|StateError:)\s*', caseSensitive: false), '')).toList();
+  final errors = lines.where((line) => line.startsWith(RegExp(r'ERROR:', caseSensitive: false))).toList();
+  final relevant = errors.isNotEmpty ? errors : lines.where((line) =>
+      !line.startsWith(RegExp(r'WARNING:', caseSensitive: false))).toList();
+  final diagnostic = relevant.isEmpty ? 'yt-dlp no informó un error específico.' : relevant.take(3).join(' ');
+  final lower = diagnostic.toLowerCase();
   if ([
     'unknownhostexception',
     'connectexception',
@@ -58,7 +63,7 @@ String friendlyDownloadError(String detail) {
   ].any(lower.contains)) {
     return 'No se puede escribir en la carpeta temporal o no hay espacio suficiente.';
   }
-  final clean = detail.replaceAll(RegExp(r'\s+'), ' ').trim();
+  final clean = diagnostic.replaceAll(RegExp(r'\s+'), ' ').trim();
   return clean.isEmpty
       ? 'Ocurrió un error inesperado.'
       : clean.substring(0, clean.length.clamp(0, 180));

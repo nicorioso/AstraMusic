@@ -6,12 +6,12 @@ import android.os.Looper
 import android.util.Log
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
+import com.yausername.youtubedl_android.YoutubeDL.UpdateChannel
 import com.yausername.ffmpeg.FFmpeg
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -37,7 +37,7 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
     private fun emit(value: Map<String, Any?>) { main.post { sink?.success(value) } }
     private fun reply(result: MethodChannel.Result, value: Any?) { main.post { result.success(value) } }
     private fun fail(result: MethodChannel.Result, error: Throwable) {
-        main.post { result.error("download_error", error.message ?: "Error de descarga", null) }
+        main.post { result.error("download_error", diagnostic(error.message ?: "Error de descarga"), null) }
     }
     private fun initialize() {
         YoutubeDL.getInstance().init(context)
@@ -46,8 +46,27 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
     private fun request(url: String, vararg options: Pair<String, String>): YoutubeDLRequest {
         val request = YoutubeDLRequest(url)
         request.addOption("--ignore-config")
+        request.addOption("--no-warnings")
         for ((key, value) in options) request.addOption(key, value)
         return request
+    }
+    private fun diagnostic(detail: String): String {
+        val lines = detail.lines().map { it.trim().replace(Regex("^(Bad state:|StateError:)\\s*", RegexOption.IGNORE_CASE), "") }.filter { it.isNotEmpty() }
+        val errors = lines.filter { it.startsWith("ERROR:", ignoreCase = true) }
+        val relevant = errors.ifEmpty {
+            lines.filterNot { it.startsWith("WARNING:", ignoreCase = true) ||
+                it.startsWith("Bad state:", ignoreCase = true) }
+        }
+        return relevant.takeLast(3).joinToString(" ").ifBlank { "yt-dlp falló sin un diagnóstico." }
+    }
+    private fun updateEngine(): String {
+        initialize()
+        return try {
+            YoutubeDL.getInstance().updateYoutubeDL(context, UpdateChannel.NIGHTLY).toString()
+        } catch (nightly: Exception) {
+            Log.w("AstraYtDlp", "Nightly update failed; trying stable", nightly)
+            YoutubeDL.getInstance().updateYoutubeDL(context, UpdateChannel.STABLE).toString()
+        }
     }
     private fun execute(url: String, vararg options: Pair<String, String>): String {
         val id = UUID.randomUUID().toString()
@@ -57,7 +76,7 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
                 emit(mapOf("status" to "downloading", "percent" to progress.toDouble()))
             }
             Log.d("AstraYtDlp", "yt-dlp stderr: ${response.err}")
-            if (response.exitCode != 0) error(response.err.ifBlank { response.out })
+            if (response.exitCode != 0) error(diagnostic(response.err.ifBlank { response.out }))
             return response.out
         } finally { processId = null }
     }
@@ -71,6 +90,8 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
         executor.execute {
             try {
                 when (call.method) {
+                    "updateEngine" -> reply(result, mapOf("status" to updateEngine(),
+                        "version" to YoutubeDL.getInstance().version(context)))
                     "checkAvailability" -> {
                         initialize()
                         reply(result, mapOf("available" to true))
@@ -92,7 +113,7 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
             } catch (error: Throwable) {
                 Log.e("AstraYtDlp", "Native download failed", error)
                 if (call.method == "downloadAudio") {
-                    emit(mapOf("status" to if (canceled) "canceled" else "failed", "error" to error.message))
+                    emit(mapOf("status" to if (canceled) "canceled" else "failed", "error" to diagnostic(error.message ?: "Error de descarga")))
                     workDir?.deleteRecursively()
                     workDir = null
                 } else fail(result, error)

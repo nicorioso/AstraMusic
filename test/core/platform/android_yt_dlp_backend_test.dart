@@ -12,6 +12,7 @@ void main() {
   setUp(() {
     messenger.setMockMethodCallHandler(methods, (call) async {
       if (call.method == 'checkAvailability') return {'available': true};
+      if (call.method == 'updateEngine') return {'version': '2026.11.17'};
       if (call.method == 'analyzeUrl') return {'json': '{"id":"abc","title":"Canción","uploader":"Autor"}'};
       return null;
     });
@@ -21,6 +22,7 @@ void main() {
   test('disponibilidad y análisis', () async {
     final backend = AndroidYtDlpBackend(methods: methods, events: events);
     expect((await backend.checkAvailability()).available, isTrue);
+    expect(await backend.updateEngine(), '2026.11.17');
     expect((await backend.analyzeUrl('https://youtu.be/abc')).title, 'Canción');
   });
 
