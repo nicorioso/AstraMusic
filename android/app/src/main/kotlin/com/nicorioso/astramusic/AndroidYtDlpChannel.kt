@@ -3,6 +3,7 @@ package com.nicorioso.astramusic
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.ffmpeg.FFmpeg
@@ -52,9 +53,12 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
         val id = UUID.randomUUID().toString()
         processId = id
         try {
-            return YoutubeDL.getInstance().execute(request(url, *options), id) { progress, _, _ ->
+            val response = YoutubeDL.getInstance().execute(request(url, *options), id) { progress, _, _ ->
                 emit(mapOf("status" to "downloading", "percent" to progress.toDouble()))
-            }.out
+            }
+            Log.d("AstraYtDlp", "yt-dlp stderr: ${response.err}")
+            if (response.exitCode != 0) error(response.err.ifBlank { response.out })
+            return response.out
         } finally { processId = null }
     }
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
@@ -86,6 +90,7 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
                     else -> main.post { result.notImplemented() }
                 }
             } catch (error: Throwable) {
+                Log.e("AstraYtDlp", "Native download failed", error)
                 if (call.method == "downloadAudio") {
                     emit(mapOf("status" to if (canceled) "canceled" else "failed", "error" to error.message))
                     workDir?.deleteRecursively()
@@ -106,10 +111,9 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
         workDir = directory
         emit(mapOf("status" to "analyzing"))
         val output = execute(url,
-            "--no-playlist" to "", "--no-overwrites" to "", "--no-continue" to "",
+            "--no-playlist" to "", "-f" to "bestaudio/best", "--no-overwrites" to "", "--no-continue" to "",
             "--extract-audio" to "", "--audio-format" to "mp3",
-            "--write-thumbnail" to "", "--convert-thumbnails" to "jpg",
-            "--embed-thumbnail" to "", "-o" to File(directory, "$id.%(ext)s").absolutePath)
+            "-o" to File(directory, "$id.%(ext)s").absolutePath)
         if (canceled) error("Cancelado")
         val audio = File(directory, "$id.mp3")
         if (!audio.isFile || audio.length() == 0L) error("yt-dlp no produjo un MP3 válido: ${output.takeLast(500)}")

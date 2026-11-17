@@ -1251,7 +1251,7 @@ class _WidgetDownloadBackend implements AudioDownloadBackend {
 
   @override
   Future<SourcePreview> analyzeUrl(String url) async {
-    if (failAnalyze) throw StateError('Connection timed out');
+    if (failAnalyze) throw StateError('SocketTimeoutException: connection timed out');
     return const SourcePreview(
       id: 'abc123',
       title: 'Título de YouTube',

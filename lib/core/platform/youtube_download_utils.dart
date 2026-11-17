@@ -30,11 +30,14 @@ class YoutubeUrl {
 String friendlyDownloadError(String detail) {
   final lower = detail.toLowerCase();
   if ([
-    'network',
-    'connection',
-    'timed out',
-    'name or service',
-    'unable to download',
+    'unknownhostexception',
+    'connectexception',
+    'sockettimeoutexception',
+    'noroutetohostexception',
+    'failed to resolve',
+    'name or service not known',
+    'temporary failure in name resolution',
+    'socket closed',
   ].any(lower.contains)) {
     return 'Sin conexión a internet. Comprueba tu conexión e inténtalo de nuevo.';
   }
