@@ -1,5 +1,5 @@
 # AstraMusic
-Reproductor de música LOCAL, gratuito. Versión 1.1.0; Android, Linux, Windows. Flutter 3.47.x / Dart 3.13.x (no actualizar SDK).
+Reproductor de música LOCAL, gratuito. Versión 1.2.0; Android, Linux, Windows. Flutter 3.47.x / Dart 3.13.x (no actualizar SDK).
 Detalle histórico por fase: docs/historial-agents.md (leer solo si es necesario).
 
 ## Respuesta
@@ -42,6 +42,7 @@ lib/core (platform, db, utils) y lib/features (library, player, playlists, setti
 - La rejilla de Inicio muestra hasta 8 playlists: recientes primero; si faltan,
   favoritos y luego las más nuevas por creación, sin duplicados.
 - El color dinámico se cachea por carátula, se oscurece y solo se usa con contraste ≥ 4,5; en otro caso conserva Gargantua.
+- Descargas de YouTube: `AudioDownloadBackend` separa escritorio (`yt-dlp`/FFmpeg en PATH) de Android (canal Kotlin con motor integrado). `AudioDownloadService` valida rutas y duplicados, guarda audio/carátulas en soporte privado y revierte archivos nuevos ante error; `AudioDownloadController` expone el flujo por Riverpod. Playlists: hasta dos trabajos en escritorio, uno en Android, con errores por pista y rollback de la playlist si falla `addTracks`. Guía: `docs/guia-descargas-youtube.md`.
 - Toda animación de UI respeta `MediaQuery.disableAnimations` y evita reconstrucciones por ticks fuera del widget de progreso.
 - Toda pantalla a pantalla completa tiene botón visible de salida y Escape en escritorio.
 - Cambio de esquema: migración con backfill + test + build_runner + commitear lo generado.

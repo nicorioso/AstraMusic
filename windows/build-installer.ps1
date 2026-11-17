@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $releaseDir = Join-Path $projectRoot "build/windows/x64/runner/Release"
 $installerScript = Join-Path $PSScriptRoot "installer.iss"
-$installerExe = Join-Path $projectRoot "build/windows/installer/AstraMusic-Setup-1.1.0.exe"
+$installerExe = Join-Path $projectRoot "build/windows/installer/AstraMusic-Setup-1.2.0.exe"
 
 function Invoke-Checked {
     param([string]$Command, [string[]]$Arguments)

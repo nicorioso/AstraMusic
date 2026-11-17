@@ -52,6 +52,14 @@ excluidos por Git. No uses la clave de depuración para publicar.
 La versión publicada se define en `pubspec.yaml` (`versionName+versionCode`)
 y el identificador Android es `com.nicorioso.astramusic`.
 
+Desde v1.2.0, el APK integra `youtubedl-android` y FFmpeg para descargas de
+YouTube y declara el permiso `INTERNET`. `android/app/build.gradle.kts` usa
+`jniLibs.useLegacyPackaging` y el tipo `release` referencia
+`android/app/proguard-rules.pro` para conservar clases del motor. La
+minificación no está activada explícitamente. Comprueba las descargas en el
+APK firmado antes de distribuirlo; el botón **Actualizar motor** requiere red
+y solo se ejecuta a petición del usuario.
+
 Para instalación local, usa el APK y verifica su firma antes de instalar:
 
 ```bash

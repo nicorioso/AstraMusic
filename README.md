@@ -1,4 +1,8 @@
-# AstraMusic 1.1.0
+# AstraMusic v1.2.0
+
+![Versión](https://img.shields.io/badge/versi%C3%B3n-v1.2.0-blue)
+![Plataformas](https://img.shields.io/badge/plataformas-Android%20%7C%20Linux%20%7C%20Windows-green)
+![Licencia MIT](https://img.shields.io/badge/licencia-MIT-lightgrey)
 
 AstraMusic es un reproductor de música local, gratuito, 100 % open source y
 sin ánimo de lucro. El proyecto nace para que cualquier persona pueda disfrutar
@@ -47,17 +51,29 @@ las instrucciones de compilación están en [la guía de publicación](docs/rele
   Ctrl/Cmd y Shift en escritorio para seleccionar y aplicar acciones en lote.
 - Importación y exportación de playlists autónomas `.amplaylist`, con audios y
   carátulas opcionales; listas inteligentes basadas en historial y biblioteca.
-- Descarga de audio y playlists de YouTube a la biblioteca local, con progreso,
-  cancelación y resultados parciales. En Android se puede actualizar el motor
-  de extracción desde la pantalla de descargas.
+- Descargas de YouTube: importa pistas individuales o playlists completas a la
+  biblioteca local y crea automáticamente una playlist en Drift con las pistas
+  obtenidas. Muestra antes los metadatos y carátulas, informa el progreso y los
+  errores por pista, y permite cancelar. Conserva las pistas logradas si alguna
+  falla, evita duplicados sin sobrescribir cambios del usuario y guarda carátulas
+  persistentes. En Android, **Actualizar motor** renueva el extractor a petición
+  del usuario.
 - Lectura de metadatos y carátulas incrustadas.
 - Interfaz adaptable para dispositivos móviles y computadores, con atajos de
   teclado y barra de título propia en escritorio.
 
-Para descargar en Linux o Windows se requieren `yt-dlp` y `ffmpeg` disponibles
-en el sistema. El audio se guarda en el almacenamiento privado de AstraMusic;
-los formatos nativos se priorizan para evitar recodificación. Consulta la
-[guía de descargas](docs/guia-descargas-youtube.md).
+Las descargas son opcionales para usar el reproductor. En Linux y Windows
+requieren `yt-dlp` y `ffmpeg` en el `PATH`; las playlists usan hasta dos descargas
+simultáneas. Android incluye el motor y FFmpeg en la aplicación y procesa una
+pista por vez. El audio se guarda en el almacenamiento privado de AstraMusic;
+se priorizan formatos de audio nativos para evitar conversiones innecesarias.
+Consulta la [guía de descargas](docs/guia-descargas-youtube.md).
+
+## Estado del proyecto
+
+**v1.2.0. Fase 15 (Descargas de YouTube): completada.** Incluye
+importación en Android y escritorio, playlists, mejoras de latencia y soporte
+nativo para paquetes Android `release`.
 
 ## Requisitos generales
 
@@ -91,6 +107,10 @@ herramientas nativas de compilación, entre ellas Clang, CMake, Ninja, pkg-confi
 y las cabeceras de GTK 3. Los nombres de los paquetes cambian según la
 distribución.
 
+Para usar descargas, instala por separado `yt-dlp` y `ffmpeg` y verifica que
+ambos comandos estén disponibles en el `PATH`. No se necesitan para reproducir
+archivos locales. Las playlists usan hasta dos descargas simultáneas.
+
 ```bash
 flutter config --enable-linux-desktop
 flutter doctor -v
@@ -106,6 +126,8 @@ usar una carpeta musical, selecciónala desde la aplicación.
 Se requiere Windows 10 u 11, Git, Flutter 3.47.x y Visual Studio 2022 con la
 carga de trabajo **Desarrollo para el escritorio con C++**. Visual Studio Code
 por sí solo no reemplaza las herramientas de compilación de Visual Studio.
+Para usar descargas, instala por separado `yt-dlp` y FFmpeg, agrega ambos al
+`PATH` y reinicia la terminal; las playlists usan hasta dos descargas simultáneas.
 
 En PowerShell, desde la raíz del proyecto:
 
@@ -130,7 +152,7 @@ Inno Setup registra el desinstalador automáticamente.
 .\windows\build-installer.ps1
 ```
 
-El instalador queda en `build/windows/installer/AstraMusic-Setup-1.1.0.exe`.
+El instalador queda en `build/windows/installer/AstraMusic-Setup-1.2.0.exe`.
 Si `ISCC.exe` no está en el `PATH`, pasa su ruta con `-Iscc`. Para compilar
 solo el instalador después de construir Windows, usa
 `ISCC.exe windows/installer.iss`.
@@ -151,7 +173,17 @@ flutter run -d <id-del-dispositivo>
 Reemplaza `<id-del-dispositivo>` por el identificador que muestra
 `flutter devices`. Al usar AstraMusic, concede los permisos de audio y
 notificaciones que Android solicite. Las canciones se agregan mediante
-**Añadir archivos**.
+**Añadir archivos** o desde **Descargas de YouTube**. El manifiesto incluye
+`INTERNET` para esta función; no hace falta instalar `yt-dlp` o FFmpeg por
+separado: `youtubedl-android` y FFmpeg vienen integrados. Si el extractor deja
+de funcionar, usa **Actualizar motor** en la pantalla de descargas; intenta la
+versión nightly y después la estable. La actualización requiere red y se inicia
+solo al pulsar el botón.
+
+Para compilar un APK `release` firmado, configura `android/key.properties` como
+indica la [guía de publicación](docs/release.md). El proyecto referencia reglas
+R8/ProGuard para el motor y usa `jniLibs.useLegacyPackaging` para sus bibliotecas
+nativas; la configuración actual no activa explícitamente la minificación.
 
 ## Calidad del código
 

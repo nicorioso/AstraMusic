@@ -20,7 +20,7 @@ Su propuesta de valor actual combina:
 - funcionamiento local: el código no implementa cuentas, sincronización en la
   nube, streaming de catálogo ni telemetría remota.
 
-La aplicación tiene la versión `1.1.0+2` en `pubspec.yaml` y usa el identificador
+La aplicación tiene la versión `1.2.0+4` en `pubspec.yaml` y usa el identificador
 `com.nicorioso.astramusic` en Android y Linux.
 
 ## 2. Stack tecnológico
@@ -31,7 +31,7 @@ La aplicación tiene la versión `1.1.0+2` en `pubspec.yaml` y usa el identifica
 |---|---|---|
 | UI multiplataforma | Flutter 3.47.x | Interfaz Material 3 para Android, Linux y Windows |
 | Lenguaje | Dart 3.13.x (`sdk: ^3.13.5`) | Aplicación, dominio, persistencia y pruebas |
-| Android nativo | Kotlin/JVM 17 | Escaneo de MediaStore y obtención de carátulas mediante canales de plataforma |
+| Android nativo | Kotlin/JVM 17 | MediaStore, carátulas y extracción de audio de YouTube mediante canales de plataforma |
 | Linux | C++/CMake, GTK 3 | Runner de escritorio |
 | Windows | C++/CMake | Runner Win32 |
 
@@ -440,21 +440,33 @@ ni se requiere que los archivos fuente sigan presentes después de importar.
   como proceso hijo en Linux/Windows; `AndroidYtDlpBackend` usa el canal Kotlin
   `AndroidYtDlpChannel` y un motor integrado. Los dos priorizan contenedores
   nativos (`m4a`, `mp3` y otros formatos de audio admitidos) y usan cuatro
-  fragmentos concurrentes y búfer de 16K.
+  fragmentos concurrentes y búfer de 16K. El código actual no pasa `--force-ipv4`.
 - `AudioDownloadService` coordina carpeta temporal, validación del ID y del
   archivo, movimiento a `downloaded_audio/`, etiquetas, carátula y registro en
   `TrackRepository`. Detecta duplicados por URI/ruta y archivo existente sin
   reemplazar metadatos del usuario. Ante fallo o cancelación borra el archivo
   recién movido, su carátula nueva y el directorio temporal; conserva las
   pistas registradas con anterioridad.
+- En Android se precarga por HTTPS una miniatura de dominio confiable mientras
+  se descarga el audio. Se prefiere para archivos M4A; si falla, se consulta la
+  carátula incrustada, la miniatura auxiliar y la URL. La imagen JPEG se guarda
+  en `downloaded_artwork/` para que persista tras limpiar los temporales.
 - Las playlists se procesan con dos trabajos simultáneos en escritorio y uno
   en Android. Los resultados se ordenan según la lista original antes de
   `PlaylistRepository.addTracks`. Los fallos por pista se informan por separado;
   si falla la inserción de pistas en la playlist, se elimina la playlist creada.
 - `AudioDownloadScreen` y su controlador Riverpod exponen análisis, progreso,
-  cancelación y resultados parciales. En Android ofrecen actualización manual
+  cancelación y resultados parciales. `AudioDownloadState` conserva disponibilidad,
+  previsualizaciones, bytes, estado, errores y resultado del lote; el controlador
+  cancela el servicio al desecharse. En Android ofrecen actualización manual
   del motor: Kotlin intenta primero el canal nightly y, si falla, el estable.
-  La inicialización de YoutubeDL y FFmpeg se hace una vez por sesión.
+  La inicialización de YoutubeDL y FFmpeg se hace una vez por sesión. El canal
+  registra en Logcat tiempos de inicialización, extracción, transferencia y
+  posprocesamiento, bytes y tasa aproximada; no envía telemetría remota.
+  Los diagnósticos priorizan líneas `ERROR:` sobre advertencias `WARNING:`.
+  El manifiesto declara `INTERNET`; el APK incluye `youtubedl-android` y FFmpeg.
+  Gradle aplica `jniLibs.useLegacyPackaging` y referencia reglas ProGuard para
+  `release`; no activa explícitamente la minificación en ese tipo de build.
 
 ### Capacidades no encontradas
 
