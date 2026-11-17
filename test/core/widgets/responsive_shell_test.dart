@@ -1160,6 +1160,54 @@ void main() {
     expect(find.byKey(const Key('download-batch-result')), findsOneWidget);
   });
 
+  testWidgets('actualiza motor con carga y reintenta un error 403', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    addTearDown(fixture.dispose);
+    final backend = _WidgetDownloadBackend()..updateGate = Completer<String?>();
+    await _setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(
+      fixture.app(
+        downloadService: fixture.downloadService(backend),
+        downloadBackend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Biblioteca').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('library-download-audio')));
+    await tester.pumpAndSettle();
+    final update = find.byKey(const Key('download-update-engine'));
+    expect(update, findsOneWidget);
+    await tester.tap(update);
+    await tester.pump();
+    expect(tester.widget<TextButton>(update).onPressed, isNull);
+    expect(
+      find.descendant(
+        of: update,
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+    backend.updateGate!.complete('2026.11.17');
+    await tester.pumpAndSettle();
+    backend.failExtractor = true;
+    await tester.enterText(
+      find.byKey(const Key('download-url-field')),
+      'https://youtu.be/abc123',
+    );
+    await tester.tap(find.byKey(const Key('download-analyze-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('download-start-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('download-update-retry')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('download-update-retry')));
+    await tester.pumpAndSettle();
+    expect(backend.updateCalls, 2);
+    expect(backend.downloadCalls, 2);
+  });
+
   testWidgets('avisa motor ausente y errores de URL y red', (tester) async {
     final fixture = _Fixture();
     addTearDown(fixture.dispose);
@@ -1224,7 +1272,8 @@ Future<void> _setSize(WidgetTester tester, Size size) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-class _WidgetDownloadBackend implements AudioDownloadBackend {
+class _WidgetDownloadBackend
+    implements AudioDownloadBackend, UpdatableAudioDownloadBackend {
   _WidgetDownloadBackend({
     this.available = true,
     this.waitForCancel = false,
@@ -1234,6 +1283,20 @@ class _WidgetDownloadBackend implements AudioDownloadBackend {
 
   bool available;
   bool failAnalyze = false;
+  bool failExtractor = false;
+  int updateCalls = 0;
+  int downloadCalls = 0;
+  Completer<String?>? updateGate;
+
+  @override
+  Future<String?> updateEngine() async {
+    updateCalls++;
+    final version =
+        await (updateGate?.future ?? Future<String?>.value('2026.11.17'));
+    failExtractor = false;
+    return version;
+  }
+
   final bool waitForCancel;
   final bool failSecond;
   final bool blockSecond;
@@ -1251,7 +1314,9 @@ class _WidgetDownloadBackend implements AudioDownloadBackend {
 
   @override
   Future<SourcePreview> analyzeUrl(String url) async {
-    if (failAnalyze) throw StateError('SocketTimeoutException: connection timed out');
+    if (failAnalyze) {
+      throw StateError('SocketTimeoutException: connection timed out');
+    }
     return const SourcePreview(
       id: 'abc123',
       title: 'Título de YouTube',
@@ -1274,6 +1339,14 @@ class _WidgetDownloadBackend implements AudioDownloadBackend {
 
   @override
   Stream<DownloadEvent> downloadAudio(DownloadRequest request) async* {
+    downloadCalls++;
+    if (failExtractor) {
+      yield const DownloadEvent(
+        status: DownloadStatus.failed,
+        error: 'HTTP Error 403',
+      );
+      return;
+    }
     final id = Uri.parse(request.url).queryParameters['v'] ?? 'abc123';
     yield const DownloadEvent(
       status: DownloadStatus.downloading,
@@ -1402,6 +1475,9 @@ class _WidgetDownloadService extends AudioDownloadService {
       DownloadRequest(url: url, temporaryDirectory: 'unused'),
     )) {
       onProgress?.call(event);
+      if (event.status == DownloadStatus.failed) {
+        throw StateError(event.error ?? 'Error de descarga');
+      }
       if (event.status == DownloadStatus.canceled) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
@@ -1455,10 +1531,13 @@ final class _Fixture {
   Widget app({
     bool notificationPermissionGranted = true,
     AudioDownloadService? downloadService,
+    AudioDownloadBackend? downloadBackend,
   }) => ProviderScope(
     overrides: [
       if (downloadService != null)
         audioDownloadServiceProvider.overrideWithValue(downloadService),
+      if (downloadBackend != null)
+        audioDownloadBackendProvider.overrideWithValue(downloadBackend),
       audioPlayerServiceProvider.overrideWithValue(player),
       trackRepositoryProvider.overrideWithValue(repository),
       smartPlaylistRepositoryProvider.overrideWithValue(smart),

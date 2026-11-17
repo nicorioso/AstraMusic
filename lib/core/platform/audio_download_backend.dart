@@ -153,3 +153,8 @@ class DownloadBatchResult {
   int get existingCount =>
       successes.where((item) => item.alreadyPresent).length;
 }
+
+/// Capacidad opcional de actualización del extractor en la plataforma.
+abstract class UpdatableAudioDownloadBackend {
+  Future<String?> updateEngine();
+}

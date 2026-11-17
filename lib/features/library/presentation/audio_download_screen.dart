@@ -24,6 +24,58 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
   String? _analyzedUrl;
   String? _inputError;
   bool _downloadWholePlaylist = false;
+  bool _updatingEngine = false;
+
+  Future<void> _updateEngine({bool retry = false}) async {
+    final backend = ref.read(audioDownloadBackendProvider);
+    if (backend is! UpdatableAudioDownloadBackend || _updatingEngine) return;
+    setState(() => _updatingEngine = true);
+    try {
+      final version = await (backend as UpdatableAudioDownloadBackend)
+          .updateEngine();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            version == null
+                ? 'El motor ya está al día.'
+                : 'Motor actualizado: $version',
+          ),
+        ),
+      );
+      if (retry) {
+        if (_downloadWholePlaylist) {
+          final playlist = ref
+              .read(audioDownloadControllerProvider)
+              .playlistPreview;
+          if (playlist != null) {
+            await ref
+                .read(audioDownloadControllerProvider.notifier)
+                .startPlaylist(playlist);
+          }
+        } else if (_analyzedUrl != null) {
+          await ref
+              .read(audioDownloadControllerProvider.notifier)
+              .start(_analyzedUrl!);
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar el motor: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updatingEngine = false);
+    }
+  }
+
+  bool _extractorFailure(String? error) =>
+      error != null &&
+      RegExp(
+        r'HTTP Error 403|Sign in to confirm|signature|extractor',
+        caseSensitive: false,
+      ).hasMatch(error);
 
   @override
   void initState() {
@@ -105,6 +157,9 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
     final onlyPlaylist = YoutubeUrl.parse(_url.text)?.uri.path == '/playlist';
     final result = main.result;
     final busy = main.isBusy;
+    final canUpdate = ref.watch(
+      audioDownloadBackendProvider,
+    ) is UpdatableAudioDownloadBackend;
 
     return Material(
       color: colors.surface,
@@ -130,6 +185,19 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+                if (canUpdate)
+                  TextButton.icon(
+                    key: const Key('download-update-engine'),
+                    onPressed: busy || _updatingEngine ? null : _updateEngine,
+                    icon: _updatingEngine
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.update),
+                    label: const Text('Actualizar motor'),
+                  ),
               ],
             ),
           ),
@@ -315,6 +383,14 @@ class _AudioDownloadScreenState extends ConsumerState<AudioDownloadScreen> {
                     icon: Icons.error_outline,
                     message: main.error!,
                   ),
+                  if (canUpdate && _extractorFailure(main.error))
+                    TextButton(
+                      key: const Key('download-update-retry'),
+                      onPressed: busy || _updatingEngine
+                          ? null
+                          : () => _updateEngine(retry: true),
+                      child: const Text('Actualizar motor y reintentar'),
+                    ),
                 ],
                 if (result != null &&
                     result.status != AudioImportStatus.canceled) ...[
