@@ -84,10 +84,18 @@ class AudioDownloadService {
   final Future<List<int>?> Function(Uri) _fetchThumbnailBytes;
   bool _busy = false;
   bool _cancelRequested = false;
+  String? _analyzedUrl;
+  SourcePreview? _analyzedPreview;
 
   Future<DownloadAvailability> checkAvailability() =>
       _backend.checkAvailability();
-  Future<SourcePreview> analyzeUrl(String url) => _backend.analyzeUrl(url);
+  Future<SourcePreview> analyzeUrl(String url) async {
+    final preview = await _backend.analyzeUrl(url);
+    _analyzedUrl = url;
+    _analyzedPreview = preview;
+    return preview;
+  }
+
   Future<PlaylistPreview> analyzePlaylist(String url) =>
       _backend.analyzePlaylist(url);
 
@@ -195,9 +203,22 @@ class AudioDownloadService {
     Directory? jobDirectory;
     File? movedFile;
     File? createdArtwork;
+    final stopwatch = Stopwatch()..start();
+    void timing(String stage, int startedAt) {
+      if (Platform.isAndroid) {
+        debugPrint(
+          'AstraDownload stage=$stage ms=${stopwatch.elapsedMilliseconds - startedAt}',
+        );
+      }
+    }
+
     try {
       onProgress?.call(const DownloadEvent(status: DownloadStatus.analyzing));
-      final preview = await _backend.analyzeUrl(url);
+      var stageStarted = stopwatch.elapsedMilliseconds;
+      final preview = _analyzedUrl == url && _analyzedPreview != null
+          ? _analyzedPreview!
+          : await _backend.analyzeUrl(url);
+      timing('analyze', stageStarted);
       if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(preview.id)) {
         throw const FormatException('El video no tiene un ID seguro.');
       }
@@ -248,6 +269,7 @@ class AudioDownloadService {
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
+      timing('preflight', stageStarted);
       final thumbnailUrl = Uri.tryParse(preview.thumbnailUrl ?? '');
       final thumbnailFuture =
           Platform.isAndroid &&
@@ -257,8 +279,13 @@ class AudioDownloadService {
           ? _fetchThumbnailBytes(thumbnailUrl).catchError((Object _) => null)
           : Future<List<int>?>.value(null);
       DownloadedAudio? downloaded;
+      stageStarted = stopwatch.elapsedMilliseconds;
       await for (final event in _backend.downloadAudio(
-        DownloadRequest(url: url, temporaryDirectory: jobDirectory.path),
+        DownloadRequest(
+          url: url,
+          temporaryDirectory: jobDirectory.path,
+          preview: preview,
+        ),
       )) {
         onProgress?.call(event);
         if (event.status == DownloadStatus.completed) downloaded = event.audio;
@@ -269,6 +296,7 @@ class AudioDownloadService {
           return const AudioImportResult(AudioImportStatus.canceled);
         }
       }
+      timing('native_download', stageStarted);
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
@@ -302,15 +330,20 @@ class AudioDownloadService {
           'Ya existe un archivo para este video; no se sobrescribió.',
         );
       }
+      stageStarted = stopwatch.elapsedMilliseconds;
       movedFile = await _moveFile(source, destination, destinationDirectory);
+      timing('move', stageStarted);
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
       onProgress?.call(const DownloadEvent(status: DownloadStatus.registering));
+      stageStarted = stopwatch.elapsedMilliseconds;
       final tags = _tagReader.read(movedFile);
+      timing('tags', stageStarted);
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
+      stageStarted = stopwatch.elapsedMilliseconds;
       final artwork = await _persistArtwork(
         preview: preview,
         downloaded: downloaded,
@@ -319,6 +352,7 @@ class AudioDownloadService {
         supportDirectory: support,
         prefetchedThumbnail: thumbnailFuture,
       );
+      timing('artwork', stageStarted);
       createdArtwork = artwork.$2;
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
@@ -359,15 +393,18 @@ class AudioDownloadService {
       if (_cancelRequested) {
         return const AudioImportResult(AudioImportStatus.canceled);
       }
+      stageStarted = stopwatch.elapsedMilliseconds;
       await _tracks.upsertAll([track]);
       movedFile = null;
       createdArtwork = null;
       final registered = await _findByUris({uri});
+      timing('drift', stageStarted);
       return AudioImportResult(
         AudioImportStatus.downloaded,
         track: registered.single,
       );
     } finally {
+      timing('total', 0);
       if (movedFile != null && await movedFile.exists()) {
         await movedFile.delete();
       }
@@ -411,12 +448,39 @@ class AudioDownloadService {
     required Future<List<int>?> prefetchedThumbnail,
   }) async {
     Uint8List? jpg;
-    if (_tagReader case final ArtworkTagReader reader) {
+    final url = Uri.tryParse(
+      downloaded.thumbnailUrl ?? preview.thumbnailUrl ?? '',
+    );
+    final validUrl =
+        url != null && url.scheme == 'https' && _trustedThumbnailHost(url.host);
+    Future<Uint8List?> fromUrl() async {
+      if (!validUrl) return null;
       try {
-        final embedded = reader.readArtwork(audio);
-        if (embedded != null) jpg = _toJpeg(embedded);
+        final bytes =
+            Platform.isAndroid && url.toString() == preview.thumbnailUrl
+            ? await prefetchedThumbnail
+            : await _fetchThumbnailBytes(url);
+        return bytes == null || bytes.length > _maxThumbnailBytes
+            ? null
+            : _toJpeg(bytes);
       } catch (_) {
-        // Una miniatura defectuosa en el MP3 no impide usar la auxiliar.
+        return null;
+      }
+    }
+
+    final preferUrl =
+        Platform.isAndroid &&
+        path.extension(audio.path).toLowerCase() == '.m4a' &&
+        validUrl;
+    if (preferUrl) jpg = await fromUrl();
+    if (jpg == null) {
+      if (_tagReader case final ArtworkTagReader reader) {
+        try {
+          final embedded = reader.readArtwork(audio);
+          if (embedded != null) jpg = _toJpeg(embedded);
+        } catch (_) {
+          // Una miniatura defectuosa en el MP3 no impide usar la auxiliar.
+        }
       }
     }
     final thumbnailPath = downloaded.thumbnailPath;
@@ -433,26 +497,7 @@ class AudioDownloadService {
         // Puede faltar la imagen auxiliar tras el posprocesamiento.
       }
     }
-    if (jpg == null) {
-      final url = Uri.tryParse(
-        downloaded.thumbnailUrl ?? preview.thumbnailUrl ?? '',
-      );
-      if (url != null &&
-          url.scheme == 'https' &&
-          _trustedThumbnailHost(url.host)) {
-        try {
-          final bytes =
-              Platform.isAndroid && url.toString() == preview.thumbnailUrl
-              ? await prefetchedThumbnail
-              : await _fetchThumbnailBytes(url);
-          if (bytes != null && bytes.length <= _maxThumbnailBytes) {
-            jpg = _toJpeg(bytes);
-          }
-        } catch (_) {
-          // Sin red, el audio sigue siendo importable.
-        }
-      }
-    }
+    if (jpg == null && !preferUrl) jpg = await fromUrl();
     if (jpg == null) return (null, null);
 
     final directory = Directory(

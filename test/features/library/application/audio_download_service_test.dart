@@ -32,20 +32,25 @@ class _Backend implements AudioDownloadBackend {
   final Completer<void> started = Completer<void>();
   final Completer<void> stopped = Completer<void>();
   int downloads = 0;
+  int analyses = 0;
+  SourcePreview? downloadedPreview;
 
   @override
   Future<DownloadAvailability> checkAvailability() async =>
       const DownloadAvailability(available: true);
 
   @override
-  Future<SourcePreview> analyzeUrl(String url) async => SourcePreview(
-    id: 'abc123',
-    title: 'Título de YouTube',
-    author: 'Canal',
-    duration: const Duration(seconds: 12),
-    type: SourceType.video,
-    thumbnailUrl: thumbnailUrl,
-  );
+  Future<SourcePreview> analyzeUrl(String url) async {
+    analyses++;
+    return SourcePreview(
+      id: 'abc123',
+      title: 'Título de YouTube',
+      author: 'Canal',
+      duration: const Duration(seconds: 12),
+      type: SourceType.video,
+      thumbnailUrl: thumbnailUrl,
+    );
+  }
 
   @override
   Future<PlaylistPreview> analyzePlaylist(String url) async => PlaylistPreview(
@@ -58,6 +63,7 @@ class _Backend implements AudioDownloadBackend {
   @override
   Stream<DownloadEvent> downloadAudio(DownloadRequest request) async* {
     downloads++;
+    downloadedPreview = request.preview;
     final file = File(
       path.join(request.temporaryDirectory, 'abc123.$extension'),
     );
@@ -228,6 +234,8 @@ void main() {
     final backend = _Backend();
     final result = await service(backend).download('https://youtu.be/abc123');
     expect(result.status, AudioImportStatus.downloaded);
+    expect(backend.analyses, 1);
+    expect(backend.downloadedPreview?.id, 'abc123');
     final track = (await repository.watchAll().first).single;
     expect(
       track.uri,
@@ -243,6 +251,16 @@ void main() {
       await Directory(path.join(root.path, 'tmp')).list().toList(),
       isEmpty,
     );
+  });
+
+  test('reutiliza el análisis previo al descargar el mismo video', () async {
+    final backend = _Backend();
+    final downloader = service(backend);
+    await downloader.analyzeUrl('https://youtu.be/abc123');
+    final result = await downloader.download('https://youtu.be/abc123');
+    expect(result.status, AudioImportStatus.downloaded);
+    expect(backend.analyses, 1);
+    expect(backend.downloadedPreview?.id, 'abc123');
   });
 
   test(
@@ -339,6 +357,7 @@ void main() {
       final stored = (await repository.watchAll().first).single;
       expect(duplicate.status, AudioImportStatus.duplicate);
       expect(backend.downloads, 1);
+      expect(backend.analyses, 2);
       expect(stored.title, 'Mi título');
       expect(stored.artist, 'Mi artista');
       expect(stored.dateAdded.isAtSameMomentAs(DateTime.utc(2020)), true);

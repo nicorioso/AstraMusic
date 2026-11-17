@@ -3,6 +3,7 @@ package com.nicorioso.astramusic
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
@@ -14,6 +15,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.util.UUID
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMessenger) {
@@ -52,8 +54,12 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
     private fun initialize() {
         synchronized(initializationLock) {
             if (!initialized) {
+                val startedAt = SystemClock.elapsedRealtime()
                 YoutubeDL.getInstance().init(context.applicationContext)
+                Log.d("AstraYtDlp", "stage=init_ytdlp ms=${SystemClock.elapsedRealtime() - startedAt}")
+                val ffmpegStartedAt = SystemClock.elapsedRealtime()
                 FFmpeg.getInstance().init(context.applicationContext)
+                Log.d("AstraYtDlp", "stage=init_ffmpeg ms=${SystemClock.elapsedRealtime() - ffmpegStartedAt}")
                 initialized = true
             }
         }
@@ -87,13 +93,32 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
             YoutubeDL.getInstance().updateYoutubeDL(context, UpdateChannel.STABLE).toString()
         }
     }
-    private fun execute(url: String, vararg options: Pair<String, String>): String {
+    private fun execute(url: String, vararg options: Pair<String, String>, outputDir: File? = null): String {
         val id = UUID.randomUUID().toString()
         processId = id
+        val startedAt = SystemClock.elapsedRealtime()
+        var firstProgressAt: Long? = null
+        var finishedProgressAt: Long? = null
         try {
             val response = YoutubeDL.getInstance().execute(request(url, *options), id) { progress, _, _ ->
+                val now = SystemClock.elapsedRealtime()
+                if (progress > 0f && firstProgressAt == null) firstProgressAt = now
+                if (progress >= 99.9f) finishedProgressAt = now
                 emit(mapOf("status" to "downloading", "percent" to progress.toDouble()))
             }
+            val endedAt = SystemClock.elapsedRealtime()
+            val extractionMs = firstProgressAt?.minus(startedAt)
+            val streamMs = firstProgressAt?.let { (finishedProgressAt ?: endedAt) - it }
+            val postprocessMs = finishedProgressAt?.let { endedAt - it }
+            val audioExtensions = setOf("mp3", "m4a", "aac", "opus", "ogg", "webm", "wav", "flac")
+            val bytes = outputDir?.listFiles()?.filter { it.isFile && it.extension.lowercase() in audioExtensions }
+                ?.sumOf { it.length() }
+            val mbps = if (bytes != null && streamMs != null && streamMs > 0) {
+                String.format(Locale.US, "%.2f", bytes * 1000.0 / streamMs / 1048576.0)
+            } else "unknown"
+            Log.d("AstraYtDlp", "stage=execute kind=${if (outputDir == null) "analyze" else "download"} " +
+                "total_ms=${endedAt - startedAt} extract_ms=$extractionMs " +
+                "stream_ms=$streamMs postprocess_ms=$postprocessMs bytes=$bytes mib_per_s=$mbps")
             Log.d("AstraYtDlp", "yt-dlp stderr: ${response.err}")
             if (response.exitCode != 0) error(diagnostic(response.err.ifBlank { response.out }))
             return response.out
@@ -158,8 +183,8 @@ class AndroidYtDlpChannel(private val context: Context, messenger: BinaryMesseng
         execute(url,
             "--no-playlist" to "", "-f" to "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio",
             "--concurrent-fragments" to "4", "--buffer-size" to "16K",
-            "--write-thumbnail" to "", "--print" to "after_move:filepath",
-            "-o" to outputPattern)
+            "--print" to "after_move:filepath", "-o" to outputPattern,
+            outputDir = directory)
         if (canceled) error("Cancelado")
         val audioExtensions = setOf("mp3", "m4a", "aac", "opus", "ogg", "webm", "wav", "flac")
         val files = directory.listFiles()?.filter { it.isFile } ?: emptyList()

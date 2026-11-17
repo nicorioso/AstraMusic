@@ -79,7 +79,7 @@ class AndroidYtDlpBackend
   Stream<DownloadEvent> downloadAudio(DownloadRequest request) async* {
     _canceled = false;
     try {
-      final preview = await analyzeUrl(request.url);
+      final preview = request.preview ?? await analyzeUrl(request.url);
       final subscription = _events.receiveBroadcastStream().map(
         (event) => Map<String, dynamic>.from(event as Map),
       );

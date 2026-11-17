@@ -72,10 +72,14 @@ class DownloadRequest {
     required this.url,
     required this.temporaryDirectory,
     this.format = AudioDownloadFormat.mp3,
+    this.preview,
   });
   final String url;
   final String temporaryDirectory;
   final AudioDownloadFormat format;
+
+  /// Metadatos ya validados por el servicio; evita repetir el análisis.
+  final SourcePreview? preview;
 }
 
 enum DownloadStatus {

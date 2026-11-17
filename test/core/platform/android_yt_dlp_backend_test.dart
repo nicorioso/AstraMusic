@@ -123,6 +123,37 @@ void main() {
     expect(arguments?['temporaryDirectory'], '/cache/job');
   });
 
+  test('usa la vista previa existente sin repetir analyzeUrl', () async {
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(methods, (call) async {
+      calls.add(call.method);
+      return null;
+    });
+    final backend = AndroidYtDlpBackend(
+      methods: methods,
+      events: const _Events({
+        'status': 'completed',
+        'path': '/cache/job/abc.m4a',
+      }),
+    );
+    final result = await backend
+        .downloadAudio(
+          const DownloadRequest(
+            url: 'https://youtu.be/abc',
+            temporaryDirectory: '/cache/job',
+            preview: SourcePreview(
+              id: 'abc',
+              title: 'Canción',
+              author: 'Canal',
+              type: SourceType.video,
+            ),
+          ),
+        )
+        .last;
+    expect(calls, ['downloadAudio']);
+    expect(result.audio?.title, 'Canción');
+  });
+
   for (final extension in ['m4a', 'mp3', 'opus', 'webm']) {
     test('mapea audio .$extension y carátula auxiliar', () async {
       final backend = AndroidYtDlpBackend(
