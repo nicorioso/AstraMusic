@@ -49,6 +49,35 @@ void main() {
     );
   });
 
+  test('envía el directorio temporal al canal nativo', () async {
+    Map<Object?, Object?>? arguments;
+    messenger.setMockMethodCallHandler(methods, (call) async {
+      if (call.method == 'analyzeUrl') {
+        return {'json': '{"id":"abc","title":"Canción","uploader":"Autor"}'};
+      }
+      if (call.method == 'downloadAudio') {
+        arguments = Map<Object?, Object?>.from(call.arguments as Map);
+      }
+      return null;
+    });
+    final backend = AndroidYtDlpBackend(
+      methods: methods,
+      events: const _Events({
+        'status': 'completed',
+        'path': '/cache/job/abc.m4a',
+      }),
+    );
+    await backend
+        .downloadAudio(
+          const DownloadRequest(
+            url: 'https://youtu.be/abc',
+            temporaryDirectory: '/cache/job',
+          ),
+        )
+        .last;
+    expect(arguments?['temporaryDirectory'], '/cache/job');
+  });
+
   for (final extension in ['m4a', 'mp3', 'opus', 'webm']) {
     test('mapea audio .$extension y carátula auxiliar', () async {
       final backend = AndroidYtDlpBackend(

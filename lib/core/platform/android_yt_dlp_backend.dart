@@ -125,6 +125,7 @@ class AndroidYtDlpBackend
         await _methods.invokeMethod<void>('downloadAudio', {
           'url': request.url,
           'id': preview.id,
+          'temporaryDirectory': request.temporaryDirectory,
         });
         yield* controller.stream;
       } finally {
