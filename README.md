@@ -34,12 +34,16 @@ Capturas de la interfaz de escritorio de AstraMusic.
 
 AstraMusic está construido con Flutter 3.47.x y Dart 3.13.x.
 
-## Descargas oficiales
+## Descargas directas
 
-Los binarios compilados se distribuyen directamente en el servidor oficial
-**[AstraMusic Discord](https://discord.gg/pRpghjs34)**: APK para Android e
-instalador `.exe` para Windows. Linux se puede ejecutar desde el código fuente;
-las instrucciones de compilación están en [la guía de publicación](docs/release.md).
+| Plataforma | Versión | Descarga |
+| --- | --- | --- |
+| Android | v1.2.0 | [Descargar APK](https://github.com/nicorioso/AstraMusic/releases/download/v1.2.0/AstraMusic-v1.2.0.apk) |
+| Windows | v1.2.0 | Próximamente (en actualización para v1.2.0) |
+
+Linux se puede ejecutar desde el código fuente; las instrucciones de compilación
+están en [la guía de publicación](docs/release.md). Los binarios oficiales también
+se anuncian en **[AstraMusic Discord](https://discord.gg/pRpghjs34)**.
 
 ## Funciones principales
 
